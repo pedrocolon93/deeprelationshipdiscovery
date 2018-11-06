@@ -52,37 +52,41 @@ class DCGAN(object):
             return self.D
         print("Discriminator-----")
         self.D = Sequential()
-        dim = 64
+        dim = 32
         depth = 8
         dropout = 0.4
         # In: 28 x 28 x 1, depth = 1
         # Out: 14 x 14 x 1, depth=64
 
         # input_shape = (self.img_rows, self.img_cols)
-        self.D.add(Dense(dim * dim * depth, input_dim=self.img_rows))
+        self.D.add(Dense(2*dim * dim * depth, input_dim=self.img_rows))
         self.D.add(BatchNormalization(momentum=0.9))
         self.D.add(Activation('relu'))
-        self.D.add(Reshape((dim, dim, depth)))
+        # self.D.add(Reshape((dim, dim, depth)))
         self.D.add(Dropout(dropout))
-        self.D.add(Conv2D(depth*1, 5, strides=2,\
-            padding='same'))
+        # self.D.add(Conv2D(depth*1, 5, strides=2,\
+        #     padding='same'))
+        self.D.add(Dense(dim*depth))
         self.D.add(LeakyReLU(alpha=0.2))
         self.D.add(Dropout(dropout))
 
-        self.D.add(Conv2D(depth*2, 5, strides=2, padding='same'))
+        # self.D.add(Conv2D(depth*2, 5, strides=2, padding='same'))
+        self.D.add(Dense(dim*depth))
         self.D.add(LeakyReLU(alpha=0.2))
         self.D.add(Dropout(dropout))
 
-        self.D.add(Conv2D(depth*4, 5, strides=2, padding='same'))
+        # self.D.add(Conv2D(depth*4, 5, strides=2, padding='same'))
+        self.D.add(Dense(dim*depth))
         self.D.add(LeakyReLU(alpha=0.2))
         self.D.add(Dropout(dropout))
 
-        self.D.add(Conv2D(depth*8, 5, strides=1, padding='same'))
+        # self.D.add(Conv2D(depth*8, 5, strides=1, padding='same'))
+        self.D.add(Dense(dim*depth))
         self.D.add(LeakyReLU(alpha=0.2))
         self.D.add(Dropout(dropout))
 
         # Out: 1-dim probability
-        self.D.add(Flatten())
+        # self.D.add(Flatten())
         self.D.add(Dense(1))
         self.D.add(Activation('sigmoid'))
         self.D.summary()
@@ -134,7 +138,8 @@ class DCGAN(object):
         # optimizer = RMSprop(lr=0.00001)#, decay=6e-8)
         # optimizer = RMSprop()
         # optimizer = Adam(lr=0.00001,amsgrad=True)
-        optimizer = RMSprop(lr=0.0000001,decay=3e-8)
+        # optimizer = RMSprop(lr=0.0000001,decay=3e-8)
+        optimizer = Adam(lr=0.0000001,amsgrad=True)
 
         self.DM = Sequential()
         self.DM.add(self.discriminator())
@@ -146,8 +151,8 @@ class DCGAN(object):
         if self.AM:
             return self.AM
         # optimizer = RMSprop(lr=0.00001, decay=3e-8)
-        optimizer = RMSprop(lr=0.000001,decay=3e-8)
-        # optimizer = Adam(amsgrad=True)
+        # optimizer = RMSprop(lr=0.000001)
+        optimizer = Adam(lr=0.000001,amsgrad=True)
         self.AM = Sequential()
         self.AM.add(self.generator(self.img_rows))
         self.AM.add(self.discriminator())
