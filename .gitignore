@@ -3,4 +3,4 @@ dataset/
 dataset2/
 mnist/
 retrogan/
-
+*.pickle
