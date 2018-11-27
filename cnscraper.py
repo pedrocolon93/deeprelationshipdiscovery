@@ -1,11 +1,13 @@
 import json
 import os
+import pickle
 
 from conceptnet5.db.query import AssertionFinder
 import numpy as np
 import pandas as pd
 import hashlib
-
+from conceptnet5.nodes import *
+from conceptnet5.api import *
 
 class edge():
     def __init__(self,start,end,reltype,weight):
@@ -13,6 +15,11 @@ class edge():
         self.end = end
         self.reltype = reltype
         self.weight = weight
+
+    @classmethod
+    def from_edge_object(cls,entry):
+        return cls(entry["start"]["label"],entry["end"]["label"],entry["rel"]["label"],entry["weight"])
+
     def __str__(self):
         return "Start:"+str(self.start)+" End:"+str(self.end)+" Relationship:"+str(self.reltype)+" Weight:"+str(self.weight)
 
@@ -34,9 +41,9 @@ def get_random_subset(iterations=10,limit=1000):
         re = af.random_edges(limit=limit)
         def convert_to_hashable(entry):
             return edge(entry["start"]["label"],entry["end"]["label"],entry["rel"]["label"],entry["weight"])
-        re = [convert_to_hashable(x) for x in re]
+        re = [convert_to_hashable(x) for x in re if x["start"]["language"]=='en' and x["rel"]["label"]!="ExternalURL"]
+        print(len(re))
         edgeset = edgeset.union(set(re))
-    print("Reorganizing for left side features")
     return list(edgeset)
 
 def parse_random_subset(path="conceptnetdumps/dump11"):
@@ -94,3 +101,22 @@ def test_random_sample():
             f.close()
             break
     print("Dumped in "+"conceptnetdumps/dump"+str(i))
+
+def load_simple_concepts_and_expand(path_to_conceptlist="simpleconcepts",save = True):
+    edgelist = []
+    with open(path_to_conceptlist) as f:
+        for line in f:
+            if "#" in line:
+                continue
+            else:
+                standard_uri = standardize_concept_uri("en",line.strip())
+                af = AssertionFinder()
+                res = af.lookup(standard_uri)
+                for item in res:
+                    if item["@type"]=="Edge":
+                        edgelist.append(edge.from_edge_object(item))
+    if save:
+        pickle.dump(edgelist, open("simple_concept_relations",'wb'))
+    return edgelist
+if __name__ == '__main__':
+    load_simple_concepts_and_expand()
