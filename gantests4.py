@@ -13,7 +13,7 @@ from keras.utils import plot_model
 from scipy.spatial.distance import cosine
 from sklearn.metrics import mean_squared_error
 
-from gantests import load_training_input_2, load_embedding
+from tools import load_embedding, load_training_input_2
 
 
 class RetroCycleGAN():
@@ -25,7 +25,7 @@ class RetroCycleGAN():
         self.img_shape = (self.img_cols,)#, self.channels)
 
         # Configure data loader
-        self.dataset_name = 'apple2orange'
+        # self.dataset_name = 'apple2orange'
         # self.data_loader = DataLoader(dataset_name=self.dataset_name,
         #                               img_res=(self.img_rows, self.img_cols))
 

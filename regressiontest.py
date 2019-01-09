@@ -6,7 +6,7 @@ from sklearn.metrics import r2_score
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.svm import SVR
 
-from gantests import load_training_input_2
+from tools import load_training_input_2
 
 X_train, Y_train, X_test, Y_test = load_training_input_2(100000)
 

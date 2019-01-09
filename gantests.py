@@ -6,26 +6,18 @@ Project: https://github.com/roatienza/Deep-Learning-Experiments
 Dependencies: tensorflow 1.0 and keras 2.0
 Usage: python3 dcgan_mnist.py
 '''
-import multiprocessing
-import os
-import pickle
-from multiprocessing.pool import Pool
 
 import numpy as np
 import time
 
-from tensorflow.contrib.learn.python.learn.estimators._sklearn import train_test_split
-from tensorflow.examples.tutorials.mnist import input_data
-
 from keras.models import Sequential
-from keras.layers import Dense, Activation, Flatten, Reshape, Conv1D
-from keras.layers import Conv2D, Conv2DTranspose, UpSampling2D
+from keras.layers import Dense, Activation
 from keras.layers import LeakyReLU, Dropout
 from keras.layers import BatchNormalization
-from keras.optimizers import Adam, RMSprop, Nadam, SGD, Adadelta
+from keras.optimizers import Adam, Adadelta
 
-import matplotlib.pyplot as plt
-from tensorflow.python.keras.losses import mean_squared_error
+import tools
+from tools import common_vectors_test, common_retro_vectors_test, load_training_input
 
 
 class ElapsedTimer(object):
@@ -144,124 +136,10 @@ class DCGAN(object):
             metrics=['accuracy'])
         return self.AM
 
-def process_line(line):
-    linesplit = line.split(" ")
-    if len(linesplit)<3:
-        return None
-    x = np.array([float(x) for x in linesplit[1:]])
-    if(np.isnan(x).any()):
-        print("Nan!?!??!")
-        return None
-    tup = (linesplit[0],x)
-    return tup
-
-def load_embedding(path,limit=100000000):
-    if os.path.exists(path):
-        words = []
-        vectors = []
-        # f = open(path,encoding="utf-8")
-        skip_first = True
-        print("Starting loading",path)
-
-
-            # return "FOO: %s" % line
-        #
-        pool = Pool(multiprocessing.cpu_count())
-        with open(path,encoding="utf-8") as source_file:
-            # chunk the work into batches of 4 lines at a time
-            results = pool.map(process_line, source_file, multiprocessing.cpu_count())
-            for line in results:
-                if line is None:
-                    continue
-                else:
-                    words.append(line[0])
-                    vectors.append(line[1])
-
-        # for line in f:
-        #     if limit is not None:
-        #         if(len(words)>=limit):
-        #             break
-        #     if skip_first ==True:
-        #         skip_first = False
-        #         continue
-        #     linesplit = line.split(" ")
-        #     words.append(linesplit[0])
-        #     vectors.append([float(x) for x in linesplit[1:]])
-        #     # print("Appended")
-            print("Finished")
-            return words,vectors
-    else:
-        raise FileNotFoundError(path+" does not exist")
-
-common_vectors_train = None
-common_retro_vectors_train = None
-common_vectors_test = None
-common_retro_vectors_test = None
-
 
 def intersection(chunk):
     global retrowords
     return [x for x in chunk if x in retrowords]
-
-def load_training_input(limit=10000):
-    global common_retro_vectors_train, common_retro_vectors_test, common_vectors_test, common_vectors_train
-    words, vectors = load_embedding("retrogan/wiki-news-300d-1M-subword.vec", limit=limit)
-    retrowords, retrovectors = load_embedding("retrogan/numberbatch", limit=limit)
-    print(len(words), len(retrowords))
-    common_vocabulary = set(words).intersection(set(retrowords))
-    common_vocabulary = np.array(list(common_vocabulary))
-    common_retro_vectors = np.array([retrovectors[retrowords.index(word)] for word in common_vocabulary])
-    common_vectors = np.array([vectors[words.index(word)] for word in common_vocabulary])
-    X_train, X_test, y_train, y_test = train_test_split(common_vectors, common_retro_vectors, test_size=0.33,
-                                                        random_state=42)
-    common_vectors_train = X_train
-    common_retro_vectors_train = y_train
-    common_vectors_test = X_test
-    common_retro_vectors_test = y_test
-    del retrowords, retrovectors, words, vectors
-    print("Size of common vocabulary:" + str(len(common_vocabulary)))
-    return common_vocabulary, common_vectors, common_retro_vectors
-
-def load_training_input_2(limit=10000):
-    global common_retro_vectors_train,common_retro_vectors_test,common_vectors_test,common_vectors_train
-    words, vectors = load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=limit)
-    retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=limit)
-    print(len(words),len(retrowords))
-    # common_vocabulary = set(words).intersection(set(retrowords))
-    worddict = {}
-    for idx, word in enumerate(retrowords):
-        worddict[word] = (-1, idx)
-    for idx, word in enumerate(words):
-        try:
-            # try to access and save the index
-            retr_idx = worddict[word][1]
-            worddict[word] = (idx, retr_idx)
-        except:
-            # not there so skip
-            pass
-    common_vocabulary = []
-    common_retro_vectors = []
-    common_vectors = []
-    p = Pool(multiprocessing.cpu_count(),)
-    for word in worddict.keys():
-        if worddict[word][0] >= 0:
-            common_vocabulary.append(word)
-            common_retro_vectors.append(retrovectors[worddict[word][1]])
-            common_vectors.append(vectors[worddict[word][0]])
-    common_vectors = np.array(common_vectors)
-    common_retro_vectors = np.array(common_retro_vectors)
-    common_vocabulary = np.array(common_vocabulary)
-    # common_vocabulary = np.array(list(common_vocabulary))
-    # common_retro_vectors = np.array([retrovectors[retrowords.index(word)]for word in common_vocabulary])
-    # common_vectors = np.array([vectors[words.index(word)]for word in common_vocabulary])
-    X_train, X_test, y_train, y_test = train_test_split(common_vectors, common_retro_vectors, test_size = 0.33, random_state = 42)
-    common_vectors_train = X_train
-    common_retro_vectors_train = y_train
-    common_vectors_test = X_test
-    common_retro_vectors_test = y_test
-    del retrowords,retrovectors,words,vectors
-    print("Size of common vocabulary:"+str(len(common_vocabulary)))
-    return common_vectors_train,common_retro_vectors_train,common_vectors_test,common_retro_vectors_test
 
 
 class RETRO_DCGAN(object):
@@ -278,13 +156,12 @@ class RETRO_DCGAN(object):
         self.generator = self.DCGAN.generator(self.img_rows)
 
     def train(self, train_steps=10000, batch_size=64, save_interval=0):
-        global common_vectors_train,common_retro_vectors_train
         for i in range(train_steps):
-            retrofitted_vectors_train = common_retro_vectors_train[np.random.randint(0,
-                common_retro_vectors_train.shape[0], size=batch_size), :]
+            retrofitted_vectors_train = tools.common_retro_vectors_train[np.random.randint(0,
+                                                                                           tools.common_retro_vectors_train.shape[0], size=batch_size), :]
             # noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
             # noise = np.random.choice(common_vectors,batch_size,False)
-            noise = common_vectors_train[np.random.choice(len(common_vectors_train),size=batch_size, replace=False)]
+            noise = tools.common_vectors_train[np.random.choice(len(tools.common_vectors_train), size=batch_size, replace=False)]
             embeddings_fake = self.generator.predict(noise)
             x = np.concatenate((retrofitted_vectors_train, embeddings_fake))
             y = np.concatenate((np.ones([batch_size, 1]),np.zeros([batch_size,1])))
@@ -294,7 +171,7 @@ class RETRO_DCGAN(object):
             y = np.ones([batch_size, 1])
             # noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
             # noise = np.random.choice(common_vectors,batch_size,False)
-            noise = common_vectors_train[np.random.choice(len(common_vectors_train), size=batch_size, replace=False)]
+            noise = tools.common_vectors_train[np.random.choice(len(tools.common_vectors_train), size=batch_size, replace=False)]
             a_loss = self.adversarial.train_on_batch(noise, y)
             log_mesg = "%d: [D loss: %f, acc: %f]" % (i, d_loss[0], d_loss[1])
             log_mesg = "%s  [A loss: %f, acc: %f]" % (log_mesg, a_loss[0], a_loss[1])

@@ -14,7 +14,7 @@ import sys
 
 import numpy as np
 
-from gantests import load_training_input, load_training_input_2
+from tools import load_training_input, load_training_input_2
 
 
 class DCGAN():
