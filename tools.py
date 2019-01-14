@@ -3,6 +3,7 @@ import os
 from multiprocessing.pool import Pool
 from keras import backend as K
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 from tensorflow.contrib.learn.python.learn.estimators._sklearn import train_test_split
 
 
@@ -117,7 +118,15 @@ def load_training_input_2(limit=10000):
     # common_vocabulary = np.array(list(common_vocabulary))
     # common_retro_vectors = np.array([retrovectors[retrowords.index(word)]for word in common_vocabulary])
     # common_vectors = np.array([vectors[words.index(word)]for word in common_vocabulary])
-    X_train, X_test, y_train, y_test = train_test_split(common_vectors, common_retro_vectors, test_size = 0.33, random_state = 42)
+    scaler = MinMaxScaler()
+    scaler = scaler.fit(common_vectors)
+    scaled_common_vector = scaler.transform(common_vectors)
+
+    scaler = MinMaxScaler()
+    scaler = scaler.fit(common_retro_vectors)
+    scaled_common_retro_vector = scaler.transform(common_retro_vectors)
+
+    X_train, X_test, y_train, y_test = train_test_split(scaled_common_vector, scaled_common_retro_vector, test_size = 0.33, random_state = 42)
     common_vectors_train = X_train
     common_retro_vectors_train = y_train
     common_vectors_test = X_test

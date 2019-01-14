@@ -14,10 +14,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from keras.layers import Lambda, Input, Dense
+import pickle
+
+from keras.layers import Lambda, Input, Dense, BatchNormalization
 from keras.models import Model
 from keras.datasets import mnist
 from keras.losses import mse, binary_crossentropy
+from keras.optimizers import RMSprop, Adam, SGD
 from keras.utils import plot_model
 from keras import backend as K
 
@@ -30,6 +33,8 @@ import os
 # reparameterization trick
 # instead of sampling from Q(z|X), sample eps = N(0,I)
 # z = z_mean + sqrt(var)*eps
+from sklearn.preprocessing import MinMaxScaler
+
 from tools import load_training_input_2
 
 
@@ -109,103 +114,161 @@ def plot_results(models,
     plt.savefig(filename)
     plt.show()
 
+class VAE():
+    def __init__(self, input_dimension=300, output_dimension=300, intermediate_dimension=512, batch_size = 128, latent_dim=64, epochs=50,use_mse = True,intermediate_layer_count = 4):
+        # image_size = x_train.shape[1]
+        # original_dim = image_size * image_size
+        # x_train = np.reshape(x_train, [-1, original_dim])
+        # x_test = np.reshape(x_test, [-1, original_dim])
+        # x_train = x_train.astype('float32') / 255
+        # x_test = x_test.astype('float32') / 255
+
+        # network parameters
+        self.input_shape = (input_dimension,)
+        self.output_shape = (output_dimension,)
+        self.intermediate_dim = intermediate_dimension
+        self.batch_size = batch_size
+        self.latent_dim = latent_dim
+        self.epochs = epochs
+        self.vae = None
+        self.encoder = None
+        self.decoder = None
+        self.inputs = None
+        self.outputs = None
+        self.z_mean = None
+        self.z_log_var = None
+        self.use_mse = use_mse
+        self.models = None
+        self.intermediate_layer_count = intermediate_layer_count
+
+    def create_vae(self):
+        # VAE model = encoder + decoder
+        # build encoder model
+        self.inputs = Input(shape=self.input_shape, name='encoder_input')
+        x = Dense(self.intermediate_dim, activation='relu')(self.inputs)
+
+        for i in range(2,self.intermediate_layer_count+2):
+            x = Dense(self.intermediate_dim * i, activation='relu')(x)
+
+        self.z_mean = Dense(self.latent_dim, name='z_mean')(x)
+        self.z_log_var = Dense(self.latent_dim, name='z_log_var')(x)
+
+        # use reparameterization trick to push the sampling out as input
+        # note that "output_shape" isn't necessary with the TensorFlow backend
+        z = Lambda(sampling, output_shape=(self.latent_dim,), name='z')([self.z_mean, self.z_log_var])
+
+        # instantiate encoder model
+        encoder = Model(self.inputs, [self.z_mean, self.z_log_var, z], name='encoder')
+        encoder.summary()
+        # plot_model(encoder, to_file='vae_mlp_encoder.png', show_shapes=True)
+
+        # build decoder model
+        latent_inputs = Input(shape=(self.latent_dim,), name='z_sampling')
+        x = Dense(self.intermediate_dim * (self.intermediate_layer_count+1), activation='relu')(latent_inputs)
+        for i in reversed(range(1,self.intermediate_layer_count+1)):
+            x = Dense(self.intermediate_dim*i, activation='relu')(x)
+
+        self.outputs = Dense(self.output_shape[0], activation='tanh')(x)
+
+        # instantiate decoder model
+        decoder = Model(latent_inputs, self.outputs, name='decoder')
+        decoder.summary()
+        # plot_model(decoder, to_file='vae_mlp_decoder.png', show_shapes=True)
+
+        # instantiate VAE model
+        self.outputs = decoder(encoder(self.inputs)[2])
+        vae = Model(self.inputs, self.outputs, name='vae_mlp')
+
+        self.vae =vae
+        return vae
+
+    def configure_vae(self):
+        self.models = (self.encoder, self.decoder)
+
+        # VAE loss = mse_loss or xent_loss + kl_loss
+        if self.use_mse:
+            reconstruction_loss = mse(self.inputs, self.outputs)
+        else:
+            reconstruction_loss = binary_crossentropy(self.inputs,
+                                                      self.outputs)
+        # def my_vae_loss(y_true,y_pred):
+        #     reconstruction_loss = mse(y_true,y_pred)
+        reconstruction_loss *= self.input_shape[0]
+        kl_loss = 1 + self.z_log_var - K.square(self.z_mean) - K.exp(self.z_log_var)
+        kl_loss = K.sum(kl_loss, axis=-1)
+        kl_loss *= -0.5
+        vae_loss = K.mean(reconstruction_loss + kl_loss)
+        # return vae_loss
+        self.vae.add_loss(vae_loss)
+
+    def compile_vae(self):
+        optimizer = RMSprop(lr=0.00001, decay=1e-8)
+        # optimizer = SGD(decay=1e-8,nesterov=True)
+        self.vae.compile(optimizer=optimizer, metrics=['accuracy'])
+        self.vae.summary()
+        # plot_model(self.vae,
+        #            to_file='vae_mlp.png',
+        #            show_shapes=True)
+
+    def load_weights(self,filename):
+        self.vae.load_weights(filename)
+
+
+    def fit(self, X_train, X_test, weight_filename='vae_mlp_mnist.h5' ):
+        self.vae.fit(x=X_train,
+                epochs=self.epochs,
+                batch_size=self.batch_size,
+                validation_data=(X_test, None))
+        self.vae.save_weights(weight_filename)
+
+    def predict(self,input):
+        pred = self.vae.predict(input)
+        return pred
 
 # MNIST dataset
 # (x_train, y_train), (x_test, y_test) = mnist.load_data()
-X_train, Y_train, X_test, Y_test = load_training_input_2(1000000)
 
-# image_size = x_train.shape[1]
-# original_dim = image_size * image_size
-original_dim = 300
-# x_train = np.reshape(x_train, [-1, original_dim])
-# x_test = np.reshape(x_test, [-1, original_dim])
-# x_train = x_train.astype('float32') / 255
-# x_test = x_test.astype('float32') / 255
 
-# network parameters
-input_shape = (original_dim, )
-intermediate_dim = 2048
-batch_size = 128
-latent_dim = 128
-epochs = 50
 
-# VAE model = encoder + decoder
-# build encoder model
-inputs = Input(shape=input_shape, name='encoder_input')
-x = Dense(intermediate_dim, activation='relu')(inputs)
-x = Dense(intermediate_dim*2, activation='relu')(x)
-z_mean = Dense(latent_dim, name='z_mean')(x)
-z_log_var = Dense(latent_dim, name='z_log_var')(x)
 
-# use reparameterization trick to push the sampling out as input
-# note that "output_shape" isn't necessary with the TensorFlow backend
-z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
-
-# instantiate encoder model
-encoder = Model(inputs, [z_mean, z_log_var, z], name='encoder')
-encoder.summary()
-plot_model(encoder, to_file='vae_mlp_encoder.png', show_shapes=True)
-
-# build decoder model
-latent_inputs = Input(shape=(latent_dim,), name='z_sampling')
-x = Dense(intermediate_dim*2, activation='relu')(latent_inputs)
-x = Dense(intermediate_dim, activation='relu')(x)
-outputs = Dense(original_dim, activation='sigmoid')(x)
-
-# instantiate decoder model
-decoder = Model(latent_inputs, outputs, name='decoder')
-decoder.summary()
-plot_model(decoder, to_file='vae_mlp_decoder.png', show_shapes=True)
-
-# instantiate VAE model
-outputs = decoder(encoder(inputs)[2])
-vae = Model(inputs, outputs, name='vae_mlp')
 
 if __name__ == '__main__':
-    # parser = argparse.ArgumentParser()
-    # help_ = "Load h5 model trained weights"
-    # parser.add_argument("-w", "--weights", help=help_)
-    # help_ = "Use mse loss instead of binary cross entropy (default)"
-    # parser.add_argument("-m",
-    #                     "--mse",
-    #                     help=help_, action='store_true')
-    # args = parser.parse_args()
-    models = (encoder, decoder)
-    data = (X_test, Y_test)
-
-    # VAE loss = mse_loss or xent_loss + kl_loss
-    use_mse = True
-    if use_mse:
-        reconstruction_loss = mse(inputs, outputs)
+    X_train= Y_train= X_test= Y_test = None
+    file = "data.pickle"
+    if not os.path.exists(file):
+        X_train, Y_train, X_test, Y_test = load_training_input_2()
+        pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
     else:
-        reconstruction_loss = binary_crossentropy(inputs,
-                                                  outputs)
-    # def my_vae_loss(y_true,y_pred):
-    #     reconstruction_loss = mse(y_true,y_pred)
-    reconstruction_loss *= original_dim
-    kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
-    kl_loss = K.sum(kl_loss, axis=-1)
-    kl_loss *= -0.5
-    vae_loss = K.mean(reconstruction_loss + kl_loss)
-        # return vae_loss
-    vae.add_loss(vae_loss)
-    vae.compile(optimizer='adam')
-    vae.summary()
+        X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle",'rb'))
 
-    plot_model(vae,
-               to_file='vae_mlp.png',
-               show_shapes=True)
-    load_weights = False
-    if load_weights:
-        filename = ""
-        vae.load_weights(filename)
-    else:
-        # train the autoencoder
-        vae.fit(x=X_train,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_data=(X_test, None))
-        vae.save_weights('vae_mlp_mnist.h5')
+
+    print("Min\tMax")
+    print("Train")
+    print(np.min(X_train),np.max(X_train))
+    print(np.min(Y_train),np.max(Y_train))
+    print("Test")
+    print(np.min(X_test),np.max(X_test))
+    print(np.min(Y_test),np.max(Y_test))
+    print("End")
+
+    #
+    input_vae = VAE()
+    input_vae.create_vae()
+    input_vae.configure_vae()
+    input_vae.compile_vae()
+    input_vae.fit(X_train,X_test,"input_vae.h5")
+    print(X_test)
+    print(input_vae.predict(X_test))
+
+
+    output_vae = VAE()
+    output_vae.create_vae()
+    output_vae.configure_vae()
+    output_vae.compile_vae()
+    output_vae.fit(Y_train, Y_test,"output_vae.h5")
+    print(Y_test)
+    print(input_vae.predict(Y_test))
+
 
     # plot_results(models,
     #              data,

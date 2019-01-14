@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 
 import datetime
+import os
 import pickle
 
 import numpy as np
@@ -34,8 +35,8 @@ class RetroCycleGAN():
         # self.disc_patch = (patch, patch, 1)
 
         # Number of filters in the first layer of G and D
-        self.gf = 32
-        self.df = 64
+        self.gf = 64
+        self.df = 256
 
         # Loss weights
         self.lambda_cycle = 10.0                    # Cycle-consistency loss
@@ -44,9 +45,9 @@ class RetroCycleGAN():
         # optimizer = Adam(0.0002, 0.5,amsgrad=True)
         # optimizer = Adam()
         # optimizer = Nadam()
-        optimizer = SGD(lr=0.01,nesterov=True,momentum=0.8,decay=0.1e-8)
+        # optimizer = SGD(lr=0.01,nesterov=True,momentum=0.8,decay=0.1e-8)
         # optimizer = Adadelta()
-        # optimizer = RMSprop(lr=0.005)
+        optimizer = RMSprop(lr=0.005)
         # Build and compile the discriminators
         self.d_A = self.build_discriminator()
         self.d_B = self.build_discriminator()
@@ -144,7 +145,7 @@ class RetroCycleGAN():
         # u4 = UpSampling2D(size=2)(u3)
         # u4 = Dense(2048)
         # output_img = Conv2D(self.channels, kernel_size=4, strides=1, padding='same', activation='tanh')(u4)
-        output_img = Dense(self.img_cols,activation='linear')(u3)
+        output_img = Dense(self.img_cols,activation='tanh')(u3)
         return Model(d0, output_img)
 
     def build_discriminator(self):
@@ -185,7 +186,13 @@ class RetroCycleGAN():
         #     Y_test = data["Y_test"]
         # else:
             # print("Dumping data")
-        X_train,Y_train, X_test,Y_test = load_training_input_2(1000000)
+        X_train = Y_train = X_test = Y_test = None
+        file = "data.pickle"
+        if not os.path.exists(file):
+            X_train, Y_train, X_test, Y_test = load_training_input_2()
+            pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
+        else:
+            X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle", 'rb'))
             # data = {
             #     'X_train':X_train,
             #            'Y_train':Y_train, 'X_test':X_test, 'Y_test':Y_test
