@@ -171,23 +171,14 @@ class RetroCycleGAN():
         validity = Dense(1,activation='sigmoid')(Flatten()(d4))
         return Model(vector_input, validity)
 
-    def train(self, epochs, batch_size=1, sample_interval=50):
+    def train(self, epochs, batch_size=1, sample_interval=50,noisy_entries_num=10):
 
         start_time = datetime.datetime.now()
 
         # Adversarial loss ground truths
-        valid = np.ones((batch_size,) )
-        fake = np.zeros((batch_size,) )
-        # X_train, Y_train, X_test, Y_test = (None,None,None,None)
-        # if os.path.exists("training_testing.data"):
-        #     print("Loading data")
-        #     data = pickle.load(open('training_testing.data','rb'))
-        #     X_train = data["X_train"]
-        #     Y_train = data["Y_train"]
-        #     X_test = data["X_test"]
-        #     Y_test = data["Y_test"]
-        # else:
-            # print("Dumping data")
+        valid = np.ones((batch_size*noisy_entries_num,) )
+        fake = np.zeros((batch_size*noisy_entries_num,) )
+
         X_train,Y_train, X_test,Y_test = load_training_input_2(1000000)
             # data = {
             #     'X_train':X_train,
@@ -215,6 +206,36 @@ class RetroCycleGAN():
                 # ----------------------
                 #  Train Discriminators
                 # ----------------------
+                self.latent_dim = 300
+                # idx = np.random.randint(0, X_train.shape[0], batch_size)
+                noisy_entries = []
+                noisy_outputs = []
+                for index in range(len(imgs_A)):
+                    # Generate some noise
+                    input_noise = output_noise = noise = np.random.normal(0, 0.5, (noisy_entries_num, self.latent_dim))
+                    # Replace one for the original
+                    input_noise[0, :] = imgs_A[index]
+                    output_noise[0, :] = imgs_B[index]
+                    # Add noise to the original to have some noisy inputs
+                    for i in range(1, noise.shape[0]):
+                        input_noise[i, :] = imgs_A[index] + noise[i, :]
+                        output_noise[i, :] = imgs_B[index] + noise[i, :]
+
+                    noisy_entries.append(input_noise)
+                    noisy_outputs.append(output_noise)
+                # imgs = Y_train[idx]
+                imgs = noisy_outputs[0]
+                noise = noisy_entries[0]
+                # print("imgs")
+                # print(imgs.shape)
+                # print("noise")
+                # print(noise.shape)
+                for entry_idx in range(1, len(noisy_outputs)):
+                    # print(noisy_outputs[entry_idx].shape)
+                    imgs = np.vstack((imgs, noisy_outputs[entry_idx]))
+                    noise = np.vstack((noise, noisy_entries[entry_idx]))
+                imgs_A = noise
+                imgs_B =imgs
 
                 # Translate images to opposite domain
                 fake_B = self.g_AB.predict(imgs_A)

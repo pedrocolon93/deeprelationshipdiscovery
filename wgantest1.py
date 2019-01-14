@@ -6,7 +6,7 @@ from keras.layers import BatchNormalization, Activation, ZeroPadding2D
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import UpSampling2D, Conv2D
 from keras.models import Sequential, Model
-from keras.optimizers import RMSprop
+from keras.optimizers import RMSprop, Adam
 
 import keras.backend as K
 
@@ -30,10 +30,10 @@ class WGAN():
         self.latent_dim = 300
 
         # Following parameter and optimizer set as recommended in paper
-        self.n_critic = 5
-        self.clip_value = 0.01
-        optimizer = RMSprop(lr=0.00005)
-
+        self.n_critic = 10
+        self.clip_value = 0.0001
+        # optimizer = RMSprop(lr=0.005)
+        optimizer = Adam()
         # Build and compile the critic
         self.critic = self.build_critic()
         self.critic.compile(loss=self.wasserstein_loss,
@@ -66,9 +66,14 @@ class WGAN():
 
         model = Sequential()
 
-        model.add(Dense(128 * 7 * 7, activation="relu", input_dim=self.latent_dim))
+        model.add(Dense(4096, activation="relu", input_dim=self.latent_dim))
+
+        model.add(Dense(2048, activation="relu", input_dim=self.latent_dim))
+        model.add(BatchNormalization(momentum=0.8))
+        model.add(Activation("relu"))
+
         # model.add(Reshape((7, 7, 128)))
-        model.add(Dense(256))
+        model.add(Dense(1024))
         model.add(BatchNormalization(momentum=0.8))
         model.add(Activation("relu"))
 
@@ -77,9 +82,13 @@ class WGAN():
         # model.add(BatchNormalization(momentum=0.8))
         # model.add(Activation("relu"))
 
-        model.add(Dense(128))
+        model.add(Dense(512))
         model.add(BatchNormalization(momentum=0.8))
         model.add(Activation("relu"))
+
+        # model.add(Dense(128))
+        # model.add(BatchNormalization(momentum=0.8))
+        # model.add(Activation("relu"))
 
         # model.add(UpSampling2D())
         # model.add(Conv2D(64, kernel_size=4, padding="same"))
@@ -88,7 +97,7 @@ class WGAN():
 
         # model.add(Conv2D(self.channels, kernel_size=4, padding="same"))
         # model.add(Activation("tanh"))
-        model.add(Dense(64))
+        model.add(Dense(300))
         model.add(Activation("tanh"))
 
 
@@ -103,13 +112,13 @@ class WGAN():
 
         model = Sequential()
 
-        model.add(Dense(64,input_shape=self.img_shape))
+        model.add(Dense(256,input_shape=self.img_shape))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
         # model.add(Conv2D(16, kernel_size=3, strides=2, input_shape=self.img_shape, padding="same"))
         # model.add(LeakyReLU(alpha=0.2))
         # model.add(Dropout(0.25))
-        model.add(Dense(128))
+        model.add(Dense(512))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
@@ -118,7 +127,7 @@ class WGAN():
         # model.add(BatchNormalization(momentum=0.8))
         # model.add(LeakyReLU(alpha=0.2))
         # model.add(Dropout(0.25))
-        model.add(Dense(256))
+        model.add(Dense(1024))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
@@ -126,7 +135,7 @@ class WGAN():
         # model.add(BatchNormalization(momentum=0.8))
         # model.add(LeakyReLU(alpha=0.2))
         # model.add(Dropout(0.25))
-        model.add(Dense(512))
+        model.add(Dense(2048))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
@@ -155,8 +164,9 @@ class WGAN():
         # X_train = np.expand_dims(X_train, axis=3)
 
         # Adversarial ground truths
-        valid = -np.ones((batch_size, 1))
-        fake = np.ones((batch_size, 1))
+        noisy_entries_num = 10
+        valid = -np.ones((batch_size*noisy_entries_num, 1))
+        fake = np.ones((batch_size*noisy_entries_num, 1))
 
         for epoch in range(epochs):
 
@@ -165,14 +175,43 @@ class WGAN():
                 # ---------------------
                 #  Train Discriminator
                 # ---------------------
-
-                # Select a random batch of images
+                ####
                 idx = np.random.randint(0, X_train.shape[0], batch_size)
-                imgs = Y_train[idx]
+                noisy_entries = []
+                noisy_outputs = []
+                for index in idx:
+                    # Generate some noise
+                    input_noise = output_noise = noise = np.random.normal(0, 1, (noisy_entries_num, self.latent_dim))
+                    # Replace one for the original
+                    input_noise[0, :] = X_train[index]
+                    output_noise[0, :] = Y_train[index]
+                    # Add noise to the original to have some noisy inputs
+                    for i in range(1, noise.shape[0]):
+                        input_noise[i, :] = X_train[index] + noise[i, :]
+                        output_noise[i, :] = Y_train[index] + noise[i, :]
+
+                    noisy_entries.append(input_noise)
+                    noisy_outputs.append(output_noise)
+                # imgs = Y_train[idx]
+                imgs = noisy_outputs[0]
+                noise =noisy_entries[0]
+                # print("imgs")
+                # print(imgs.shape)
+                # print("noise")
+                # print(noise.shape)
+                for entry_idx in range(1,len(noisy_outputs)):
+                    # print(noisy_outputs[entry_idx].shape)
+                    imgs = np.vstack((imgs,noisy_outputs[entry_idx]))
+                    noise = np.vstack((noise,noisy_entries[entry_idx]))
+                ####
+                # Select a random batch of word embeddings
+                # idx = np.random.randint(0, X_train.shape[0], batch_size)
+
+                # imgs = Y_train[idx]
 
                 # Sample noise as generator input
                 # noise = np.random.normal(0, 1, (batch_size, self.latent_dim))
-                noise = X_train[idx]
+                # noise = X_train[idx]
                 # Generate a batch of new images
                 gen_imgs = self.generator.predict(noise)
 
@@ -196,9 +235,9 @@ class WGAN():
             # Plot the progress
             print("%d [D loss: %f] [G loss: %f]" % (epoch, 1 - d_loss[0], 1 - g_loss[0]))
 
-            # If at save interval => save generated image samples
-            if epoch % sample_interval == 0:
-                self.sample_images(epoch)
+            # # If at save interval => save generated image samples
+            # if epoch % sample_interval == 0:
+            #     self.sample_images(epoch)
 
     def sample_images(self, epoch):
         r, c = 5, 5
@@ -224,4 +263,4 @@ class WGAN():
 
 if __name__ == '__main__':
     wgan = WGAN()
-    wgan.train(epochs=4000, batch_size=32, sample_interval=50)
+    wgan.train(epochs=4000, batch_size=128, sample_interval=50)

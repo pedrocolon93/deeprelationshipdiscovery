@@ -8,7 +8,7 @@ from keras.layers import BatchNormalization
 from keras.layers import Input, Dense, Dropout, Concatenate
 from keras.layers.advanced_activations import LeakyReLU
 from keras.models import Model
-from keras.optimizers import Adam, Nadam, Adadelta
+from keras.optimizers import Adam, Nadam, Adadelta, RMSprop, SGD
 from sklearn.metrics import mean_squared_error
 
 from tools import load_training_input_2
@@ -44,8 +44,9 @@ class RetroCycleGAN():
         # optimizer = Adam(0.0002, 0.5,amsgrad=True)
         # optimizer = Adam()
         # optimizer = Nadam()
-        # optimizer = SGD(lr=0.001,nesterov=True,momentum=0.8)
-        optimizer = Adadelta()
+        optimizer = SGD(lr=0.01,nesterov=True,momentum=0.8,decay=0.1e-8)
+        # optimizer = Adadelta()
+        # optimizer = RMSprop(lr=0.005)
         # Build and compile the discriminators
         self.d_A = self.build_discriminator()
         self.d_B = self.build_discriminator()
@@ -150,7 +151,7 @@ class RetroCycleGAN():
 
         def d_layer(layer_input, layer_size,  normalization=True):
             """Discriminator layer"""
-            d = Dense(layer_size, activation='tanh')(layer_input)
+            d = Dense(layer_size, activation='relu')(layer_input)
             # d = LeakyReLU(alpha=0.2)(d)
             if normalization:
                 d = BatchNormalization()(d)
@@ -167,13 +168,13 @@ class RetroCycleGAN():
 
         return Model(img, validity)
 
-    def train(self, epochs, batch_size=1, sample_interval=50):
+    def train(self, epochs, batch_size=1, sample_interval=50,noisy_entries_num=5):
 
         start_time = datetime.datetime.now()
 
         # Adversarial loss ground truths
-        valid = np.ones((batch_size,) )
-        fake = np.zeros((batch_size,) )
+        valid = np.ones((batch_size*noisy_entries_num,) )
+        fake = np.zeros((batch_size*noisy_entries_num,) )
         # X_train, Y_train, X_test, Y_test = (None,None,None,None)
         # if os.path.exists("training_testing.data"):
         #     print("Loading data")
@@ -211,6 +212,38 @@ class RetroCycleGAN():
                 # ----------------------
                 #  Train Discriminators
                 # ----------------------
+
+                self.latent_dim = 300
+                # idx = np.random.randint(0, X_train.shape[0], batch_size)
+                noisy_entries = []
+                noisy_outputs = []
+                for index in range(len(imgs_A)):
+                    # Generate some noise
+                    input_noise = output_noise = noise = np.random.normal(0, 0.1, (noisy_entries_num, self.latent_dim))
+                    # Replace one for the original
+                    input_noise[0, :] = imgs_A[index]
+                    output_noise[0, :] = imgs_B[index]
+                    # Add noise to the original to have some noisy inputs
+                    for i in range(1, noise.shape[0]):
+                        input_noise[i, :] = imgs_A[index] + noise[i, :]
+                        output_noise[i, :] = imgs_B[index] + noise[i, :]
+
+                    noisy_entries.append(input_noise)
+                    noisy_outputs.append(output_noise)
+                # imgs = Y_train[idx]
+                imgs = noisy_outputs[0]
+                noise = noisy_entries[0]
+                # print("imgs")
+                # print(imgs.shape)
+                # print("noise")
+                # print(noise.shape)
+                for entry_idx in range(1, len(noisy_outputs)):
+                    # print(noisy_outputs[entry_idx].shape)
+                    imgs = np.vstack((imgs, noisy_outputs[entry_idx]))
+                    noise = np.vstack((noise, noisy_entries[entry_idx]))
+                imgs_A = noise
+                imgs_B =imgs
+
 
                 # Translate images to opposite domain
                 fake_B = self.g_AB.predict(imgs_A)
@@ -252,7 +285,7 @@ class RetroCycleGAN():
                                                                             elapsed_time))
 
                 # If at save interval => save generated image samples
-                if batch_i % sample_interval == 0:
+                # if batch_i % sample_interval == 0:
                     # limit = 15
                     # a_b = []
                     # b_a = []
@@ -283,7 +316,7 @@ class RetroCycleGAN():
                     #     find_word(tup[0], retro=False)
                     #     find_closest(tup[1], retro=False)
 
-                    pickle.dump(self, open('model.pickle', 'wb'))
+                    # pickle.dump(self, open('model.pickle', 'wb'))
                 # except:
                 #     self = pickle.load(open('model.pickle', 'rb'))
 
@@ -293,8 +326,8 @@ class RetroCycleGAN():
 
 
 if __name__ == '__main__':
-    # gan = RetroCycleGAN()
-    # gan.train(epochs=8, batch_size=128, sample_interval=100)
+    gan = RetroCycleGAN()
+    gan.train(epochs=8, batch_size=128, sample_interval=100)
     # abscond_non_retro_string = "abscond 0.0083 0.0106 -0.0268 -0.0179 -0.0123 -0.0072 -0.0058 -0.0372 0.0215 0.0092 -0.0087 -0.0091 -0.0002 -0.0316 -0.0138 -0.0186 0.0189 0.0047 0.0237 0.0043 -0.0229 -0.0097 -0.0151 0.0094 -0.0085 0.0259 -0.0083 0.0093 -0.0311 0.0042 -0.0082 -0.0047 -0.0314 0.0360 -0.0176 -0.0247 -0.0167 0.0047 -0.0126 0.0110 -0.0013 -0.0205 0.0101 -0.0122 0.0060 0.0189 0.0311 0.0070 0.0056 -0.0056 -0.0062 0.0206 -0.0230 -0.0413 -0.0595 -0.0164 -0.0098 -0.0071 -0.0358 -0.0132 0.0216 -0.0071 0.0353 0.0016 -0.0055 -0.0022 0.0198 -0.0473 -0.0023 0.0197 -0.0023 0.0097 0.0426 -0.0248 0.0226 0.0097 0.0219 0.0313 0.0260 0.0198 0.0124 0.0188 -0.0033 0.0273 -0.0140 0.0084 0.0328 0.0050 -0.0147 0.0026 -0.0000 -0.0004 -0.0546 -0.0010 -0.0100 -0.0234 -0.0023 -0.0256 -0.0069 0.0037 0.0184 -0.0153 0.0025 -0.0033 0.0115 -0.0353 -0.0161 -0.0114 0.0079 0.0151 0.0010 0.0172 0.0448 0.0219 -0.0249 -0.0007 0.0135 -0.0117 -0.0040 -0.0212 0.0224 -0.0031 0.0216 -0.0259 0.0281 -0.0152 0.0123 -0.0021 -0.0314 0.0218 0.0015 -0.0040 -0.0079 -0.0083 0.0050 0.0043 -0.0159 0.0147 0.0299 0.0155 0.0092 0.0089 0.0115 -0.0311 0.0300 0.0211 -0.0071 0.0061 -0.0047 -0.0168 0.0086 0.0225 -0.0166 -0.0245 0.0236 -0.0077 -0.0140 -0.0174 -0.0177 0.0032 0.0250 0.0140 -0.0224 0.0173 0.0130 0.0002 0.0274 -0.0072 -0.0231 0.0372 -0.0039 -0.0194 -0.0168 -0.0048 -0.0256 0.0111 0.0283 -0.0138 -0.0065 -0.0137 0.0103 -0.0142 -0.0154 -0.0231 0.0073 -0.0247 0.0107 0.0420 0.0073 0.0143 -0.0061 0.0097 -0.0217 -0.0047 -0.0055 -0.0019 0.0270 0.0021 -0.0064 0.0107 -0.0554 0.0341 -0.0097 0.0129 -0.0084 -0.0033 0.0114 -0.0177 -0.0206 -0.0137 0.0159 -0.0186 0.0458 -0.0003 0.0344 0.0011 -0.0099 0.0272 0.0023 -0.0138 -0.0150 -0.0023 -0.0102 0.0390 -0.0184 -0.0149 -0.0399 0.0448 -0.0124 0.0030 -0.0198 -0.0237 -0.0301 -0.0379 0.0394 0.0074 0.0107 0.0116 0.0025 0.0066 0.0677 0.0044 -0.0065 0.0203 0.0011 0.0007 -0.0023 -0.0304 -0.0320 0.0150 -0.0175 -0.0003 -0.0007 -0.0290 -0.0009 0.0059 0.0029 0.0116 -0.0115 0.0038 -0.0466 0.0101 -0.0172 -0.0422 -0.0049 -0.0273 -0.0213 -0.0297 0.0205 -0.0035 -0.0134 0.0487 -0.0358 -0.0319 -0.0106 -0.0173 0.0521 -0.0056 -0.0125 -0.0032 0.0036 -0.0117 -0.0042 0.0037 0.0135 0.0280 0.0046 -0.0057 -0.0085 0.0146 0.0135 -0.0021 0.0129 0.0088 -0.0240 -0.0376 -0.0146 0.0147 -0.0194 0.0091"
     # abscond_retro_string = "abscond 0.1078 0.1119 -0.0016 0.0495 -0.0000 -0.1264 -0.0106 0.1652 -0.0126 0.0014 -0.0152 -0.2043 -0.1176 0.0370 -0.0422 -0.0036 -0.1001 0.1304 -0.1046 0.0412 -0.0869 0.0258 -0.0425 -0.0860 -0.1142 0.0464 -0.0693 -0.0286 -0.0238 -0.0273 -0.1242 0.0355 0.1453 0.0868 0.0621 -0.0667 -0.0268 -0.0045 -0.0517 0.0195 0.1216 0.0675 0.0023 -0.0394 0.0637 0.0011 0.0182 -0.0634 0.0148 0.0288 -0.0035 -0.1871 -0.1273 -0.0948 -0.0088 0.0042 0.0227 -0.0361 -0.0315 0.0192 -0.0185 -0.0205 0.0164 0.0869 0.0870 0.0031 0.0705 -0.0816 0.0203 -0.0322 0.0490 0.0160 0.0381 0.0149 -0.0820 -0.0296 0.0640 -0.0127 -0.0219 -0.0524 0.0362 -0.0185 0.0136 0.0098 0.0577 0.0168 0.0320 -0.0758 -0.0391 -0.0265 -0.0238 -0.1031 -0.0499 -0.0783 -0.0551 -0.0252 -0.0356 -0.0828 -0.0040 0.0604 -0.0173 0.0419 0.0603 -0.0523 -0.0525 -0.0550 -0.0030 -0.0848 -0.0196 0.1151 -0.0197 0.0151 0.0234 -0.0275 0.0093 0.0391 -0.0724 0.0403 0.0170 -0.0186 0.0557 0.0261 0.0008 0.0300 0.0560 -0.0471 -0.0723 -0.0336 -0.0067 -0.0021 -0.0541 0.0661 0.0628 -0.1231 0.0472 0.0382 0.0343 -0.0489 0.0677 -0.0233 -0.0018 -0.0637 -0.0537 0.0262 -0.0072 -0.0641 -0.0023 0.0050 -0.0099 0.0008 -0.1040 0.0255 -0.0774 0.0872 -0.0496 0.1259 0.0727 0.0662 0.0121 0.0274 0.0346 -0.0330 -0.0051 0.0149 -0.0099 0.0617 0.0613 -0.0023 -0.0644 -0.0512 0.0439 0.0105 0.0264 0.0183 -0.0171 0.0141 -0.0330 -0.1142 -0.0598 -0.0745 0.0036 -0.0196 0.0385 -0.1153 -0.0148 0.0290 -0.0159 -0.0546 -0.0229 -0.0159 -0.0613 0.0418 -0.0169 0.0727 0.0739 -0.0360 -0.0401 -0.0260 -0.0012 -0.0452 0.0135 0.1019 0.1254 0.0591 0.0156 0.1324 -0.0012 0.0179 -0.0791 -0.0545 0.0060 0.0070 0.0315 -0.0158 -0.0333 -0.0537 0.1155 0.0209 -0.0414 0.0919 -0.0663 0.0434 0.0534 -0.0324 0.0347 -0.0319 -0.0836 0.0196 -0.0068 0.0489 0.0111 -0.0402 -0.0150 0.0525 0.0733 -0.0244 0.0272 0.0421 0.0245 -0.0382 -0.0431 -0.0394 -0.1068 0.0013 0.0754 -0.0197 -0.0160 0.0295 0.0201 -0.1482 -0.1019 0.0268 -0.0359 -0.0386 0.0520 -0.0556 -0.0306 0.0504 -0.0563 -0.0453 0.0187 -0.0465 0.0508 -0.0409 -0.0045 0.0389 0.0047 -0.0844 -0.0316 0.0251 0.0191 0.0010 -0.0509 0.0382 -0.0021 -0.0544 0.0041 0.0867 -0.0691 0.1239 -0.0463 0.0282 -0.0628 0.0969 -0.0607 0.0281 0.0016 0.0848 0.0033 0.0248 -0.0417 0.0300 0.0178 0.0124 0.0254 -0.0082 0.0339 -0.0189 -0.0541 0.0553"
     # y = np.array([float(x) for x in abscond_retro_string.split(" ")[1:]])
@@ -304,10 +337,10 @@ if __name__ == '__main__':
     # # print(list(common_vocabulary).index("abscond"))
     # pred_y = gan.g_AB.predict(x)[0]
     # print(pred_y)
-    gan = pickle.load(open("model.pickle","rb"))
+    # gan = pickle.load(open("model.pickle","rb"))
     # print(gan.X_test)
-    print("COmpiling and testing!")
-    gan.g_AB.compile(optimizer="adam",loss="mae",metrics=["accuracy"])
-    print(gan.g_AB.evaluate(gan.X_test,gan.Y_test))
+    # print("COmpiling and testing!")
+    # gan.g_AB.compile(optimizer="adam",loss="mae",metrics=["accuracy"])
+    # print(gan.g_AB.evaluate(gan.X_test,gan.Y_test))
 
 
