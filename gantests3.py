@@ -25,9 +25,6 @@ class RetroCycleGAN():
         self.img_shape = (self.img_cols,)#, self.channels)
 
         # Configure data loader
-        self.dataset_name = 'apple2orange'
-        # self.data_loader = DataLoader(dataset_name=self.dataset_name,
-        #                               img_res=(self.img_rows, self.img_cols))
 
 
         # Calculate output shape of D (PatchGAN)
@@ -291,41 +288,6 @@ class RetroCycleGAN():
                                                                             np.mean(g_loss[5:6]),
                                                                             elapsed_time))
 
-                # If at save interval => save generated image samples
-                # if batch_i % sample_interval == 0:
-                    # limit = 15
-                    # a_b = []
-                    # b_a = []
-                    # w_to_r = []
-                    # r_to_w = []
-                    # for test_batch, (test_a, test_b) in enumerate(load_batch(10, False, n_batches=10)):
-                    #     if test_batch == limit:
-                    #         break
-                    #     word_to_ret = self.g_AB.predict(test_a)
-                    #     for idx, converted in enumerate(word_to_ret):
-                    #         w_to_r.append((word_to_ret[idx], converted[idx]))
-                    #     ret_to_word = self.g_BA.predict(test_b)
-                    #     for idx, converted in enumerate(ret_to_word):
-                    #         r_to_w.append((ret_to_word[idx], converted[idx]))
-                    #
-                    #     ab = mean_squared_error(test_b, word_to_ret)
-                    #     ba = mean_squared_error(test_a, ret_to_word)
-                    #     # print("A->B"+str(ab))
-                    #     # print("B->A" + str(ba))
-                    #     a_b.append(ab)
-                    #     b_a.append(ba)
-                    # print("A->B avg", np.average(a_b))
-                    # print("B->A avg", np.average(b_a))
-                    # for tup in w_to_r:
-                    #     find_word(tup[0])
-                    #     find_closest(tup[1])
-                    # for tup in r_to_w:
-                    #     find_word(tup[0], retro=False)
-                    #     find_closest(tup[1], retro=False)
-
-                    # pickle.dump(self, open('model.pickle', 'wb'))
-                # except:
-                #     self = pickle.load(open('model.pickle', 'rb'))
 
         self.X_test = X_test
         self.Y_test = Y_test
