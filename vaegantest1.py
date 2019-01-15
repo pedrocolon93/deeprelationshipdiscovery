@@ -246,21 +246,30 @@ class RetroCycleGAN():
                 #     # print(noisy_outputs[entry_idx].shape)
                 #     imgs = np.vstack((imgs, noisy_outputs[entry_idx]))
                 #     noise = np.vstack((noise, noisy_entries[entry_idx]))
-                noise = []
-                imgs = []
+                noisy_entries = []
+                noisy_outputs = []
                 for index in range(batch_size):
                     #sample for input
                     dist = self.in_vae.predict(imgs_A[index,:])
                     samples = []
                     for i in range(noisy_entries_num):
                         samples.append(sampling(dist))
-                    noise.append(samples)
+                    noisy_entries.append(samples)
+                    #sample for output
                     dist = self.out_vae.predict(imgs_B[index,:])
                     samples = []
                     for i in range(noisy_entries_num):
                         samples.append(sampling(dist))
-                    imgs.append(samples)
-                    #sample for output
+                    noisy_outputs.append(samples)
+                #join
+                noise = noisy_entries[0,:]
+                imgs = noisy_outputs[0,:]
+
+                for entry_idx in range(1, len(noisy_outputs)):
+                    # print(noisy_outputs[entry_idx].shape)
+                    imgs = np.vstack((imgs, noisy_outputs[entry_idx]))
+                    noise = np.vstack((noise, noisy_entries[entry_idx]))
+
 
                 imgs_A = noise
                 imgs_B = imgs

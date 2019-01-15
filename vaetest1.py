@@ -139,6 +139,7 @@ class VAE():
         self.z_log_var = None
         self.use_mse = use_mse
         self.models = None
+        self.loss = None
         self.intermediate_layer_count = intermediate_layer_count
 
     def create_vae(self):
@@ -191,20 +192,21 @@ class VAE():
         else:
             reconstruction_loss = binary_crossentropy(self.inputs,
                                                       self.outputs)
-        # def my_vae_loss(y_true,y_pred):
-        #     reconstruction_loss = mse(y_true,y_pred)
-        reconstruction_loss *= self.input_shape[0]
-        kl_loss = 1 + self.z_log_var - K.square(self.z_mean) - K.exp(self.z_log_var)
-        kl_loss = K.sum(kl_loss, axis=-1)
-        kl_loss *= -0.5
-        vae_loss = K.mean(reconstruction_loss + kl_loss)
-        # return vae_loss
-        self.vae.add_loss(vae_loss)
+        def my_vae_loss(y_true,y_pred):
+            reconstruction_loss = mse(y_true,y_pred)
+            reconstruction_loss *= self.input_shape[0]
+            kl_loss = 1 + self.z_log_var - K.square(self.z_mean) - K.exp(self.z_log_var)
+            kl_loss = K.sum(kl_loss, axis=-1)
+            kl_loss *= -0.5
+            vae_loss = K.mean(reconstruction_loss + kl_loss)
+            return vae_loss
+        self.loss = my_vae_loss
+        # self.vae.add_loss(vae_loss)
 
     def compile_vae(self):
         optimizer = RMSprop(lr=0.00001, decay=1e-8)
         # optimizer = SGD(decay=1e-8,nesterov=True)
-        self.vae.compile(optimizer=optimizer, metrics=['accuracy'])
+        self.vae.compile(optimizer=optimizer,loss=self.loss)
         self.vae.summary()
         # plot_model(self.vae,
         #            to_file='vae_mlp.png',
@@ -215,10 +217,10 @@ class VAE():
 
 
     def fit(self, X_train, X_test, weight_filename='vae_mlp_mnist.h5' ):
-        self.vae.fit(x=X_train,
+        self.vae.fit(X_train, X_train,
                 epochs=self.epochs,
                 batch_size=self.batch_size,
-                validation_data=(X_test, None))
+                validation_data=(X_test, X_test))
         self.vae.save_weights(weight_filename)
 
     def predict(self,input):
