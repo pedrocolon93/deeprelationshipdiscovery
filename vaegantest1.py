@@ -18,7 +18,8 @@ class RetroCycleGAN():
         self.out_vae = output_vae
         # Input shape
         self.img_rows = 1
-        self.img_cols = 300
+        # self.img_cols = 300
+        self.img_cols = input_vae.latent_dim
         self.channels = 1
         self.img_shape = (self.img_cols,)#, self.channels)
 
@@ -33,8 +34,8 @@ class RetroCycleGAN():
         # self.disc_patch = (patch, patch, 1)
 
         # Number of filters in the first layer of G and D
-        self.gf = 64
-        self.df = 256
+        self.gf = 128
+        self.df = 512
 
         # Loss weights
         self.lambda_cycle = 10.0                    # Cycle-consistency loss
@@ -143,7 +144,7 @@ class RetroCycleGAN():
         # u4 = UpSampling2D(size=2)(u3)
         # u4 = Dense(2048)
         # output_img = Conv2D(self.channels, kernel_size=4, strides=1, padding='same', activation='tanh')(u4)
-        output_img = Dense(self.img_cols,activation='tanh')(u3)
+        output_img = Dense(self.img_cols)(u3)
         return Model(d0, output_img)
 
     def build_discriminator(self):
@@ -250,20 +251,23 @@ class RetroCycleGAN():
                 noisy_outputs = []
                 for index in range(batch_size):
                     #sample for input
-                    dist = self.in_vae.predict(imgs_A[index,:])
+                    # dist = self.in_vae.encoder.predict(imgs_A[index,:].reshape(1,self.img_cols))
                     samples = []
                     for i in range(noisy_entries_num):
-                        samples.append(sampling(dist))
+                        # mean_var = dist[0:1,:]
+                        samples.append(self.in_vae.encoder.predict(imgs_A[index,:].reshape(1,300))[2].reshape((self.in_vae.latent_dim,)))
                     noisy_entries.append(samples)
                     #sample for output
-                    dist = self.out_vae.predict(imgs_B[index,:])
+                    # dist = self.out_vae.encoder.predict(imgs_B[index,:].reshape(1,self.img_cols))
                     samples = []
                     for i in range(noisy_entries_num):
-                        samples.append(sampling(dist))
+                        # samples.append(sampling(dist))
+                        samples.append(self.out_vae.encoder.predict(imgs_A[index,:].reshape(1,300))[2].reshape((self.out_vae.latent_dim,)))
+
                     noisy_outputs.append(samples)
                 #join
-                noise = noisy_entries[0,:]
-                imgs = noisy_outputs[0,:]
+                noise = noisy_entries[0]
+                imgs = noisy_outputs[0]
 
                 for entry_idx in range(1, len(noisy_outputs)):
                     # print(noisy_outputs[entry_idx].shape)
@@ -344,19 +348,22 @@ if __name__ == '__main__':
     input_vae.create_vae()
     input_vae.configure_vae()
     input_vae.compile_vae()
-    input_vae.fit(X_train,X_test,"input_vae.h5")
-    print(X_test)
-    print(input_vae.predict(X_test))
+    input_vae.load_weights("input_vae.h5")
+    # input_vae.fit(X_train,X_test,"input_vae.h5")
+    # print(X_test)
+    # print(input_vae.predict(X_test))
 
 
     output_vae = VAE()
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()
-    output_vae.fit(Y_train, Y_test,"output_vae.h5")
-    print(Y_test)
-    print(input_vae.predict(Y_test))
+    output_vae.load_weights("output_vae.h5")
+    # output_vae.fit(Y_train, Y_test,"output_vae.h5")
+    # print(Y_test)
+    # print(input_vae.predict(Y_test))
 
     rcgan = RetroCycleGAN(input_vae,output_vae)
+    rcgan.train(epochs=10,batch_size=128,sample_interval=200,noisy_entries_num=20)
 
 

@@ -159,8 +159,8 @@ class VAE():
         z = Lambda(sampling, output_shape=(self.latent_dim,), name='z')([self.z_mean, self.z_log_var])
 
         # instantiate encoder model
-        encoder = Model(self.inputs, [self.z_mean, self.z_log_var, z], name='encoder')
-        encoder.summary()
+        self.encoder = Model(self.inputs, [self.z_mean, self.z_log_var, z], name='encoder')
+        self.encoder.summary()
         # plot_model(encoder, to_file='vae_mlp_encoder.png', show_shapes=True)
 
         # build decoder model
@@ -172,12 +172,12 @@ class VAE():
         self.outputs = Dense(self.output_shape[0], activation='tanh')(x)
 
         # instantiate decoder model
-        decoder = Model(latent_inputs, self.outputs, name='decoder')
-        decoder.summary()
+        self.decoder = Model(latent_inputs, self.outputs, name='decoder')
+        self.decoder.summary()
         # plot_model(decoder, to_file='vae_mlp_decoder.png', show_shapes=True)
 
         # instantiate VAE model
-        self.outputs = decoder(encoder(self.inputs)[2])
+        self.outputs = self.decoder(self.encoder(self.inputs)[2])
         vae = Model(self.inputs, self.outputs, name='vae_mlp')
 
         self.vae =vae
