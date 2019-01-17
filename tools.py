@@ -86,7 +86,7 @@ def load_training_input(limit=10000):
     return common_vocabulary, common_vectors, common_retro_vectors
 
 
-def load_training_input_2(limit=10000):
+def load_training_input_2(limit=10000,normalize=True):
     global common_retro_vectors_train,common_retro_vectors_test,common_vectors_test,common_vectors_train
     words, vectors = load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=limit)
     retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=limit)
@@ -118,13 +118,17 @@ def load_training_input_2(limit=10000):
     # common_vocabulary = np.array(list(common_vocabulary))
     # common_retro_vectors = np.array([retrovectors[retrowords.index(word)]for word in common_vocabulary])
     # common_vectors = np.array([vectors[words.index(word)]for word in common_vocabulary])
-    scaler = MinMaxScaler()
-    scaler = scaler.fit(common_vectors)
-    scaled_common_vector = scaler.transform(common_vectors)
+    if normalize:
+        scaler = MinMaxScaler()
+        scaler = scaler.fit(common_vectors)
+        scaled_common_vector = scaler.transform(common_vectors)
 
-    scaler = MinMaxScaler()
-    scaler = scaler.fit(common_retro_vectors)
-    scaled_common_retro_vector = scaler.transform(common_retro_vectors)
+        scaler = MinMaxScaler()
+        scaler = scaler.fit(common_retro_vectors)
+        scaled_common_retro_vector = scaler.transform(common_retro_vectors)
+    else:
+        scaled_common_vector = common_vectors
+        scaled_common_retro_vector = common_retro_vectors
 
     X_train, X_test, y_train, y_test = train_test_split(scaled_common_vector, scaled_common_retro_vector, test_size = 0.33, random_state = 42)
     common_vectors_train = X_train
