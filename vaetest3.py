@@ -16,7 +16,7 @@ from __future__ import print_function
 
 import pickle
 
-from keras.layers import Lambda, Input, Dense, BatchNormalization, Dropout
+from keras.layers import Lambda, Input, Dense, BatchNormalization, Dropout, LeakyReLU
 from keras.models import Model
 from keras.datasets import mnist
 from keras.losses import mse, binary_crossentropy
@@ -50,72 +50,13 @@ def sampling(args):
     batch = K.shape(z_mean)[0]
     dim = K.int_shape(z_mean)[1]
     # by default, random_normal has mean=0 and std=1.0
-    epsilon = K.random_normal(shape=(batch, dim))
+    epsilon = K.random_normal(shape=(batch, dim),stddev=1)
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
-
-def plot_results(models,
-                 data,
-                 batch_size=128,
-                 model_name="vae_mnist"):
-    """Plots labels and MNIST digits as function of 2-dim latent vector
-    # Arguments:
-        models (tuple): encoder and decoder models
-        data (tuple): test data and label
-        batch_size (int): prediction batch size
-        model_name (string): which model is using this function
-    """
-
-    encoder, decoder = models
-    x_test, y_test = data
-    os.makedirs(model_name, exist_ok=True)
-
-    filename = os.path.join(model_name, "vae_mean.png")
-    # display a 2D plot of the digit classes in the latent space
-    z_mean, _, _ = encoder.predict(x_test,
-                                   batch_size=batch_size)
-    plt.figure(figsize=(12, 10))
-    plt.scatter(z_mean[:, 0], z_mean[:, 1], c=y_test)
-    plt.colorbar()
-    plt.xlabel("z[0]")
-    plt.ylabel("z[1]")
-    plt.savefig(filename)
-    plt.show()
-
-    filename = os.path.join(model_name, "digits_over_latent.png")
-    # display a 30x30 2D manifold of digits
-    n = 30
-    digit_size = 28
-    figure = np.zeros((digit_size * n, digit_size * n))
-    # linearly spaced coordinates corresponding to the 2D plot
-    # of digit classes in the latent space
-    grid_x = np.linspace(-4, 4, n)
-    grid_y = np.linspace(-4, 4, n)[::-1]
-
-    for i, yi in enumerate(grid_y):
-        for j, xi in enumerate(grid_x):
-            z_sample = np.array([[xi, yi]])
-            x_decoded = decoder.predict(z_sample)
-            digit = x_decoded[0].reshape(digit_size, digit_size)
-            figure[i * digit_size: (i + 1) * digit_size,
-                   j * digit_size: (j + 1) * digit_size] = digit
-
-    plt.figure(figsize=(10, 10))
-    start_range = digit_size // 2
-    end_range = n * digit_size + start_range + 1
-    pixel_range = np.arange(start_range, end_range, digit_size)
-    sample_range_x = np.round(grid_x, 1)
-    sample_range_y = np.round(grid_y, 1)
-    plt.xticks(pixel_range, sample_range_x)
-    plt.yticks(pixel_range, sample_range_y)
-    plt.xlabel("z[0]")
-    plt.ylabel("z[1]")
-    plt.imshow(figure, cmap='Greys_r')
-    plt.savefig(filename)
-    plt.show()
-
 class VAE():
-    def __init__(self,batch_norm = True,dropout=0.4, input_dimension=300, output_dimension=300, intermediate_dimension=64, batch_size = 128, latent_dim=64, epochs=50,use_mse = True,intermediate_layer_count = 4):
+    def __init__(self,a_weight=1, b_weight=1, batch_norm = True,dropout=0.4, input_dimension=300, output_dimension=300,
+                 intermediate_dimension=64, batch_size = 128, latent_dim=64, epochs=50,use_mse = True,
+                 intermediate_layer_count = 4):
         # image_size = x_train.shape[1]
         # original_dim = image_size * image_size
         # x_train = np.reshape(x_train, [-1, original_dim])
@@ -143,17 +84,20 @@ class VAE():
         self.intermediate_layer_count = intermediate_layer_count
         self.dropout = dropout
         self.batch_norm = batch_norm
+        self.a_weight = a_weight
+        self.b_weight = b_weight
 
     def create_vae(self):
         # VAE model = encoder + decoder
         # build encoder model
         self.inputs = Input(shape=self.input_shape, name='encoder_input')
-        x = Dense(self.intermediate_dim, activation='relu')(self.inputs)
-
+        x = Dense(self.intermediate_dim,)(self.inputs)
+        x = LeakyReLU()(x)
         for i in range(2,self.intermediate_layer_count+2):
             if self.batch_norm:
                 x = BatchNormalization()(x)
-            x = Dense(self.intermediate_dim * i, activation='relu')(x)
+            x = Dense(self.intermediate_dim * i,activation="tanh")(x)
+            # x = LeakyReLU()(x)
             x = Dropout(self.dropout)(x)
 
         self.z_mean = Dense(self.latent_dim, name='z_mean')(x)
@@ -170,11 +114,12 @@ class VAE():
 
         # build decoder model
         latent_inputs = Input(shape=(self.latent_dim,), name='z_sampling')
-        x = Dense(self.intermediate_dim * (self.intermediate_layer_count+1), activation='relu')(latent_inputs)
+        x = Dense(self.intermediate_dim * (self.intermediate_layer_count+1), activation='tanh')(latent_inputs)
         for i in reversed(range(1,self.intermediate_layer_count+1)):
             if self.batch_norm:
                 x = BatchNormalization()(x)
-            x = Dense(self.intermediate_dim*i, activation='relu')(x)
+            x = Dense(self.intermediate_dim*i,activation="tanh")(x)
+            # x = LeakyReLU()(x)
             x = Dropout(self.dropout)(x)
 
 
@@ -207,20 +152,20 @@ class VAE():
             kl_loss = 1 + self.z_log_var - K.square(self.z_mean) - K.exp(self.z_log_var)
             kl_loss = K.sum(kl_loss, axis=-1)
             kl_loss *= -0.5
-            scaling_factor = 1
-            a_weight = 1.0/scaling_factor
-            b_weight = 1
+            # scaling_factor = 1
+            a_weight = self.a_weight
+            b_weight = self.b_weight
             print(kl_loss)
-            vae_loss = scaling_factor*K.mean(a_weight*reconstruction_loss + b_weight*kl_loss)
+            vae_loss = K.mean(a_weight*reconstruction_loss + b_weight*kl_loss)/((a_weight+b_weight)/2)
             return vae_loss
         self.loss = my_vae_loss
         # self.vae.add_loss(vae_loss)
 
     def compile_vae(self):
-        # optimizer = RMSprop(lr=0.0001, decay=1e-8)
-        optimizer = Adam()
-        # optimizer = SGD(decay=1e-8,nesterov=True)
-        self.vae.compile(optimizer=optimizer,loss=self.loss,metrics=["accuracy"])
+        # optimizer = RMSprop(decay=1e-6)
+        # optimizer = Adam()
+        optimizer = SGD(decay=1e-8,nesterov=True)
+        self.vae.compile(optimizer=optimizer,loss=self.loss)
         self.vae.summary()
         # plot_model(self.vae,
         #            to_file='vae_mlp.png',
@@ -272,8 +217,8 @@ if __name__ == '__main__':
     print(np.min(Y_test),np.max(Y_test))
     print("End")
 
-    #
-    input_vae = VAE(intermediate_layer_count=6,latent_dim=128,intermediate_dimension=64,epochs=150)
+    # #
+    input_vae = VAE(a_weight=1,b_weight=10,intermediate_layer_count=2,latent_dim=64,intermediate_dimension=64,epochs=50)
     input_vae.create_vae()
     input_vae.configure_vae()
     input_vae.compile_vae()
@@ -282,7 +227,7 @@ if __name__ == '__main__':
     print(input_vae.predict(X_test))
 
 
-    output_vae = VAE(intermediate_layer_count=2,latent_dim=512,intermediate_dimension=32,epochs=5,dropout=0.3,batch_norm=True)
+    output_vae = VAE(a_weight=1,b_weight=100, intermediate_layer_count=6,latent_dim=64,intermediate_dimension=64,epochs=50)
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()
