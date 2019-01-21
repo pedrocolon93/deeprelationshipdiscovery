@@ -6,8 +6,10 @@ import pickle
 import numpy as np
 from keras import Model, Input
 from keras.layers import Dense, BatchNormalization, Concatenate, Dropout, LeakyReLU
+from keras.models import load_model
 from keras.optimizers import RMSprop, Adam
 
+from gantests4 import find_word, find_closest
 from tools import load_training_input_2
 from vaetest3 import VAE, sampling
 
@@ -290,6 +292,8 @@ class RetroCycleGAN():
                                                                             elapsed_time))
 
                 if batch_i % sample_interval == 0:
+                    self.g_AB.save("toretro")
+                    self.g_BA.save("fromretro")
                     self.combined.save("combined_model")
 
 
@@ -338,4 +342,13 @@ if __name__ == '__main__':
     print(output_vae.predict(Y_test))
 
     rcgan = RetroCycleGAN(input_vae,output_vae)
-    rcgan.train(epochs=10,batch_size=32,sample_interval=200,noisy_entries_num=10,n_batches=200)
+    # rcgan.train(epochs=10,batch_size=32,sample_interval=200,noisy_entries_num=10,n_batches=200)
+    rcgan.combined.load_weights("combined_model")
+    data = pickle.load(open('training_testing.data', 'rb'))
+    word_count = 5
+    for i in range(word_count):
+        find_word(data["X_test"][i,:],retro=False)
+        prediction = input_vae.predict(data["X_test"][i,:].reshape(300,1))
+        rcgan.g_AB = load_model("toretro")
+        rcgan.g_BA=load_model("fromretro")
+        rcgan.combined=load_model("combined_model")

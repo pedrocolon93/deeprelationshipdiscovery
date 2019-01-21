@@ -331,7 +331,7 @@ def find_word(word,retro=True):
     else:
         retrowords, retrovectors =load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=10000000)
     for idx, retrovector in enumerate(retrovectors):
-        if retrovector == word:
+        if np.array_equal(word,retrovector):
             print("Found word is ",retrowords[idx])
             del retrowords, retrovectors
             return
