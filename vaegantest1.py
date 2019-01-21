@@ -321,34 +321,34 @@ if __name__ == '__main__':
     print("End")
 
     # #
-    input_vae = VAE(a_weight=1, b_weight=10, intermediate_layer_count=2, latent_dim=64, intermediate_dimension=64,
-                    epochs=50)
+    input_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=2, latent_dim=64, intermediate_dimension=64,
+                    epochs=100)
     input_vae.create_vae()
     input_vae.configure_vae()
     input_vae.compile_vae()
-    # input_vae.fit(X_train, X_test, "input_vae.h5")
-    input_vae.load_weights("input_vae.h5")
+    input_vae.fit(X_train, X_test, "input_vae.h5")
+    # input_vae.load_weights("input_vae.h5")
     print(X_test)
     print(input_vae.predict(X_test))
 
-    output_vae = VAE(a_weight=1, b_weight=100, intermediate_layer_count=6, latent_dim=64, intermediate_dimension=64,
-                     epochs=50)
+    output_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=6, latent_dim=64, intermediate_dimension=64,
+                     epochs=100)
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()
-    # output_vae.fit(Y_train, Y_test, "output_vae.h5")
-    output_vae.load_weights("output_vae.h5")
+    output_vae.fit(Y_train, Y_test, "output_vae.h5")
+    # output_vae.load_weights("output_vae.h5")
     print(Y_test)
     print(output_vae.predict(Y_test))
 
     rcgan = RetroCycleGAN(input_vae,output_vae)
-    # rcgan.train(epochs=10,batch_size=32,sample_interval=200,noisy_entries_num=10,n_batches=200)
+    rcgan.train(epochs=10,batch_size=128,sample_interval=200,noisy_entries_num=10,n_batches=200)
     rcgan.combined.load_weights("combined_model")
     data = pickle.load(open('training_testing.data', 'rb'))
     word_count = 5
     for i in range(word_count):
         find_word(data["X_test"][i,:],retro=False)
-        prediction = input_vae.predict(data["X_test"][i,:].reshape(300,1))
+        prediction = input_vae.predict(data["X_test"][i,:].reshape(1,300))
         rcgan.g_AB = load_model("toretro")
         rcgan.g_BA=load_model("fromretro")
         rcgan.combined=load_model("combined_model")
