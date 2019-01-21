@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 
 import datetime
+import os
 import pickle
 
 import numpy as np
@@ -127,8 +128,8 @@ class RetroCycleGAN():
         vector_input = Input(shape=self.img_shape)
 
 
-        d0 = Dense(128*128*3)(vector_input)
-        d0 = Reshape((128,128,3))(d0)
+        d0 = Dense(64*64*1)(vector_input)
+        d0 = Reshape((64,64,1))(d0)
 
         # Downsampling
         d1 = conv2d(d0, self.gf)
@@ -144,7 +145,7 @@ class RetroCycleGAN():
         u4 = UpSampling2D(size=2)(u3)
         output_img = Conv2D(self.channels, kernel_size=4, strides=1, padding='same', activation='tanh')(u4)
         output_img = Flatten()(output_img)
-        output_img = Dense(300,activation="linear")(output_img)
+        output_img = Dense(300)(output_img)
         return Model(vector_input, output_img)
 
     def build_discriminator(self):
@@ -179,12 +180,16 @@ class RetroCycleGAN():
         valid = np.ones((batch_size*noisy_entries_num,) )
         fake = np.zeros((batch_size*noisy_entries_num,) )
 
-        X_train,Y_train, X_test,Y_test = load_training_input_2(1000000)
-            # data = {
-            #     'X_train':X_train,
-            #            'Y_train':Y_train, 'X_test':X_test, 'Y_test':Y_test
-            # }
-            # pickle.dump(data,open('training_testing.data','wb'))
+        X_train = Y_train = X_test = Y_test = None
+        regen = False
+        normalize = False
+        file = "data.pickle"
+        if not os.path.exists(file) or regen:
+            X_train, Y_train, X_test, Y_test = load_training_input_2(normalize=normalize)
+            pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
+        else:
+            X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle", 'rb'))
+
         n_batches = 900
         def load_batch(batch_size,train_test = True,n_batches = 900):
             for i in range(n_batches):

@@ -6,10 +6,10 @@ import pickle
 import numpy as np
 from keras import Model, Input
 from keras.layers import Dense, BatchNormalization, Concatenate, Dropout, LeakyReLU
-from keras.optimizers import RMSprop
+from keras.optimizers import RMSprop, Adam
 
 from tools import load_training_input_2
-from vaetest1 import VAE, sampling
+from vaetest3 import VAE, sampling
 
 
 class RetroCycleGAN():
@@ -34,19 +34,19 @@ class RetroCycleGAN():
         # self.disc_patch = (patch, patch, 1)
 
         # Number of filters in the first layer of G and D
-        self.gf = 128
-        self.df = 512
+        self.gf = 256
+        self.df = 128
 
         # Loss weights
         self.lambda_cycle = 10.0                    # Cycle-consistency loss
         self.lambda_id = 0.1 * self.lambda_cycle    # Identity loss
 
         # optimizer = Adam(0.0002, 0.5,amsgrad=True)
-        # optimizer = Adam()
+        optimizer = Adam()
         # optimizer = Nadam()
         # optimizer = SGD(lr=0.01,nesterov=True,momentum=0.8,decay=0.1e-8)
         # optimizer = Adadelta()
-        optimizer = RMSprop(lr=0.005)
+        # optimizer = RMSprop(lr=0.005)
         # Build and compile the discriminators
         self.d_A = self.build_discriminator()
         self.d_B = self.build_discriminator()
@@ -168,7 +168,7 @@ class RetroCycleGAN():
 
         return Model(img, validity)
 
-    def train(self, epochs, batch_size=1, sample_interval=50,noisy_entries_num=5):
+    def train(self, epochs, batch_size=1, sample_interval=50,noisy_entries_num=5,n_batches = 200):
 
         start_time = datetime.datetime.now()
 
@@ -192,12 +192,12 @@ class RetroCycleGAN():
             pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
         else:
             X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle", 'rb'))
-            # data = {
-            #     'X_train':X_train,
-            #            'Y_train':Y_train, 'X_test':X_test, 'Y_test':Y_test
-            # }
-            # pickle.dump(data,open('training_testing.data','wb'))
-        n_batches = 900
+        data = {
+            'X_train':X_train,
+                   'Y_train':Y_train, 'X_test':X_test, 'Y_test':Y_test
+        }
+        pickle.dump(data,open('training_testing.data','wb'))
+        # n_batches = n_batches
         def load_batch(batch_size,train_test = True,n_batches = 900):
             for i in range(n_batches):
                 if train_test:
@@ -213,40 +213,11 @@ class RetroCycleGAN():
         for epoch in range(epochs):
 
 
-            for batch_i, (imgs_A, imgs_B) in enumerate(load_batch(batch_size)):
+            for batch_i, (imgs_A, imgs_B) in enumerate(load_batch(batch_size,n_batches=n_batches)):
 
                 # ----------------------
                 #  Train Discriminators
                 # ----------------------
-
-                # self.latent_dim = 300
-                # # idx = np.random.randint(0, X_train.shape[0], batch_size)
-                # noisy_entries = []
-                # noisy_outputs = []
-                # for index in range(len(imgs_A)):
-                #     # Generate some noise
-                #     input_noise = output_noise = noise = np.random.normal(0, 0.1, (noisy_entries_num, self.latent_dim))
-                #     # Replace one for the original
-                #     input_noise[0, :] = imgs_A[index]
-                #     output_noise[0, :] = imgs_B[index]
-                #     # Add noise to the original to have some noisy inputs
-                #     for i in range(1, noise.shape[0]):
-                #         input_noise[i, :] = imgs_A[index] + noise[i, :]
-                #         output_noise[i, :] = imgs_B[index] + noise[i, :]
-                #
-                #     noisy_entries.append(input_noise)
-                #     noisy_outputs.append(output_noise)
-                # # imgs = Y_train[idx]
-                # imgs = noisy_outputs[0]
-                # noise = noisy_entries[0]
-                # # print("imgs")
-                # # print(imgs.shape)
-                # # print("noise")
-                # # print(noise.shape)
-                # for entry_idx in range(1, len(noisy_outputs)):
-                #     # print(noisy_outputs[entry_idx].shape)
-                #     imgs = np.vstack((imgs, noisy_outputs[entry_idx]))
-                #     noise = np.vstack((noise, noisy_entries[entry_idx]))
                 noisy_entries = []
                 noisy_outputs = []
                 for index in range(batch_size):
@@ -318,52 +289,53 @@ class RetroCycleGAN():
                                                                             np.mean(g_loss[5:6]),
                                                                             elapsed_time))
 
+                if batch_i % sample_interval == 0:
+                    self.combined.save("combined_model")
 
-        self.X_test = X_test
-        self.Y_test = Y_test
-        pickle.dump(self, open('model.pickle', 'wb'))
+
+
 
 
 if __name__ == '__main__':
-    X_train= Y_train= X_test= Y_test = None
+    X_train = Y_train = X_test = Y_test = None
+    regen = False
+    normalize = False
     file = "data.pickle"
-    if not os.path.exists(file):
-        X_train, Y_train, X_test, Y_test = load_training_input_2()
+    if not os.path.exists(file) or regen:
+        X_train, Y_train, X_test, Y_test = load_training_input_2(normalize=normalize)
         pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
     else:
-        X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle",'rb'))
-
+        X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle", 'rb'))
 
     print("Min\tMax")
     print("Train")
-    print(np.min(X_train),np.max(X_train))
-    print(np.min(Y_train),np.max(Y_train))
+    print(np.min(X_train), np.max(X_train))
+    print(np.min(Y_train), np.max(Y_train))
     print("Test")
-    print(np.min(X_test),np.max(X_test))
-    print(np.min(Y_test),np.max(Y_test))
+    print(np.min(X_test), np.max(X_test))
+    print(np.min(Y_test), np.max(Y_test))
     print("End")
 
-    #
-    input_vae = VAE()
+    # #
+    input_vae = VAE(a_weight=1, b_weight=10, intermediate_layer_count=2, latent_dim=64, intermediate_dimension=64,
+                    epochs=50)
     input_vae.create_vae()
     input_vae.configure_vae()
     input_vae.compile_vae()
+    # input_vae.fit(X_train, X_test, "input_vae.h5")
     input_vae.load_weights("input_vae.h5")
-    # input_vae.fit(X_train,X_test,"input_vae.h5")
-    # print(X_test)
-    # print(input_vae.predict(X_test))
+    print(X_test)
+    print(input_vae.predict(X_test))
 
-
-    output_vae = VAE()
+    output_vae = VAE(a_weight=1, b_weight=100, intermediate_layer_count=6, latent_dim=64, intermediate_dimension=64,
+                     epochs=50)
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()
+    # output_vae.fit(Y_train, Y_test, "output_vae.h5")
     output_vae.load_weights("output_vae.h5")
-    # output_vae.fit(Y_train, Y_test,"output_vae.h5")
-    # print(Y_test)
-    # print(input_vae.predict(Y_test))
+    print(Y_test)
+    print(output_vae.predict(Y_test))
 
     rcgan = RetroCycleGAN(input_vae,output_vae)
-    rcgan.train(epochs=10,batch_size=128,sample_interval=200,noisy_entries_num=20)
-
-
+    rcgan.train(epochs=10,batch_size=32,sample_interval=200,noisy_entries_num=10,n_batches=200)
