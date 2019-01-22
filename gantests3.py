@@ -32,8 +32,8 @@ class RetroCycleGAN():
         # self.disc_patch = (patch, patch, 1)
 
         # Number of filters in the first layer of G and D
-        self.gf = 64
-        self.df = 64
+        self.gf = 32
+        self.df = 128
 
         # Loss weights
         self.lambda_cycle = 10.0                    # Cycle-consistency loss
