@@ -301,24 +301,24 @@ class RetroCycleGAN():
 
 
 if __name__ == '__main__':
-    X_train = Y_train = X_test = Y_test = None
-    regen = False
-    normalize = False
-    file = "data.pickle"
-    if not os.path.exists(file) or regen:
-        X_train, Y_train, X_test, Y_test = load_training_input_2(normalize=normalize)
-        pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
-    else:
-        X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle", 'rb'))
-
-    print("Min\tMax")
-    print("Train")
-    print(np.min(X_train), np.max(X_train))
-    print(np.min(Y_train), np.max(Y_train))
-    print("Test")
-    print(np.min(X_test), np.max(X_test))
-    print(np.min(Y_test), np.max(Y_test))
-    print("End")
+    # X_train = Y_train = X_test = Y_test = None
+    # regen = False
+    # normalize = False
+    # file = "data.pickle"
+    # if not os.path.exists(file) or regen:
+    #     X_train, Y_train, X_test, Y_test = load_training_input_2(normalize=normalize)
+    #     pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
+    # else:
+    #     X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle", 'rb'))
+    #
+    # print("Min\tMax")
+    # print("Train")
+    # print(np.min(X_train), np.max(X_train))
+    # print(np.min(Y_train), np.max(Y_train))
+    # print("Test")
+    # print(np.min(X_test), np.max(X_test))
+    # print(np.min(Y_test), np.max(Y_test))
+    # print("End")
 
     # #
     input_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=2, latent_dim=64, intermediate_dimension=64,
@@ -326,29 +326,33 @@ if __name__ == '__main__':
     input_vae.create_vae()
     input_vae.configure_vae()
     input_vae.compile_vae()
-    input_vae.fit(X_train, X_test, "input_vae.h5")
-    # input_vae.load_weights("input_vae.h5")
-    print(X_test)
-    print(input_vae.predict(X_test))
+    # input_vae.fit(X_train, X_test, "input_vae.h5")
+    input_vae.load_weights("input_vae.h5")
+    # print(X_test)
+    # print(input_vae.predict(X_test))
 
     output_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=6, latent_dim=64, intermediate_dimension=64,
                      epochs=100)
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()
-    output_vae.fit(Y_train, Y_test, "output_vae.h5")
-    # output_vae.load_weights("output_vae.h5")
-    print(Y_test)
-    print(output_vae.predict(Y_test))
+    # output_vae.fit(Y_train, Y_test, "output_vae.h5")
+    output_vae.load_weights("output_vae.h5")
+    # print(Y_test)
+    # print(output_vae.predict(Y_test))
 
     rcgan = RetroCycleGAN(input_vae,output_vae)
-    rcgan.train(epochs=10,batch_size=128,sample_interval=200,noisy_entries_num=10,n_batches=200)
+    # rcgan.train(epochs=10,batch_size=128,sample_interval=200,noisy_entries_num=10,n_batches=200)
     rcgan.combined.load_weights("combined_model")
     data = pickle.load(open('training_testing.data', 'rb'))
     word_count = 5
     for i in range(word_count):
         find_word(data["X_test"][i,:],retro=False)
-        prediction = input_vae.predict(data["X_test"][i,:].reshape(1,300))
+        input_representation = input_vae.encoder.predict(data["X_test"][i,:].reshape(1,300))
         rcgan.g_AB = load_model("toretro")
+        retro_representation = rcgan.g_AB.predict(input_representation[2])
         rcgan.g_BA=load_model("fromretro")
-        rcgan.combined=load_model("combined_model")
+        reconstruction_rep = rcgan.g_BA.predict(retro_representation)
+        # rcgan.combined=load_model("combined_model")
+        output_ = output_vae.decoder.predict(retro_representation)
+        find_closest(output_)

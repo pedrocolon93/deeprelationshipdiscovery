@@ -142,7 +142,7 @@ class RetroCycleGAN():
         # u4 = UpSampling2D(size=2)(u3)
         # u4 = Dense(2048)
         # output_img = Conv2D(self.channels, kernel_size=4, strides=1, padding='same', activation='tanh')(u4)
-        output_img = Dense(self.img_cols,activation='tanh')(u3)
+        output_img = Dense(self.img_cols)(u3)
         return Model(d0, output_img)
 
     def build_discriminator(self):
@@ -209,8 +209,6 @@ class RetroCycleGAN():
                     imgs_B = Y_test[idx]
                     yield imgs_A, imgs_B
         for epoch in range(epochs):
-
-
             for batch_i, (imgs_A, imgs_B) in enumerate(load_batch(batch_size)):
 
                 # ----------------------
@@ -231,7 +229,6 @@ class RetroCycleGAN():
                     for i in range(1, noise.shape[0]):
                         input_noise[i, :] = imgs_A[index] + noise[i, :]
                         output_noise[i, :] = imgs_B[index] + noise[i, :]
-
                     noisy_entries.append(input_noise)
                     noisy_outputs.append(output_noise)
                 # imgs = Y_train[idx]
@@ -288,10 +285,10 @@ class RetroCycleGAN():
                                                                             np.mean(g_loss[5:6]),
                                                                             elapsed_time))
 
-
-        self.X_test = X_test
-        self.Y_test = Y_test
-        pickle.dump(self, open('model.pickle', 'wb'))
+            if batch_i % sample_interval == 0:
+                self.g_AB.save("toretro")
+                self.g_BA.save("fromretro")
+                self.combined.save("combined_model")
 
 
 if __name__ == '__main__':
