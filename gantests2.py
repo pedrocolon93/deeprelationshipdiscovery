@@ -1,12 +1,15 @@
 from __future__ import print_function, division
 
+import os
+import pickle
+
 from keras.datasets import mnist
 from keras.layers import Input, Dense, Reshape, Flatten, Dropout
 from keras.layers import BatchNormalization, Activation, ZeroPadding2D
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import UpSampling2D, Conv2D
 from keras.models import Sequential, Model
-from keras.optimizers import Adam, Adadelta
+from keras.optimizers import Adam, Adadelta, RMSprop
 
 import matplotlib.pyplot as plt
 
@@ -25,8 +28,9 @@ class DCGAN():
         self.channels = 1
         self.img_shape = (self.img_rows, self.img_cols, self.channels)
         self.latent_dim = 300
-
-        optimizer = Adam(0.0002, amsgrad=True)
+        # optimizer = Adam()
+        optimizer = RMSprop(lr=0.0001)
+        # optimizer = Adam(0.0002, amsgrad=True)
         # optimizer = Adadelta()
         # Build and compile the discriminator
         self.discriminator = self.build_discriminator()
@@ -58,10 +62,11 @@ class DCGAN():
 
         # model.add(Dense(128 * 7 * 7, activation="relu", input_dim=self.latent_dim))
         model.add(Dense(512,activation='relu',input_dim=self.latent_dim))
+        model.add(BatchNormalization(momentum=0.8))
         model.add(Dense(256,activation='relu'))
         model.add(BatchNormalization(momentum=0.8))
-        model.add(Dense(128,activation='relu'))
-        model.add(BatchNormalization(momentum=0.8))
+        # model.add(Dense(128,activation='relu'))
+        # model.add(BatchNormalization(momentum=0.8))
 
         # model.add(Reshape((7, 7, 128)))
         # model.add(UpSampling2D())
@@ -75,7 +80,7 @@ class DCGAN():
         # model.add(Conv2D(self.channels, kernel_size=3, padding="same"))
         # model.add(Flatten(self.latent_dim))
         model.add(Dense(self.latent_dim))
-        model.add(Activation("linear"))
+        # model.add(Activation("linear"))
 
         model.summary()
 
@@ -88,10 +93,15 @@ class DCGAN():
 
         model = Sequential()
         # model.add(Dense(128 * 7 * 7, activation="relu", input_dim=self.latent_dim))
-        model.add(Dense(64,activation='relu',input_dim=self.latent_dim))
+        model.add(Dense(128,activation='relu',input_dim=self.latent_dim))
         # model.add(Reshape((7, 7, 128)))
         # model.add(Conv2D(32, kernel_size=3, strides=2, input_shape=self.img_shape, padding="same"))
-        model.add(Dense(128))
+        model.add(Dense(256))
+        model.add(BatchNormalization(momentum=0.8))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Dropout(0.25))
+
+        model.add(Dense(256))
         model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
@@ -108,8 +118,8 @@ class DCGAN():
         # model.add(BatchNormalization(momentum=0.8))
         # model.add(LeakyReLU(alpha=0.2))
         # model.add(Dropout(0.25))
-        model.add(Dense(512))
-        model.add(BatchNormalization(momentum=0.8))
+        model.add(Dense(1024))
+        # model.add(BatchNormalization(momentum=0.8))
         model.add(LeakyReLU(alpha=0.2))
         model.add(Dropout(0.25))
         # model.add(Conv2D(256, kernel_size=3, strides=1, padding="same"))
@@ -135,7 +145,15 @@ class DCGAN():
         # # Rescale -1 to 1
         # X_train = X_train / 127.5 - 1.
         # X_train = np.expand_dims(X_train, axis=3)
-        X_train,Y_train, X_test,Y_test = load_training_input_2(10000000)
+        X_train = Y_train = X_test = Y_test = None
+        regen = False
+        normalize = False
+        file = "data.pickle"
+        if not os.path.exists(file) or regen:
+            X_train, Y_train, X_test, Y_test = load_training_input_2(normalize=normalize)
+            pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
+        else:
+            X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle", 'rb'))
 
         # Adversarial ground truths
         valid = np.ones((batch_size, 1))
@@ -207,6 +225,17 @@ class DCGAN():
         plt.close()
 
 
+import tensorflow as tf
+from keras.backend.tensorflow_backend import set_session
+
+
 if __name__ == '__main__':
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+    # config.log_device_placement = True  # to log device placement (on which device the operation ran)
+    # (nothing gets printed in Jupyter, only if you run it standalone)
+    sess = tf.Session(config=config)
+    set_session(sess)  # set this TensorFlow session as the default session for Keras
+
     dcgan = DCGAN()
     dcgan.train(epochs=10000, batch_size=64, save_interval=500)

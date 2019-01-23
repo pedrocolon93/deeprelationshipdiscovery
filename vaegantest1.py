@@ -2,9 +2,10 @@ import datetime
 
 import os
 import pickle
+import sklearn
 
 import numpy as np
-from keras import Model, Input
+from keras import Model, Input, metrics
 from keras.layers import Dense, BatchNormalization, Concatenate, Dropout, LeakyReLU
 from keras.models import load_model
 from keras.optimizers import RMSprop, Adam
@@ -298,18 +299,27 @@ class RetroCycleGAN():
 
 
 
+import tensorflow as tf
+from keras.backend.tensorflow_backend import set_session
 
 
 if __name__ == '__main__':
-    # X_train = Y_train = X_test = Y_test = None
-    # regen = False
-    # normalize = False
-    # file = "data.pickle"
-    # if not os.path.exists(file) or regen:
-    #     X_train, Y_train, X_test, Y_test = load_training_input_2(normalize=normalize)
-    #     pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
-    # else:
-    #     X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle", 'rb'))
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+    # config.log_device_placement = True  # to log device placement (on which device the operation ran)
+    # (nothing gets printed in Jupyter, only if you run it standalone)
+    sess = tf.Session(config=config)
+    set_session(sess)  # set this TensorFlow session as the default session for Keras
+
+    X_train = Y_train = X_test = Y_test = None
+    regen = False
+    normalize = False
+    file = "data.pickle"
+    if not os.path.exists(file) or regen:
+        X_train, Y_train, X_test, Y_test = load_training_input_2(normalize=normalize)
+        pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
+    else:
+        X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle", 'rb'))
     #
     # print("Min\tMax")
     # print("Train")
@@ -321,38 +331,43 @@ if __name__ == '__main__':
     # print("End")
 
     # #
-    input_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=2, latent_dim=64, intermediate_dimension=64,
-                    epochs=100)
+    input_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=2, latent_dim=16, intermediate_dimension=128,
+                    epochs=30,loss_weight=0.001)
     input_vae.create_vae()
     input_vae.configure_vae()
     input_vae.compile_vae()
     # input_vae.fit(X_train, X_test, "input_vae.h5")
     input_vae.load_weights("input_vae.h5")
-    # print(X_test)
-    # print(input_vae.predict(X_test))
+    print(X_test)
+    print(input_vae.predict(X_test))
+    print(sklearn.metrics.mean_squared_error(X_test,input_vae.predict(X_test)))
 
-    output_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=6, latent_dim=64, intermediate_dimension=64,
-                     epochs=100)
+
+    output_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=1, latent_dim=16, intermediate_dimension=128,
+                     epochs=30,batch_size=256,dropout=0.8,loss_weight=0.001)
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()
     # output_vae.fit(Y_train, Y_test, "output_vae.h5")
-    output_vae.load_weights("output_vae.h5")
-    # print(Y_test)
-    # print(output_vae.predict(Y_test))
+    # output_vae.load_weights("output_vae.h5")
+    print(sklearn.metrics.mean_squared_error(Y_test,output_vae.predict(Y_test)))
+    # print()
+    print(Y_test)
+    print(output_vae.predict(Y_test))
+
 
     rcgan = RetroCycleGAN(input_vae,output_vae)
-    # rcgan.train(epochs=10,batch_size=128,sample_interval=200,noisy_entries_num=10,n_batches=200)
-    rcgan.combined.load_weights("combined_model")
-    data = pickle.load(open('training_testing.data', 'rb'))
-    word_count = 5
-    for i in range(word_count):
-        find_word(data["X_test"][i,:],retro=False)
-        input_representation = input_vae.encoder.predict(data["X_test"][i,:].reshape(1,300))
-        rcgan.g_AB = load_model("toretro")
-        retro_representation = rcgan.g_AB.predict(input_representation[2])
-        rcgan.g_BA=load_model("fromretro")
-        reconstruction_rep = rcgan.g_BA.predict(retro_representation)
-        # rcgan.combined=load_model("combined_model")
-        output_ = output_vae.decoder.predict(retro_representation)
-        find_closest(output_)
+    rcgan.train(epochs=10,batch_size=128,sample_interval=200,noisy_entries_num=10,n_batches=200)
+    # rcgan.combined.load_weights("combined_model")
+    # data = pickle.load(open('training_testing.data', 'rb'))
+    # word_count = 5
+    # for i in range(word_count):
+    #     find_word(data["X_test"][i,:],retro=False)
+    #     input_representation = input_vae.encoder.predict(data["X_test"][i,:].reshape(1,300))
+    #     rcgan.g_AB = load_model("toretro")
+    #     retro_representation = rcgan.g_AB.predict(input_representation[2])
+    #     rcgan.g_BA=load_model("fromretro")
+    #     reconstruction_rep = rcgan.g_BA.predict(retro_representation)
+    #     # rcgan.combined=load_model("combined_model")
+    #     output_ = output_vae.decoder.predict(retro_representation)
+    #     find_closest(output_)

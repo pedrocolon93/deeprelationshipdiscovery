@@ -16,13 +16,14 @@ from __future__ import print_function
 
 import pickle
 
+import keras
 from keras.layers import Lambda, Input, Dense, BatchNormalization, Dropout, LeakyReLU
 from keras.models import Model
 from keras.datasets import mnist
-from keras.losses import mse, binary_crossentropy
+from keras.losses import mse, binary_crossentropy, mae
 from keras.optimizers import RMSprop, Adam, SGD
 from keras.utils import plot_model
-from keras import backend as K
+from keras import backend as K, metrics
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -56,7 +57,7 @@ def sampling(args):
 class VAE():
     def __init__(self,a_weight=1, b_weight=1, batch_norm = True,dropout=0.4, input_dimension=300, output_dimension=300,
                  intermediate_dimension=64, batch_size = 128, latent_dim=64, epochs=50,use_mse = True,
-                 intermediate_layer_count = 4):
+                 intermediate_layer_count = 4,loss_weight = 1):
         # image_size = x_train.shape[1]
         # original_dim = image_size * image_size
         # x_train = np.reshape(x_train, [-1, original_dim])
@@ -86,6 +87,7 @@ class VAE():
         self.batch_norm = batch_norm
         self.a_weight = a_weight
         self.b_weight = b_weight
+        self.loss_weight = loss_weight
 
     def create_vae(self):
         # VAE model = encoder + decoder
@@ -96,12 +98,14 @@ class VAE():
         for i in range(2,self.intermediate_layer_count+2):
             if self.batch_norm:
                 x = BatchNormalization()(x)
-            x = Dense(self.intermediate_dim * i,activation="tanh")(x)
+            x = Dense(self.intermediate_dim * i,activation="relu")(x)
             # x = LeakyReLU()(x)
             x = Dropout(self.dropout)(x)
 
-        self.z_mean = Dense(self.latent_dim, name='z_mean')(x)
-        self.z_log_var = Dense(self.latent_dim, name='z_log_var')(x)
+        self.z_mean = Dense(self.latent_dim,kernel_initializer=keras.initializers.Constant(value=0),
+                bias_initializer='zeros', name='z_mean')(x)
+        self.z_log_var = Dense(self.latent_dim,kernel_initializer=keras.initializers.Constant(value=0),
+                bias_initializer='zeros', name='z_log_var')(x)
 
         # use reparameterization trick to push the sampling out as input
         # note that "output_shape" isn't necessary with the TensorFlow backend
@@ -114,11 +118,11 @@ class VAE():
 
         # build decoder model
         latent_inputs = Input(shape=(self.latent_dim,), name='z_sampling')
-        x = Dense(self.intermediate_dim * (self.intermediate_layer_count+1), activation='tanh')(latent_inputs)
+        x = Dense(self.intermediate_dim * (self.intermediate_layer_count+1), activation='relu')(latent_inputs)
         for i in reversed(range(1,self.intermediate_layer_count+1)):
             if self.batch_norm:
                 x = BatchNormalization()(x)
-            x = Dense(self.intermediate_dim*i,activation="tanh")(x)
+            x = Dense(self.intermediate_dim*i,activation="relu")(x)
             # x = LeakyReLU()(x)
             x = Dropout(self.dropout)(x)
 
@@ -147,25 +151,26 @@ class VAE():
             reconstruction_loss = binary_crossentropy(self.inputs,
                                                       self.outputs)
         def my_vae_loss(y_true,y_pred):
+            a_weight = self.a_weight
+            b_weight = self.b_weight
+            loss_weight = self.loss_weight
             reconstruction_loss = mse(y_true,y_pred)
             reconstruction_loss *= self.input_shape[0]
             kl_loss = 1 + self.z_log_var - K.square(self.z_mean) - K.exp(self.z_log_var)
             kl_loss = K.sum(kl_loss, axis=-1)
             kl_loss *= -0.5
             # scaling_factor = 1
-            a_weight = self.a_weight
-            b_weight = self.b_weight
             print(kl_loss)
-            vae_loss = K.mean(a_weight*reconstruction_loss + b_weight*kl_loss)/((a_weight+b_weight)/2)
-            return vae_loss
+            vae_loss = K.mean(a_weight*reconstruction_loss + b_weight*kl_loss)
+            return vae_loss*loss_weight
         self.loss = my_vae_loss
         # self.vae.add_loss(vae_loss)
 
     def compile_vae(self):
-        # optimizer = RMSprop(decay=1e-6)
+        # optimizer = RMSprop(decay=1e-8)
         # optimizer = Adam()
         optimizer = SGD(decay=1e-8,nesterov=True)
-        self.vae.compile(optimizer=optimizer,loss=self.loss)
+        self.vae.compile(optimizer=optimizer,loss=self.loss,metrics=[metrics.mae,metrics.mse])
         self.vae.summary()
         # plot_model(self.vae,
         #            to_file='vae_mlp.png',

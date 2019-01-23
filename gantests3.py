@@ -32,19 +32,19 @@ class RetroCycleGAN():
         # self.disc_patch = (patch, patch, 1)
 
         # Number of filters in the first layer of G and D
-        self.gf = 512
-        self.df = 32
+        self.gf = 128
+        self.df = 64
 
         # Loss weights
-        self.lambda_cycle = 10.0                    # Cycle-consistency loss
+        self.lambda_cycle = 5.0                    # Cycle-consistency loss
         self.lambda_id = 0.1 * self.lambda_cycle    # Identity loss
 
         # optimizer = Adam(0.0002, 0.5,amsgrad=True)
-        # optimizer = Adam()
+        optimizer = Adam()
         # optimizer = Nadam()
         # optimizer = SGD(lr=0.01,nesterov=True,momentum=0.8,decay=0.1e-8)
         # optimizer = Adadelta()
-        optimizer = RMSprop(lr=0.005)
+        # optimizer = RMSprop(lr=0.001)
         # Build and compile the discriminators
         self.d_A = self.build_discriminator()
         self.d_B = self.build_discriminator()
@@ -171,8 +171,8 @@ class RetroCycleGAN():
         start_time = datetime.datetime.now()
 
         # Adversarial loss ground truths
-        valid = np.ones((batch_size*noisy_entries_num,) )
-        fake = np.zeros((batch_size*noisy_entries_num,) )
+        valid = np.ones((batch_size,))#*noisy_entries_num,) )
+        fake = np.zeros((batch_size,))#*noisy_entries_num,) )
         # X_train, Y_train, X_test, Y_test = (None,None,None,None)
         # if os.path.exists("training_testing.data"):
         #     print("Loading data")
@@ -216,32 +216,33 @@ class RetroCycleGAN():
                 # ----------------------
 
                 self.latent_dim = 300
-                # idx = np.random.randint(0, X_train.shape[0], batch_size)
-                noisy_entries = []
-                noisy_outputs = []
-                for index in range(len(imgs_A)):
-                    # Generate some noise
-                    input_noise = output_noise = noise = np.random.normal(0, 0.1, (noisy_entries_num, self.latent_dim))
-                    # Replace one for the original
-                    input_noise[0, :] = imgs_A[index]
-                    output_noise[0, :] = imgs_B[index]
-                    # Add noise to the original to have some noisy inputs
-                    for i in range(1, noise.shape[0]):
-                        input_noise[i, :] = imgs_A[index] + noise[i, :]
-                        output_noise[i, :] = imgs_B[index] + noise[i, :]
-                    noisy_entries.append(input_noise)
-                    noisy_outputs.append(output_noise)
-                # imgs = Y_train[idx]
-                imgs = noisy_outputs[0]
-                noise = noisy_entries[0]
+                idx = np.random.randint(0, X_train.shape[0], batch_size)
+                # noisy_entries = []
+                # noisy_outputs = []
+                # for index in range(len(imgs_A)):
+                #     # Generate some noise
+                #     input_noise = output_noise = noise = np.random.normal(0, 0.1, (noisy_entries_num, self.latent_dim))
+                #     # Replace one for the original
+                #     input_noise[0, :] = imgs_A[index]
+                #     output_noise[0, :] = imgs_B[index]
+                #     # Add noise to the original to have some noisy inputs
+                #     for i in range(1, noise.shape[0]):
+                #         input_noise[i, :] = imgs_A[index] + noise[i, :]
+                #         output_noise[i, :] = imgs_B[index] + noise[i, :]
+                #     noisy_entries.append(input_noise)
+                #     noisy_outputs.append(output_noise)
+                noise = X_train[idx]
+                imgs = Y_train[idx]
+                # imgs = noisy_outputs[0]
+                # noise = noisy_entries[0]
                 # print("imgs")
                 # print(imgs.shape)
                 # print("noise")
                 # print(noise.shape)
-                for entry_idx in range(1, len(noisy_outputs)):
-                    # print(noisy_outputs[entry_idx].shape)
-                    imgs = np.vstack((imgs, noisy_outputs[entry_idx]))
-                    noise = np.vstack((noise, noisy_entries[entry_idx]))
+                # for entry_idx in range(1, len(noisy_outputs)):
+                #     # print(noisy_outputs[entry_idx].shape)
+                #     imgs = np.vstack((imgs, noisy_outputs[entry_idx]))
+                #     noise = np.vstack((noise, noisy_entries[entry_idx]))
                 imgs_A = noise
                 imgs_B =imgs
 
@@ -291,7 +292,18 @@ class RetroCycleGAN():
                 self.combined.save("combined_model")
 
 
+import tensorflow as tf
+from keras.backend.tensorflow_backend import set_session
+
+
 if __name__ == '__main__':
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+    # config.log_device_placement = True  # to log device placement (on which device the operation ran)
+    # (nothing gets printed in Jupyter, only if you run it standalone)
+    sess = tf.Session(config=config)
+    set_session(sess)  # set this TensorFlow session as the default session for Keras
+
     gan = RetroCycleGAN()
     gan.train(epochs=8, batch_size=128, sample_interval=100)
     # abscond_non_retro_string = "abscond 0.0083 0.0106 -0.0268 -0.0179 -0.0123 -0.0072 -0.0058 -0.0372 0.0215 0.0092 -0.0087 -0.0091 -0.0002 -0.0316 -0.0138 -0.0186 0.0189 0.0047 0.0237 0.0043 -0.0229 -0.0097 -0.0151 0.0094 -0.0085 0.0259 -0.0083 0.0093 -0.0311 0.0042 -0.0082 -0.0047 -0.0314 0.0360 -0.0176 -0.0247 -0.0167 0.0047 -0.0126 0.0110 -0.0013 -0.0205 0.0101 -0.0122 0.0060 0.0189 0.0311 0.0070 0.0056 -0.0056 -0.0062 0.0206 -0.0230 -0.0413 -0.0595 -0.0164 -0.0098 -0.0071 -0.0358 -0.0132 0.0216 -0.0071 0.0353 0.0016 -0.0055 -0.0022 0.0198 -0.0473 -0.0023 0.0197 -0.0023 0.0097 0.0426 -0.0248 0.0226 0.0097 0.0219 0.0313 0.0260 0.0198 0.0124 0.0188 -0.0033 0.0273 -0.0140 0.0084 0.0328 0.0050 -0.0147 0.0026 -0.0000 -0.0004 -0.0546 -0.0010 -0.0100 -0.0234 -0.0023 -0.0256 -0.0069 0.0037 0.0184 -0.0153 0.0025 -0.0033 0.0115 -0.0353 -0.0161 -0.0114 0.0079 0.0151 0.0010 0.0172 0.0448 0.0219 -0.0249 -0.0007 0.0135 -0.0117 -0.0040 -0.0212 0.0224 -0.0031 0.0216 -0.0259 0.0281 -0.0152 0.0123 -0.0021 -0.0314 0.0218 0.0015 -0.0040 -0.0079 -0.0083 0.0050 0.0043 -0.0159 0.0147 0.0299 0.0155 0.0092 0.0089 0.0115 -0.0311 0.0300 0.0211 -0.0071 0.0061 -0.0047 -0.0168 0.0086 0.0225 -0.0166 -0.0245 0.0236 -0.0077 -0.0140 -0.0174 -0.0177 0.0032 0.0250 0.0140 -0.0224 0.0173 0.0130 0.0002 0.0274 -0.0072 -0.0231 0.0372 -0.0039 -0.0194 -0.0168 -0.0048 -0.0256 0.0111 0.0283 -0.0138 -0.0065 -0.0137 0.0103 -0.0142 -0.0154 -0.0231 0.0073 -0.0247 0.0107 0.0420 0.0073 0.0143 -0.0061 0.0097 -0.0217 -0.0047 -0.0055 -0.0019 0.0270 0.0021 -0.0064 0.0107 -0.0554 0.0341 -0.0097 0.0129 -0.0084 -0.0033 0.0114 -0.0177 -0.0206 -0.0137 0.0159 -0.0186 0.0458 -0.0003 0.0344 0.0011 -0.0099 0.0272 0.0023 -0.0138 -0.0150 -0.0023 -0.0102 0.0390 -0.0184 -0.0149 -0.0399 0.0448 -0.0124 0.0030 -0.0198 -0.0237 -0.0301 -0.0379 0.0394 0.0074 0.0107 0.0116 0.0025 0.0066 0.0677 0.0044 -0.0065 0.0203 0.0011 0.0007 -0.0023 -0.0304 -0.0320 0.0150 -0.0175 -0.0003 -0.0007 -0.0290 -0.0009 0.0059 0.0029 0.0116 -0.0115 0.0038 -0.0466 0.0101 -0.0172 -0.0422 -0.0049 -0.0273 -0.0213 -0.0297 0.0205 -0.0035 -0.0134 0.0487 -0.0358 -0.0319 -0.0106 -0.0173 0.0521 -0.0056 -0.0125 -0.0032 0.0036 -0.0117 -0.0042 0.0037 0.0135 0.0280 0.0046 -0.0057 -0.0085 0.0146 0.0135 -0.0021 0.0129 0.0088 -0.0240 -0.0376 -0.0146 0.0147 -0.0194 0.0091"
