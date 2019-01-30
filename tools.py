@@ -46,7 +46,6 @@ def load_embedding(path,limit=100000000):
                 else:
                     words.append(line[0])
                     vectors.append(line[1])
-
         # for line in f:
         #     if limit is not None:
         #         if(len(words)>=limit):
@@ -58,6 +57,8 @@ def load_embedding(path,limit=100000000):
         #     words.append(linesplit[0])
         #     vectors.append([float(x) for x in linesplit[1:]])
         #     # print("Appended")
+            pool.close()
+            pool.join() 
             print("Finished")
             return words,vectors
     else:

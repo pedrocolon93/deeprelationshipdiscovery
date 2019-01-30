@@ -368,7 +368,7 @@ if __name__ == '__main__':
     rcgan.train(epochs=5,batch_size=128,sample_interval=200,noisy_entries_num=10,n_batches=200)
     rcgan.combined.load_weights("combined_model")
     data = pickle.load(open('training_testing.data', 'rb'))
-    word_count = 5
+    word_count = 10
     for i in range(word_count):
         find_word(data["X_test"][i,:],retro=False)
         gc.collect()
