@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="alienware" showAutoUploadSettingsWarning="false">
+    <serverData>
+      <paths name="8kbox">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/mltests" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="8kboxconceptnet">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/mltests" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="alienware">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/Documents/mltests" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="conceptnet@18.85.38.248:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="tmp/pycharm_project_759" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="ubuntu@ec2-204-236-249-24.compute-1.amazonaws.com:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/tmp/pycharm_project_165" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

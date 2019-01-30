@@ -51,13 +51,13 @@ def sampling(args):
     batch = K.shape(z_mean)[0]
     dim = K.int_shape(z_mean)[1]
     # by default, random_normal has mean=0 and std=1.0
-    epsilon = K.random_normal(shape=(batch, dim),stddev=1)
+    epsilon = K.random_normal(shape=(batch, dim),mean=0,stddev=1)
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
 class VAE():
     def __init__(self,a_weight=1, b_weight=1, batch_norm = True,dropout=0.4, input_dimension=300, output_dimension=300,
                  intermediate_dimension=64, batch_size = 128, latent_dim=64, epochs=50,use_mse = True,
-                 intermediate_layer_count = 4,loss_weight = 1):
+                 intermediate_layer_count = 4,loss_weight = 1.0,lr=0.0005,intermediate_mult=None):
         # image_size = x_train.shape[1]
         # original_dim = image_size * image_size
         # x_train = np.reshape(x_train, [-1, original_dim])
@@ -88,24 +88,29 @@ class VAE():
         self.a_weight = a_weight
         self.b_weight = b_weight
         self.loss_weight = loss_weight
+        self.lr = lr
+        self.intermediate_mult = intermediate_mult
 
     def create_vae(self):
         # VAE model = encoder + decoder
         # build encoder model
         self.inputs = Input(shape=self.input_shape, name='encoder_input')
         x = Dense(self.intermediate_dim,)(self.inputs)
-        x = LeakyReLU()(x)
         for i in range(2,self.intermediate_layer_count+2):
             if self.batch_norm:
                 x = BatchNormalization()(x)
-            x = Dense(self.intermediate_dim * i,activation="relu")(x)
-            # x = LeakyReLU()(x)
+            if self.intermediate_mult is None:
+                x = Dense(self.intermediate_dim * i)(x)
+            else:
+                x = Dense(self.intermediate_dim * self.intermediate_mult)(x)
+
+            x = LeakyReLU()(x)
             x = Dropout(self.dropout)(x)
 
-        self.z_mean = Dense(self.latent_dim,kernel_initializer=keras.initializers.Constant(value=0),
-                bias_initializer='zeros', name='z_mean')(x)
-        self.z_log_var = Dense(self.latent_dim,kernel_initializer=keras.initializers.Constant(value=0),
-                bias_initializer='zeros', name='z_log_var')(x)
+        self.z_mean = Dense(self.latent_dim,
+                name='z_mean')(x)
+        self.z_log_var = Dense(self.latent_dim,
+                name='z_log_var')(x)
 
         # use reparameterization trick to push the sampling out as input
         # note that "output_shape" isn't necessary with the TensorFlow backend
@@ -118,12 +123,15 @@ class VAE():
 
         # build decoder model
         latent_inputs = Input(shape=(self.latent_dim,), name='z_sampling')
-        x = Dense(self.intermediate_dim * (self.intermediate_layer_count+1), activation='relu')(latent_inputs)
+        x = Dense(self.intermediate_dim * (self.intermediate_layer_count+1))(latent_inputs)
         for i in reversed(range(1,self.intermediate_layer_count+1)):
             if self.batch_norm:
                 x = BatchNormalization()(x)
-            x = Dense(self.intermediate_dim*i,activation="relu")(x)
-            # x = LeakyReLU()(x)
+            if self.intermediate_mult is None:
+                x = Dense(self.intermediate_dim * i)(x)
+            else:
+                x = Dense(self.intermediate_dim * self.intermediate_mult)(x)
+            x = LeakyReLU()(x)
             x = Dropout(self.dropout)(x)
 
 
@@ -155,22 +163,28 @@ class VAE():
             b_weight = self.b_weight
             loss_weight = self.loss_weight
             reconstruction_loss = mse(y_true,y_pred)
-            reconstruction_loss *= self.input_shape[0]
+            reconstruction_loss *= 300
             kl_loss = 1 + self.z_log_var - K.square(self.z_mean) - K.exp(self.z_log_var)
             kl_loss = K.sum(kl_loss, axis=-1)
             kl_loss *= -0.5
             # scaling_factor = 1
             print(kl_loss)
-            vae_loss = K.mean(a_weight*reconstruction_loss + b_weight*kl_loss)
-            return vae_loss*loss_weight
+            vae_loss = K.mean(reconstruction_loss + kl_loss)
+            vae_loss*=loss_weight
+            return vae_loss
         self.loss = my_vae_loss
         # self.vae.add_loss(vae_loss)
 
-    def compile_vae(self):
-        # optimizer = RMSprop(decay=1e-8)
-        # optimizer = Adam()
-        optimizer = SGD(decay=1e-8,nesterov=True)
-        self.vae.compile(optimizer=optimizer,loss=self.loss,metrics=[metrics.mae,metrics.mse])
+    def compile_vae(self, loss="mse"):
+        optimizer = RMSprop(lr=self.lr,decay=1e-8)
+        # optimizer = Adam(lr=self.lr)
+        # optimizer = SGD(decay=1e-8,nesterov=True)
+        loss_to_optimize = None
+        if loss == "mse":
+            loss_to_optimize = mse
+        else:
+            loss_to_optimize = self.loss
+        self.vae.compile(optimizer=optimizer,loss=loss_to_optimize,metrics=[metrics.mae,metrics.mse])
         self.vae.summary()
         # plot_model(self.vae,
         #            to_file='vae_mlp.png',
@@ -207,7 +221,7 @@ if __name__ == '__main__':
     normalize = False
     file = "data.pickle"
     if not os.path.exists(file) or regen:
-        X_train, Y_train, X_test, Y_test = load_training_input_2(normalize=normalize)
+        X_train, Y_train, X_test, Y_test = load_training_input_2(normalize=normalize,seed=10)
         pickle.dump((X_train, Y_train, X_test, Y_test), open(file, "wb"))
     else:
         X_train, Y_train, X_test, Y_test = pickle.load(open("data.pickle",'rb'))
@@ -223,16 +237,25 @@ if __name__ == '__main__':
     print("End")
 
     # #
-    input_vae = VAE(a_weight=1,b_weight=10,intermediate_layer_count=2,latent_dim=64,intermediate_dimension=64,epochs=50)
+    input_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=1, latent_dim=64, intermediate_dimension=1024,intermediate_mult = 1,
+                    epochs=10,loss_weight=0.0001,batch_size=64,lr=0.00005,batch_norm=False)
     input_vae.create_vae()
     input_vae.configure_vae()
-    input_vae.compile_vae()
+    # print("Going with mse")
+    input_vae.compile_vae(loss="mse")
     input_vae.fit(X_train,X_test,"input_vae.h5")
-    print(X_test)
-    print(input_vae.predict(X_test))
+    # print("Going with vae")
+    # print(X_test)
+    # print(input_vae.predict(X_test))
+    # input_vae.compile_vae(loss="vae")
+    # input_vae.fit(X_train,X_test,"input_vae.h5")
+    # print(X_test)
+    # print(input_vae.predict(X_test))
 
 
-    output_vae = VAE(a_weight=1,b_weight=100, intermediate_layer_count=6,latent_dim=64,intermediate_dimension=64,epochs=50)
+    #
+    output_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=1, latent_dim=64, intermediate_dimension=1024,intermediate_mult = 1,
+                        epochs=10,loss_weight=0.0001,batch_size=64,lr=0.00005,batch_norm=False)
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()

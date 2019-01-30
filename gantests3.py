@@ -12,8 +12,7 @@ from keras.models import Model
 from keras.optimizers import Adam, Nadam, Adadelta, RMSprop, SGD
 from sklearn.metrics import mean_squared_error
 
-from tools import load_training_input_2
-from gantests4 import find_word, find_closest
+from tools import load_training_input_2, find_word, find_closest
 
 
 class RetroCycleGAN():

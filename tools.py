@@ -1,8 +1,12 @@
+import gc
 import multiprocessing
 import os
 from multiprocessing.pool import Pool
+
 from keras import backend as K
 import numpy as np
+from scipy.spatial.distance import cosine
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.contrib.learn.python.learn.estimators._sklearn import train_test_split
 
@@ -86,7 +90,7 @@ def load_training_input(limit=10000):
     return common_vocabulary, common_vectors, common_retro_vectors
 
 
-def load_training_input_2(limit=10000,normalize=True):
+def load_training_input_2(limit=10000,normalize=True, seed = 42):
     global common_retro_vectors_train,common_retro_vectors_test,common_vectors_test,common_vectors_train
     words, vectors = load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=limit)
     retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=limit)
@@ -130,7 +134,7 @@ def load_training_input_2(limit=10000,normalize=True):
         scaled_common_vector = common_vectors
         scaled_common_retro_vector = common_retro_vectors
 
-    X_train, X_test, y_train, y_test = train_test_split(scaled_common_vector, scaled_common_retro_vector, test_size = 0.33, random_state = 42)
+    X_train, X_test, y_train, y_test = train_test_split(scaled_common_vector, scaled_common_retro_vector, test_size = 0.33, random_state = seed)
     common_vectors_train = X_train
     common_retro_vectors_train = y_train
     common_vectors_test = X_test
@@ -138,3 +142,35 @@ def load_training_input_2(limit=10000,normalize=True):
     del retrowords,retrovectors,words,vectors
     print("Size of common vocabulary:"+str(len(common_vocabulary)))
     return common_vectors_train,common_retro_vectors_train,common_vectors_test,common_retro_vectors_test
+
+
+def find_word(word,retro=True):
+    retrowords,retrovectors = None,None
+    if retro:
+        retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=10000000)
+    else:
+        retrowords, retrovectors =load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=10000000)
+    for idx, retrovector in enumerate(retrovectors):
+        if np.array_equal(word,retrovector):
+            print("Found word is ",retrowords[idx])
+            del retrowords, retrovectors
+            return
+    del retrowords, retrovectors
+    print("Word not found...")
+
+
+def find_closest(pred_y,n_top=5,retro=True):
+    retrowords,retrovectors = None,None
+    if retro:
+        retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=10000000)
+    else:
+        retrowords, retrovectors =load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=10000000)
+    # t1 = retrovectors[0].reshape(1,300)
+    # t2 = pred_y.reshape(1,300)
+    # res = cosine_similarity(t1,t2)
+    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300), pred_y.reshape(1,300))[0][0],retrovectors)))]
+    sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
+    for i in range(n_top):
+        print(retrowords[sorted_results[i][0]],sorted_results[i][1])
+    del retrowords,retrovectors,results,sorted_results
+    gc.collect()

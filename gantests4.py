@@ -10,11 +10,9 @@ from keras.layers import Input, Dense, Dropout, Concatenate
 from keras.layers.advanced_activations import LeakyReLU
 from keras.models import Model
 from keras.optimizers import Adam
-from keras.utils import plot_model
-from scipy.spatial.distance import cosine
 from sklearn.metrics import mean_squared_error
 
-from tools import load_embedding, load_training_input_2
+from tools import load_training_input_2, find_word, find_closest
 
 
 class RetroCycleGAN():
@@ -313,8 +311,8 @@ class RetroCycleGAN():
                             find_closest(tup[1])
                         for tup in r_to_w:
                             print(tup)
-                            find_word(tup[0],retro=False)
-                            find_closest(tup[1],retro=False)
+                            find_word(tup[0], retro=False)
+                            find_closest(tup[1], retro=False)
 
                         pickle.dump(self,open('model.pickle','wb'))
                     except:
@@ -323,32 +321,6 @@ class RetroCycleGAN():
         self.X_test = X_test
         self.Y_test = Y_test
         pickle.dump(self, open('model.pickle', 'wb'))
-
-def find_word(word,retro=True):
-    retrowords,retrovectors = None,None
-    if retro:
-        retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=10000000)
-    else:
-        retrowords, retrovectors =load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=10000000)
-    for idx, retrovector in enumerate(retrovectors):
-        if np.array_equal(word,retrovector):
-            print("Found word is ",retrowords[idx])
-            del retrowords, retrovectors
-            return
-    del retrowords, retrovectors
-    print("Word not found...")
-
-def find_closest(pred_y,n_top=5,retro=True):
-    retrowords,retrovectors = None,None
-    if retro:
-        retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=10000000)
-    else:
-        retrowords, retrovectors =load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=10000000)
-    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine(x, pred_y),retrovectors)))]
-    sorted_results = sorted(results,key=lambda x:x[1],reverse=False)
-    for i in range(n_top):
-        print(retrowords[sorted_results[i][0]],sorted_results[i][1])
-    del retrowords,retrovectors
 
 
 if __name__ == '__main__':
