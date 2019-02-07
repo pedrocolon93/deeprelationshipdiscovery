@@ -37,17 +37,17 @@ class RetroCycleGAN():
         # self.disc_patch = (patch, patch, 1)
 
         # Number of filters in the first layer of G and D
-        self.gf = 64
-        self.df = 256
+        self.gf = 32
+        self.df = 64
 
         # Loss weights
         self.lambda_cycle = 10.0                    # Cycle-consistency loss
         self.lambda_id = 0.1 * self.lambda_cycle    # Identity loss
 
         # optimizer = Adam(0.0002, 0.5,amsgrad=True)
-        optimizer = Adam(lr=0.005)
+        optimizer = Adam()
         # optimizer = Nadam()
-        # optimizer = SGD(lr=0.001,nesterov=True,momentum=0.8,decay=0.1e-8)
+        optimizer = SGD(lr=0.001,nesterov=True,momentum=0.8,decay=0.1e-8)
         # optimizer = Adadelta()
         # optimizer = RMSprop(lr=0.0005)
         # optimizer = Adam(0.0002, 0.5)
@@ -169,8 +169,8 @@ class RetroCycleGAN():
         d2 = d_layer(d1, self.df*2)
         d3 = d_layer(d2, self.df*4)
         d4 = d_layer(d3, self.df*8)
-        d4 = d_layer(d4, self.df*16)
-        d4 = d_layer(d4, self.df*32)
+        # d4 = d_layer(d4, self.df*16)
+        # d4 = d_layer(d4, self.df*32)
         validity = Dense(1,activation='sigmoid')(d4)
 
         return Model(img, validity)
@@ -205,8 +205,7 @@ class RetroCycleGAN():
         }
         pickle.dump(data,open('training_testing.data','wb'))
         # n_batches = n_batches
-        self.d_A.save("old_d_a")
-        self.d_B.save("old_d_b")
+        last_reload = 0
         def load_batch(batch_size,train_test = True,n_batches = 900):
             for i in range(n_batches):
                 if train_test:
@@ -298,19 +297,12 @@ class RetroCycleGAN():
                                                                             np.mean(g_loss[5:6]),
                                                                             elapsed_time))
 
+
                 if batch_i % sample_interval == 0:
                     print("Checkpointing")
                     self.g_AB.save("toretro")
                     self.g_BA.save("fromretro")
                     self.combined.save("combined_model")
-                    self.d_A.save("old_d_a")
-                    self.d_B.save("old_d_b")
-
-                if batch_i % 10 == 0:
-                    print("Relaoding discriminator")
-                    self.d_A.load_weights("old_d_a")
-                    self.d_B.load_weights("old_d_b")
-
 
 
 
@@ -348,36 +340,33 @@ if __name__ == '__main__':
     # print("End")
 
     # #
-    input_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=1, latent_dim=64, intermediate_dimension=1024,intermediate_mult = 1,
-                    epochs=20,loss_weight=0.0001,batch_size=64,lr=0.00005,batch_norm=True)
-    input_vae.create_vae()
-    input_vae.configure_vae()
-    # print("Going with mse")
-    input_vae.compile_vae(loss="mse")
+    # input_vae = VAE(b_weight=5000, intermediate_layer_count=1, latent_dim=128,dropout=0.6, intermediate_dimension=512,
+    #                 epochs=100, batch_size=128, lr=0.00005,batch_norm=True, capacity_ratio= 0.5)
+    # input_vae.create_vae()
+    # input_vae.configure_vae()
+    # input_vae.compile_vae()
     # input_vae.fit(X_train,X_test,"input_vae.h5")
-    # input_vae.fit(X_train, X_test, "input_vae.h5")
-    input_vae.load_weights("input_vae.h5")
-    print(X_test)
-    print(input_vae.predict(X_test))
-    print(sklearn.metrics.mean_squared_error(X_test,input_vae.predict(X_test)))
+    # input_vae.load_weights("input_vae.h5")
+    # print(X_test)
+    # print(input_vae.predict(X_test))
+    # # print(input_vae.encoder.predict(X_test))
+    # print(sklearn.metrics.mean_absolute_error(X_test,input_vae.predict(X_test)))
 
-    output_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=1, latent_dim=64, intermediate_dimension=1024,
-                     intermediate_mult=1,
-                     epochs=30, loss_weight=0.0001, batch_size=64, lr=0.00005, batch_norm=True)
+    output_vae = VAE(a_weight=1,b_weight=1000, intermediate_layer_count=2, latent_dim=64,dropout=0.8, intermediate_dimension=1024,
+                    epochs=100, batch_size=256, lr=0.0005,batch_norm=True, capacity_ratio= 1000)
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()
-    # output_vae.fit(Y_train, Y_test, "output_vae.h5")
-    # output_vae.fit(Y_train, Y_test, "output_vae.h5")
+    output_vae.fit(Y_train, Y_test, "output_vae.h5")
     output_vae.load_weights("output_vae.h5")
-    print(sklearn.metrics.mean_squared_error(Y_test,output_vae.predict(Y_test)))
-    # print()
     print(Y_test)
     print(output_vae.predict(Y_test))
-
+    print(sklearn.metrics.mean_absolute_error(Y_test,output_vae.predict(Y_test)))
+    exit()
+    input("Press enter to continue training the GAN!")
 
     rcgan = RetroCycleGAN(input_vae,output_vae)
-    rcgan.train(epochs=5,batch_size=128,sample_interval=350,noisy_entries_num=10,n_batches=400)
+    rcgan.train(epochs=5,batch_size=128,sample_interval=200,noisy_entries_num=10,n_batches=400)
     rcgan.combined.load_weights("combined_model")
     data = pickle.load(open('training_testing.data', 'rb'))
     word_count = 10
