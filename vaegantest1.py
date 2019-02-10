@@ -47,7 +47,7 @@ class RetroCycleGAN():
         # optimizer = Adam(0.0002, 0.5,amsgrad=True)
         optimizer = Adam()
         # optimizer = Nadam()
-        optimizer = SGD(lr=0.001,nesterov=True,momentum=0.8,decay=0.1e-8)
+        # optimizer = SGD(lr=0.001,nesterov=True,momentum=0.8,decay=0.1e-8)
         # optimizer = Adadelta()
         # optimizer = RMSprop(lr=0.0005)
         # optimizer = Adam(0.0002, 0.5)
@@ -340,20 +340,20 @@ if __name__ == '__main__':
     # print("End")
 
     # #
-    # input_vae = VAE(b_weight=5000, intermediate_layer_count=1, latent_dim=128,dropout=0.6, intermediate_dimension=512,
-    #                 epochs=100, batch_size=128, lr=0.00005,batch_norm=True, capacity_ratio= 0.5)
-    # input_vae.create_vae()
-    # input_vae.configure_vae()
-    # input_vae.compile_vae()
-    # input_vae.fit(X_train,X_test,"input_vae.h5")
-    # input_vae.load_weights("input_vae.h5")
-    # print(X_test)
-    # print(input_vae.predict(X_test))
-    # # print(input_vae.encoder.predict(X_test))
-    # print(sklearn.metrics.mean_absolute_error(X_test,input_vae.predict(X_test)))
+    input_vae = VAE(b_weight=5000, intermediate_layer_count=2, latent_dim=128,dropout=0.6, intermediate_dimension=1024,
+                    epochs=500, batch_size=512, lr=0.00005,batch_norm=True, capacity_ratio= 0.5)
+    input_vae.create_vae()
+    input_vae.configure_vae()
+    input_vae.compile_vae()
+    input_vae.fit(X_train,X_test,"input_vae.h5")
+    input_vae.load_weights("input_vae.h5")
+    print(X_test)
+    print(input_vae.predict(X_test))
+    # print(input_vae.encoder.predict(X_test))
+    print(sklearn.metrics.mean_absolute_error(X_test,input_vae.predict(X_test)))
 
-    output_vae = VAE(a_weight=1,b_weight=1000, intermediate_layer_count=2, latent_dim=64,dropout=0.8, intermediate_dimension=1024,
-                    epochs=100, batch_size=256, lr=0.0005,batch_norm=True, capacity_ratio= 1000)
+    output_vae = VAE(a_weight=1,b_weight=50000, intermediate_layer_count=2, latent_dim=128,dropout=0.8, intermediate_dimension=2048,
+                    epochs=500, batch_size=512, lr=0.0005,batch_norm=True, capacity_ratio= 10000)
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()
@@ -362,9 +362,9 @@ if __name__ == '__main__':
     print(Y_test)
     print(output_vae.predict(Y_test))
     print(sklearn.metrics.mean_absolute_error(Y_test,output_vae.predict(Y_test)))
-    exit()
-    input("Press enter to continue training the GAN!")
 
+    #input("Press enter to continue training the GAN!")
+    print("starting gan")
     rcgan = RetroCycleGAN(input_vae,output_vae)
     rcgan.train(epochs=5,batch_size=128,sample_interval=200,noisy_entries_num=10,n_batches=400)
     rcgan.combined.load_weights("combined_model")

@@ -169,8 +169,8 @@ class VAE():
         # self.vae.add_loss(vae_loss)
 
     def compile_vae(self, loss="mse"):
-        # optimizer = RMSprop(lr=self.lr,decay=1e-8)
-        optimizer = Adam(lr=self.lr)
+        optimizer = RMSprop(lr=self.lr)
+        #optimizer = Adam(lr=self.lr)
         # optimizer = Nadam(lr=self.lr)
 
         # optimizer = SGD(decay=1e-8,nesterov=True)
