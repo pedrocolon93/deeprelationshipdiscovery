@@ -37,8 +37,8 @@ class RetroCycleGAN():
         # self.disc_patch = (patch, patch, 1)
 
         # Number of filters in the first layer of G and D
-        self.gf = 32
-        self.df = 64
+        self.gf = 16
+        self.df = 32
 
         # Loss weights
         self.lambda_cycle = 10.0                    # Cycle-consistency loss
@@ -119,12 +119,12 @@ class RetroCycleGAN():
             d = BatchNormalization()(d)
             return d
 
-        def undense(layer_input, skip_input, layer_size,  dropout_rate=0.75):
+        def undense(layer_input, skip_input, layer_size,  dropout_rate=None):
             """Layers used during upsampling"""
             # u = UpSampling2D(size=2)(layer_input)
             # u = Conv2D(filters, kernel_size=f_size, strides=1, padding='same', activation='relu')(u)
             u = Dense(layer_size)(layer_input)
-            u = LeakyReLU(alpha=0.02)(u)
+            u = LeakyReLU()(u)
 
             if dropout_rate:
                 u = Dropout(dropout_rate)(u)
@@ -157,10 +157,13 @@ class RetroCycleGAN():
 
         def d_layer(layer_input, layer_size,  normalization=True):
             """Discriminator layer"""
+            dropout_rate = 0.75
             d = Dense(layer_size)(layer_input)
-            d = LeakyReLU(alpha=0.02)(d)
+            d = LeakyReLU()(d)
             if normalization:
                 d = BatchNormalization()(d)
+            d = Dropout(dropout_rate)(d)
+
             return d
 
         img = Input(shape=self.img_shape)
@@ -169,8 +172,8 @@ class RetroCycleGAN():
         d2 = d_layer(d1, self.df*2)
         d3 = d_layer(d2, self.df*4)
         d4 = d_layer(d3, self.df*8)
-        # d4 = d_layer(d4, self.df*16)
-        # d4 = d_layer(d4, self.df*32)
+        d4 = d_layer(d4, self.df*16)
+        d4 = d_layer(d4, self.df*32)
         validity = Dense(1,activation='sigmoid')(d4)
 
         return Model(img, validity)
@@ -345,7 +348,7 @@ if __name__ == '__main__':
     input_vae.create_vae()
     input_vae.configure_vae()
     input_vae.compile_vae()
-    input_vae.fit(X_train,X_test,"input_vae.h5")
+    # input_vae.fit(X_train,X_test,"input_vae.h5")
     input_vae.load_weights("input_vae.h5")
     print(X_test)
     print(input_vae.predict(X_test))
@@ -357,7 +360,7 @@ if __name__ == '__main__':
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()
-    output_vae.fit(Y_train, Y_test, "output_vae.h5")
+    # output_vae.fit(Y_train, Y_test, "output_vae.h5")
     output_vae.load_weights("output_vae.h5")
     print(Y_test)
     print(output_vae.predict(Y_test))
