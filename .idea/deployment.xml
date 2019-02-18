@@ -30,6 +30,13 @@
           </mappings>
         </serverdata>
       </paths>
+      <paths name="home_ubuntu">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/gantests" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="ubuntu@ec2-204-236-249-24.compute-1.amazonaws.com:22">
         <serverdata>
           <mappings>

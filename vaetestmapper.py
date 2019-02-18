@@ -68,8 +68,8 @@ if __name__ == '__main__':
     # print(input_vae.predict(X_test))
 
 
-    output_vae = VAE(a_weight=1, b_weight=1, intermediate_layer_count=1, latent_dim=16, intermediate_dimension=512,intermediate_mult = 1,
-                    epochs=5,loss_weight=0.00001,batch_size=64,lr=0.0005,batch_norm=True)
+    output_vae = VAE(a_weight=1, b_weight=1000, intermediate_layer_count=4, latent_dim=32, intermediate_dimension=512,intermediate_mult = 1,
+                    epochs=100,loss_weight=1,batch_size=256,lr=0.0001,batch_norm=True,capacity_ratio=10000)
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()

@@ -91,7 +91,7 @@ def load_training_input(limit=10000):
     return common_vocabulary, common_vectors, common_retro_vectors
 
 
-def load_training_input_2(limit=10000,normalize=True, seed = 42):
+def load_training_input_2(limit=10000,normalize=True, seed = 42,test_split=0.1):
     global common_retro_vectors_train,common_retro_vectors_test,common_vectors_test,common_vectors_train
     words, vectors = load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=limit)
     retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=limit)
@@ -135,12 +135,13 @@ def load_training_input_2(limit=10000,normalize=True, seed = 42):
         scaled_common_vector = common_vectors
         scaled_common_retro_vector = common_retro_vectors
 
-    X_train, X_test, y_train, y_test = train_test_split(scaled_common_vector, scaled_common_retro_vector, test_size = 0.33, random_state = seed)
+    X_train, X_test, y_train, y_test = train_test_split(scaled_common_vector, scaled_common_retro_vector, test_size = test_split, random_state = seed)
     common_vectors_train = X_train
     common_retro_vectors_train = y_train
     common_vectors_test = X_test
     common_retro_vectors_test = y_test
     del retrowords,retrovectors,words,vectors
+    gc.collect()
     print("Size of common vocabulary:"+str(len(common_vocabulary)))
     return common_vectors_train,common_retro_vectors_train,common_vectors_test,common_retro_vectors_test
 
@@ -175,3 +176,20 @@ def find_closest(pred_y,n_top=5,retro=True):
         print(retrowords[sorted_results[i][0]],sorted_results[i][1])
     del retrowords,retrovectors,results,sorted_results
     gc.collect()
+
+
+def find_in_fasttext(testwords):
+    retrowords, retrovectors = load_embedding("retrogan/wiki-news-300d-1M-subword.vec", limit=10000000)
+    indices = []
+    for word in testwords:
+        indices.append(retrowords.index(word))
+    results = [retrovectors[idx] for idx in indices]
+    return results
+
+def find_in_numberbatch(testwords):
+    retrowords, retrovectors = load_embedding("retrogan/numberbatch", limit=10000000)
+    indices = []
+    for word in testwords:
+        indices.append(retrowords.index(word))
+    results = [retrovectors[idx] for idx in indices]
+    return results

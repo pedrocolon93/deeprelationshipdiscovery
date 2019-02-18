@@ -16,7 +16,7 @@ from vaetest3 import VAE, sampling
 
 
 class RetroCycleGAN():
-    def __init__(self, input_vae, output_vae):
+    def __init__(self, input_vae, output_vae, gf,df, lambda_cycle, lambda_id):
         self.in_vae = input_vae
         self.out_vae = output_vae
         # Input shape
@@ -37,15 +37,15 @@ class RetroCycleGAN():
         # self.disc_patch = (patch, patch, 1)
 
         # Number of filters in the first layer of G and D
-        self.gf = 16
-        self.df = 32
+        self.gf = gf
+        self.df = df
 
         # Loss weights
-        self.lambda_cycle = 10.0                    # Cycle-consistency loss
-        self.lambda_id = 0.1 * self.lambda_cycle    # Identity loss
+        self.lambda_cycle = lambda_cycle                   # Cycle-consistency loss
+        self.lambda_id = lambda_id * self.lambda_cycle    # Identity loss
 
         # optimizer = Adam(0.0002, 0.5,amsgrad=True)
-        optimizer = Adam()
+        optimizer = Adam(lr=0.01)
         # optimizer = Nadam()
         # optimizer = SGD(lr=0.001,nesterov=True,momentum=0.8,decay=0.1e-8)
         # optimizer = Adadelta()
@@ -117,14 +117,15 @@ class RetroCycleGAN():
             d = Dense(layer_size)(layer_input)
             d = LeakyReLU(alpha=0.02)(d)
             d = BatchNormalization()(d)
+            d = Dropout(0.5)(d)
             return d
 
-        def undense(layer_input, skip_input, layer_size,  dropout_rate=None):
+        def undense(layer_input, skip_input, layer_size,  dropout_rate=0.5):
             """Layers used during upsampling"""
             # u = UpSampling2D(size=2)(layer_input)
             # u = Conv2D(filters, kernel_size=f_size, strides=1, padding='same', activation='relu')(u)
             u = Dense(layer_size)(layer_input)
-            u = LeakyReLU()(u)
+            u = LeakyReLU(alpha=0.02)(u)
 
             if dropout_rate:
                 u = Dropout(dropout_rate)(u)
@@ -172,8 +173,8 @@ class RetroCycleGAN():
         d2 = d_layer(d1, self.df*2)
         d3 = d_layer(d2, self.df*4)
         d4 = d_layer(d3, self.df*8)
-        d4 = d_layer(d4, self.df*16)
-        d4 = d_layer(d4, self.df*32)
+        # d5 = d_layer(d4, self.df*16)
+        # d6 = d_layer(d5, self.df*32)
         validity = Dense(1,activation='sigmoid')(d4)
 
         return Model(img, validity)
@@ -229,6 +230,7 @@ class RetroCycleGAN():
                 # ----------------------
                 #  Train Discriminators
                 # ----------------------
+
                 noisy_entries = []
                 noisy_outputs = []
                 for index in range(batch_size):
@@ -237,7 +239,10 @@ class RetroCycleGAN():
                     samples = []
                     for i in range(noisy_entries_num):
                         # mean_var = dist[0:1,:]
-                        samples.append(self.in_vae.encoder.predict(imgs_A[index,:].reshape(1,300))[2].reshape((self.in_vae.latent_dim,)))
+                        entry = imgs_A[index, :].reshape(1, 300)
+                        if batch_i % 5 == 0:
+                            np.multiply(entry, np.random.normal(size=(1, 300)))
+                        samples.append(self.in_vae.encoder.predict(entry)[2].reshape((self.in_vae.latent_dim,)))
                     noisy_entries.append(samples)
                     #sample for output
                     # dist = self.out_vae.encoder.predict(imgs_B[index,:].reshape(1,self.img_cols))
@@ -265,15 +270,23 @@ class RetroCycleGAN():
                 fake_B = self.g_AB.predict(imgs_A)
                 fake_A = self.g_BA.predict(imgs_B)
 
-                # Train the discriminators (original images = real / translated = Fake)
-                dA_loss_real = self.d_A.train_on_batch(imgs_A, valid)
-                dA_loss_fake = self.d_A.train_on_batch(fake_A, fake)
-                dA_loss = 0.5 * np.add(dA_loss_real, dA_loss_fake)
+                if batch_i % 6 == 0:
+                    dA_loss_real = self.d_A.train_on_batch(imgs_A, fake)
+                    dA_loss_fake = self.d_A.train_on_batch(fake_A, valid)
+                    dA_loss = 0.5 * np.add(dA_loss_real, dA_loss_fake)
 
-                dB_loss_real = self.d_B.train_on_batch(imgs_B, valid)
-                dB_loss_fake = self.d_B.train_on_batch(fake_B, fake)
-                dB_loss = 0.5 * np.add(dB_loss_real, dB_loss_fake)
+                    dB_loss_real = self.d_B.train_on_batch(imgs_B, fake)
+                    dB_loss_fake = self.d_B.train_on_batch(fake_B, valid)
+                    dB_loss = 0.5 * np.add(dB_loss_real, dB_loss_fake)
+                else:
+                    # Train the discriminators (original images = real / translated = Fake)
+                    dA_loss_real = self.d_A.train_on_batch(imgs_A, valid)
+                    dA_loss_fake = self.d_A.train_on_batch(fake_A, fake)
+                    dA_loss = 0.5 * np.add(dA_loss_real, dA_loss_fake)
 
+                    dB_loss_real = self.d_B.train_on_batch(imgs_B, valid)
+                    dB_loss_fake = self.d_B.train_on_batch(fake_B, fake)
+                    dB_loss = 0.5 * np.add(dB_loss_real, dB_loss_fake)
                 # Total disciminator loss
                 d_loss = 0.5 * np.add(dA_loss, dB_loss)
 
@@ -306,6 +319,7 @@ class RetroCycleGAN():
                     self.g_AB.save("toretro")
                     self.g_BA.save("fromretro")
                     self.combined.save("combined_model")
+            # Test epoch performance
 
 
 
@@ -323,8 +337,8 @@ if __name__ == '__main__':
     set_session(sess)  # set this TensorFlow session as the default session for Keras
 
     X_train = Y_train = X_test = Y_test = None
-    regen = False
-    normalize = False
+    regen = True
+    normalize = True
     seed = 10
     file = "data.pickle"
     if not os.path.exists(file) or regen:
@@ -343,24 +357,24 @@ if __name__ == '__main__':
     # print("End")
 
     # #
-    input_vae = VAE(b_weight=5000, intermediate_layer_count=2, latent_dim=128,dropout=0.6, intermediate_dimension=1024,
-                    epochs=500, batch_size=512, lr=0.00005,batch_norm=True, capacity_ratio= 0.5)
+    input_vae = VAE(b_weight=50, intermediate_layer_count=2, latent_dim=128,dropout=0.8, intermediate_dimension=512,
+                    epochs=500, batch_size=512, lr=0.00005,batch_norm=True, capacity_ratio= 10)
     input_vae.create_vae()
     input_vae.configure_vae()
     input_vae.compile_vae()
-    # input_vae.fit(X_train,X_test,"input_vae.h5")
+    input_vae.fit(X_train,X_test,"input_vae.h5")
     input_vae.load_weights("input_vae.h5")
     print(X_test)
     print(input_vae.predict(X_test))
     # print(input_vae.encoder.predict(X_test))
     print(sklearn.metrics.mean_absolute_error(X_test,input_vae.predict(X_test)))
 
-    output_vae = VAE(a_weight=1,b_weight=50000, intermediate_layer_count=2, latent_dim=128,dropout=0.8, intermediate_dimension=2048,
-                    epochs=500, batch_size=512, lr=0.0005,batch_norm=True, capacity_ratio= 10000)
+    output_vae = VAE(a_weight=1,b_weight=50, intermediate_layer_count=2, latent_dim=128,dropout=0.8, intermediate_dimension=512,
+                    epochs=500, batch_size=512, lr=0.0005,batch_norm=True, capacity_ratio= 10)
     output_vae.create_vae()
     output_vae.configure_vae()
     output_vae.compile_vae()
-    # output_vae.fit(Y_train, Y_test, "output_vae.h5")
+    output_vae.fit(Y_train, Y_test, "output_vae.h5")
     output_vae.load_weights("output_vae.h5")
     print(Y_test)
     print(output_vae.predict(Y_test))
@@ -368,10 +382,11 @@ if __name__ == '__main__':
 
     #input("Press enter to continue training the GAN!")
     print("starting gan")
-    rcgan = RetroCycleGAN(input_vae,output_vae)
-    rcgan.train(epochs=5,batch_size=128,sample_interval=200,noisy_entries_num=10,n_batches=400)
+    rcgan = RetroCycleGAN(input_vae,output_vae,32,64,10,0.2)
+    rcgan.train(epochs=5,batch_size=512,sample_interval=200,noisy_entries_num=5,n_batches=600)
     rcgan.combined.load_weights("combined_model")
     data = pickle.load(open('training_testing.data', 'rb'))
+
     word_count = 10
     for i in range(word_count):
         find_word(data["X_test"][i,:],retro=False)
@@ -380,7 +395,7 @@ if __name__ == '__main__':
         rep_amount = 10
         for i in range(rep_amount):
             input_rep.append(input_vae.encoder.predict(data["X_test"][i,:].reshape(1,300))[2])
-        input_representation = np.mean(input_rep)
+        input_representation = np.mean(input_rep, axis=0)
         rcgan.g_AB = load_model("toretro")
         retro_representation = rcgan.g_AB.predict(input_representation)
         rcgan.g_BA=load_model("fromretro")
@@ -389,6 +404,6 @@ if __name__ == '__main__':
             output_rep.append(output_vae.decoder.predict(retro_representation))
             # output_rep.append(rcgan.g_BA.predict(retro_representation))
         # rcgan.combined=load_model("combined_model")
-        output_ = np.mean(output_rep)
+        output_ = np.mean(output_rep,axis=0)
         find_closest(output_)
         gc.collect()
