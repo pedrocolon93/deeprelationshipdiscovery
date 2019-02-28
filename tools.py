@@ -99,23 +99,22 @@ def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
     global original,retrofitted
     original,retrofitted = datasets[dataset]
     o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
-    asarray1 = np.array(o.iloc[:, :])
 
     # print(asarray1.shape)
     # print(o["index"][0])
     # print(o["columns"][0][:])
     r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
-    asarray2 = np.array(r.iloc[:, :])
     r_sub = r.loc[o.index.intersection(r.index), :]
+    del r
+    gc.collect()
     # print(asarray2.shape)
-    X = np.array(o.iloc[:,:])
-    y = np.array(r_sub.iloc[:,:])
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = test_split, random_state = seed)
+    X_train, X_test, y_train, y_test = train_test_split(o.values, r_sub.values, test_size = test_split, random_state = seed)
     common_vectors_train = X_train
     common_retro_vectors_train = y_train
     common_vectors_test = X_test
     common_retro_vectors_test = y_test
     # del retrowords, retrovectors, words, vectors
+    del o
     gc.collect()
     # print("Size of common vocabulary:" + str(len(common_vocabulary)))
     return common_vectors_train, common_retro_vectors_train, common_vectors_test, common_retro_vectors_test
