@@ -40,7 +40,7 @@ class RetroPixGAN():
         self.gf = 64
         self.df = 64
 
-        optimizer = Adam(0.0002,decay=1e-6,amsgrad=True)
+        optimizer = Adam(0.0002,decay=1e-7,amsgrad=True)
 
         # Build and compile the discriminator
         self.discriminator = self.build_discriminator()
@@ -101,11 +101,11 @@ class RetroPixGAN():
         # Downsampling
         d1 = conv2d(d0, self.gf, bn=False)
         d2 = conv2d(d1, self.gf * 8)
-        d3 = conv2d(d2, self.gf * 8)
-        d4 = conv2d(d3, self.gf * 8)
-        d5 = conv2d(d4, self.gf * 8)
-        d6 = conv2d(d5, self.gf * 4)
-        d7 = conv2d(d6, self.gf * 2)
+        # d3 = conv2d(d2, self.gf * 8)
+        # d4 = conv2d(d3, self.gf * 8)
+        # d5 = conv2d(d4, self.gf * 8)
+        # d6 = conv2d(d5, self.gf * 4)
+        # d7 = conv2d(d6, self.gf * 2)
 
         # Upsampling
         u1 = deconv2d(d7, d6, self.gf * 2)

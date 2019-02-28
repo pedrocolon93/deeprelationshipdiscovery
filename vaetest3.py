@@ -239,11 +239,11 @@ if __name__ == '__main__':
 
     # #
     input_vae = VAE(a_weight=1, b_weight=10, intermediate_layer_count=4, latent_dim=128, intermediate_dimension=2048,intermediate_mult = 0.5,
-                    epochs=10,loss_weight=0.001,batch_size=64,lr=0.00005,batch_norm=True)
+                    epochs=10,loss_weight=0.001,batch_size=512,lr=0.0005,batch_norm=True)
     input_vae.create_vae()
     input_vae.configure_vae()
     # print("Going with mse")
-    input_vae.compile_vae(loss="mse")
+    input_vae.compile_vae()
     input_vae.fit(X_train,X_test,"input_vae.h5")
     # print("Going with vae")
     # print(X_test)

@@ -1,8 +1,9 @@
 import gc
 import multiprocessing
 import os
+import pickle
 from multiprocessing.pool import Pool
-
+import pandas as pd
 from keras import backend as K
 import numpy as np
 from scipy.spatial.distance import cosine
@@ -10,6 +11,16 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.contrib.learn.python.learn.estimators._sklearn import train_test_split
 
+directory = '/home/conceptnet/conceptnet5/data/vectors/'
+# directory = '/home/pedro/Documents/mltests/retrogan/'
+# original = 'fasttext-opensubtitles.h5'
+original = 'crawl-300d-2M.h5'
+# retrofitted = 'fasttext-opensubtitles-retrofit.h5'
+retrofitted = 'crawl-300d-2M-retrofit.h5'
+
+print("Searching in")
+print(directory)
+print("for:",original,retrofitted)
 
 def process_line(line):
     linesplit = line.split(" ")
@@ -25,17 +36,16 @@ def process_line(line):
 def root_mean_squared_error(y_true, y_pred):
     return K.sqrt(K.mean(K.square(y_pred - y_true)))
 
-def load_embedding(path,limit=100000000):
+def load_embedding(path,limit=100000000,cache=None):
+    if cache is not None:
+        words,vectors = pickle.load(cache)
+        return words,vectors
     if os.path.exists(path):
         words = []
         vectors = []
         # f = open(path,encoding="utf-8")
         skip_first = True
         print("Starting loading",path)
-
-
-            # return "FOO: %s" % line
-        #
         pool = Pool(multiprocessing.cpu_count())
         with open(path,encoding="utf-8") as source_file:
             # chunk the work into batches of 4 lines at a time
@@ -46,21 +56,12 @@ def load_embedding(path,limit=100000000):
                 else:
                     words.append(line[0])
                     vectors.append(line[1])
-        # for line in f:
-        #     if limit is not None:
-        #         if(len(words)>=limit):
-        #             break
-        #     if skip_first ==True:
-        #         skip_first = False
-        #         continue
-        #     linesplit = line.split(" ")
-        #     words.append(linesplit[0])
-        #     vectors.append([float(x) for x in linesplit[1:]])
-        #     # print("Appended")
-            pool.close()
-            pool.join() 
-            print("Finished")
-            return words,vectors
+        pool.close()
+        pool.join()
+        print("Finished")
+        if cache is not None:
+            pickle.dump((words,vectors),cache)
+        return words,vectors
     else:
         raise FileNotFoundError(path+" does not exist")
 
@@ -90,6 +91,37 @@ def load_training_input(limit=10000):
     print("Size of common vocabulary:" + str(len(common_vocabulary)))
     return common_vocabulary, common_vectors, common_retro_vectors
 
+datasets = {
+    'fasttext':['fasttext-opensubtitles.h5','fasttext-opensubtitles-retrofit.h5'],
+    'crawl':['crawl-300d-2M.h5','crawl-300d-2M-retrofit.h5']
+}
+def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
+    global original,retrofitted
+    original,retrofitted = datasets[dataset]
+    o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
+    asarray1 = np.array(o.iloc[:, :])
+
+    # print(asarray1.shape)
+    # print(o["index"][0])
+    # print(o["columns"][0][:])
+    r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
+    asarray2 = np.array(r.iloc[:, :])
+    r_sub = r.loc[o.index.intersection(r.index), :]
+    # print(asarray2.shape)
+    X = np.array(o.iloc[:,:])
+    y = np.array(r_sub.iloc[:,:])
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = test_split, random_state = seed)
+    common_vectors_train = X_train
+    common_retro_vectors_train = y_train
+    common_vectors_test = X_test
+    common_retro_vectors_test = y_test
+    # del retrowords, retrovectors, words, vectors
+    gc.collect()
+    # print("Size of common vocabulary:" + str(len(common_vocabulary)))
+    return common_vectors_train, common_retro_vectors_train, common_vectors_test, common_retro_vectors_test
+
+
+    # print(r_sub)
 
 def load_training_input_2(limit=10000,normalize=True, seed = 42,test_split=0.1):
     global common_retro_vectors_train,common_retro_vectors_test,common_vectors_test,common_vectors_train
@@ -149,9 +181,9 @@ def load_training_input_2(limit=10000,normalize=True, seed = 42,test_split=0.1):
 def find_word(word,retro=True):
     retrowords,retrovectors = None,None
     if retro:
-        retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=10000000)
+        retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=10000000,cache='./numberbatch')
     else:
-        retrowords, retrovectors =load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=10000000)
+        retrowords, retrovectors =load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=10000000, cache='./fasttext')
     for idx, retrovector in enumerate(retrovectors):
         if np.array_equal(word,retrovector):
             print("Found word is ",retrowords[idx])
@@ -161,35 +193,79 @@ def find_word(word,retro=True):
     print("Word not found...")
 
 
-def find_closest(pred_y,n_top=5,retro=True):
-    retrowords,retrovectors = None,None
-    if retro:
-        retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=10000000)
+def find_cross_closest(vec1, vec2, n_top, closest=0):
+    #TODO SKIP THE NEIGHBORS OF THE ONE WE DO NOT COMPARE AGAINST
+    results = []
+    if closest == 0:
+        #explore the dot between vec1 and synonyms of vec2
+        closest_words, closest_vecs = find_closest_2(vec2,n_top=n_top)
+        results = [(idx, item) for idx, item in enumerate(
+            list(map(lambda x: cosine_similarity( np.array(x).reshape(1, 300), np.array(vec1).reshape(1, 300))[0][0], closest_vecs)))]
     else:
-        retrowords, retrovectors =load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=10000000)
+        #explore the dot between vec2 and synonyms of vec1
+        closest_words, closest_vecs = find_closest_2(vec1,n_top=n_top)
+        results = [(idx, item) for idx, item in enumerate(
+            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, 300), np.array(vec2).reshape(1, 300))[0][0], closest_vecs)))]
+    sorted_results = sorted(results, key=lambda x: x[1], reverse=True)
+    final_n_results = []
+    final_n_results_words = []
+    for i in range(n_top):
+        # i += skip
+        print(closest_words[sorted_results[i][0]], sorted_results[i][1])
+        final_n_results_words.append(closest_words[sorted_results[i][0]])
+        final_n_results.append(closest_words[sorted_results[i][0]])
+    return final_n_results_words,final_n_results
+
+
+def find_closest(pred_y,n_top=5,retro=True,skip=0,retrowords=None,retrovectors=None):
+    if not (retrovectors is not None and retrowords is not None):
+        if retro:
+            retrowords, retrovectors =load_embedding("retrogan/numberbatch",limit=10000000)
+        else:
+            retrowords, retrovectors =load_embedding("retrogan/wiki-news-300d-1M-subword.vec",limit=10000000)
     # t1 = retrovectors[0].reshape(1,300)
     # t2 = pred_y.reshape(1,300)
     # res = cosine_similarity(t1,t2)
     results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300), pred_y.reshape(1,300))[0][0],retrovectors)))]
     sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
+    final_n_results = []
+    final_n_results_words = []
     for i in range(n_top):
+        i += skip
         print(retrowords[sorted_results[i][0]],sorted_results[i][1])
+        final_n_results_words.append(retrowords[sorted_results[i][0]])
+        final_n_results.append(retrovectors[sorted_results[i][0]])
+
     del retrowords,retrovectors,results,sorted_results
     gc.collect()
+    return final_n_results_words,final_n_results
+
+def find_closest_2(pred_y,n_top=5,retro=True,skip=0):
+    o = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
+    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300), pred_y.reshape(1,300)),np.array(o.iloc[0:100000,:]))))]
+    sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
+    final_n_results = []
+    final_n_results_words = []
+    for i in range(n_top):
+        # i += skip
+        # print(retrowords[sorted_results[i][0]],sorted_results[i][1])
+        final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
+        final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
+
+    del o,results,sorted_results
+    gc.collect()
+    return final_n_results_words,final_n_results
 
 
-def find_in_fasttext(testwords):
-    retrowords, retrovectors = load_embedding("retrogan/wiki-news-300d-1M-subword.vec", limit=10000000)
-    indices = []
-    for word in testwords:
-        indices.append(retrowords.index(word))
-    results = [retrovectors[idx] for idx in indices]
-    return results
 
-def find_in_numberbatch(testwords):
-    retrowords, retrovectors = load_embedding("retrogan/numberbatch", limit=10000000)
-    indices = []
-    for word in testwords:
-        indices.append(retrowords.index(word))
-    results = [retrovectors[idx] for idx in indices]
-    return results
+def find_in_fasttext(testwords,return_words=False):
+    o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
+    # r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
+    asarray1 = np.array(o.loc[["/c/en/"+x for x in testwords], :])
+    return asarray1
+
+def find_in_numberbatch(testwords, return_words=False):
+    # o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
+    r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
+    asarray1 = np.array(r.loc[["/c/en/" + x for x in testwords], :])
+    return asarray1
