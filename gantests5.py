@@ -1,24 +1,25 @@
 from __future__ import print_function, division
 
 import datetime
-import gc
-import os
-import pickle
 from random import shuffle
 
 import sklearn
 
 import numpy as np
-from keras.layers import BatchNormalization, UpSampling2D, Conv2D, Reshape, Flatten
+from keras.layers import BatchNormalization
 from keras.layers import Input, Dense, Dropout, Concatenate
 from keras.layers.advanced_activations import LeakyReLU
 from keras.models import Model
-from keras.optimizers import Adam, Nadam, Adadelta, RMSprop, SGD
-from sklearn.metrics import mean_squared_error
+from keras.optimizers import Adam
 from tqdm import tqdm
 
-from tools import load_training_input_2, find_word, find_closest, find_in_fasttext, find_in_numberbatch, \
+from tools import find_in_fasttext, find_in_numberbatch, \
     load_training_input_3
+
+from numpy.random import seed
+seed(1)
+from tensorflow import set_random_seed
+set_random_seed(2)
 
 
 class RetroCycleGAN():
@@ -29,13 +30,6 @@ class RetroCycleGAN():
         self.channels = 1
         self.img_shape = (self.img_cols,)#, self.channels)
         self.save_index = save_index
-
-        # Configure data loader
-
-
-        # Calculate output shape of D (PatchGAN)
-        # patch = int(self.img_rows / 2**4)
-        # self.disc_patch = (patch, patch, 1)
 
         # Number of filters in the first layer of G and D
         self.gf = 32
@@ -125,24 +119,19 @@ class RetroCycleGAN():
 
         # Image input
         inpt = Input(shape=self.img_shape)
-        # d0 = Dense(512)(inpt)
-        # d0 = Reshape(target_shape=(16,32,1))(d0)
         # Downsampling
         d0 = conv2d(inpt, self.gf*8)
         d1 = conv2d(d0, self.gf*8)
-        d2 = conv2d(d1, self.gf*4)
-        d3 = conv2d(d2, self.gf*4)
-        d4 = conv2d(d3, self.gf*2)
+        d2 = conv2d(d1, self.gf*6)
+        d3 = conv2d(d2, self.gf*6)
+        d4 = conv2d(d3, self.gf*4)
 
         # Upsampling
-        u1 = deconv2d(d4, d3, self.gf*2)
-        u2 = deconv2d(u1, d2, self.gf*4)
+        u1 = deconv2d(d4, d3, self.gf*4)
+        u2 = deconv2d(u1, d2, self.gf*6)
         u3 = deconv2d(u2, d1, self.gf*8)
 
-        # u4 = UpSampling2D(size=2)(u3)
-        # output_img = Flatten()(u4)
         output_img = Dense(300)(u3)
-        # output_img = Conv2D(self.channels, kernel_size=4, strides=1, padding='same', activation='tanh')(u4)
 
         return Model(inpt, output_img)
 
@@ -158,22 +147,26 @@ class RetroCycleGAN():
             return d
 
         inpt = Input(shape=self.img_shape)
-        # img = Dense(512)(inpt)
-        # img = Reshape(target_shape=(16,32,1))(img)
         d1 = d_layer(inpt, self.df*8, normalization=False)
         d2 = d_layer(d1, self.df*4)
         d3 = d_layer(d2, self.df*2)
         d4 = d_layer(d3, self.df*1)
 
-        # validity = Conv2D(1, kernel_size=4, strides=1, padding='same')(d4)
-        # validity = Flatten()(validity)
         validity = Dense(1)(d4)
         return Model(inpt, validity)
+
+    def load_weights(self,extension):
+        try:
+            self.g_AB.load_weights("toretro" + extension)
+            self.g_BA.load_weights("fromretro" + extension)
+            self.combined.load_weights("combined_model" + extension)
+        except Exception as e:
+            print(e)
 
     def train(self, epochs, batch_size=1, sample_interval=50,noisy_entries_num=5,batches=900,dataset="fasttext"):
 
         start_time = datetime.datetime.now()
-
+        # self.load_weights(extension="0")
         # Adversarial loss ground truths
         valid = np.ones((batch_size,))#*noisy_entries_num,) )
         fake = np.zeros((batch_size,))#*noisy_entries_num,) )
@@ -183,6 +176,7 @@ class RetroCycleGAN():
         seed = 32
         X_train, Y_train, X_test, Y_test = load_training_input_3(seed=seed,test_split=0.1,dataset=dataset)
         n_batches = batches
+        add_noise = True
         def load_batch(batch_size=2):
             l = X_train.shape[0]
             iterable = list(range(0,l))
@@ -203,10 +197,11 @@ class RetroCycleGAN():
                 idx = np.random.randint(0, X_train.shape[0], batch_size)
                 noise = X_train[idx]
                 imgs = Y_train[idx]
-                # if batch_i%2==0:
-                #     normnoise = np.random.normal(size=(batch_size,300))
-                #     noise = np.add(noise,normnoise)
-                    # imgs = np.add(imgs,normnoise)
+
+                if batch_i%2==0 and add_noise:
+                    normnoise = np.random.normal(size=(batch_size,300))
+                    noise = np.add(noise,normnoise)
+                    imgs = np.add(imgs,normnoise)
 
                 imgs_A = noise
                 imgs_B =imgs
@@ -256,35 +251,29 @@ class RetroCycleGAN():
                                                                             np.mean(g_loss[3:5]),
                                                                             np.mean(g_loss[5:6]),
                                                                             elapsed_time))
-                if batch_i%sample_interval==0 and batch_i!=0:
-                    print("Saving")
-                    self.g_AB.save("toretro" + self.save_index)
-                    self.g_BA.save("fromretro" + self.save_index)
-                    self.combined.save("combined_model" + self.save_index)
-            self.g_AB.save("toretro"+self.save_index)
-            self.g_BA.save("fromretro"+self.save_index)
-            self.combined.save("combined_model"+self.save_index)
-
-            # Check at end of epoch!
-            testwords = ["human", "dog", "cat", "potato", "fat"]
-            fastext_version = find_in_fasttext(testwords)
-            retro_version = find_in_numberbatch(testwords)
-            for idx, word in enumerate(testwords):
-                print(word)
-                retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, 300))
-                print(sklearn.metrics.mean_absolute_error(retro_version[idx],
-                                                          retro_representation.reshape((300,))))
+            try:
+                # Check at end of epoch!
+                testwords = ["human", "dog", "cat", "potato", "fat"]
+                fastext_version = find_in_fasttext(testwords)
+                retro_version = find_in_numberbatch(testwords)
+                for idx, word in enumerate(testwords):
+                    print(word)
+                    retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, 300))
+                    print(sklearn.metrics.mean_absolute_error(retro_version[idx],
+                                                              retro_representation.reshape((300,))))
+                self.g_AB.save("toretro" + str(epoch) + self.save_index)
+                self.g_BA.save("fromretro" + str(epoch) + self.save_index)
+                self.combined.save("combined_model" + str(epoch) + self.save_index)
+            except Exception as e:
+                print(e)
 
         self.g_AB.save("toretro"+self.save_index)
         self.g_BA.save("fromretro"+self.save_index)
         self.combined.save("combined_model"+self.save_index)
         return X_train, Y_train, X_test, Y_test
 
-
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
-
-
 
 if __name__ == '__main__':
     config = tf.ConfigProto()
@@ -310,26 +299,3 @@ if __name__ == '__main__':
         print(word)
         retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, 300))
         print(sklearn.metrics.mean_absolute_error(retro_version[idx], retro_representation.reshape((300,))))
-        # find_closest(retro_representation)
-    # word_count = 1
-    # for i in range(10, 20, word_count):
-    #     find_word(data["X_test"][i, :], retro=False)
-    #     gc.collect()
-    #     # input_rep = []
-    #     # rep_amount = 10
-    #     # for i in range(rep_amount):
-    #     #     input_rep.append(input_vae.encoder.predict(data["X_test"][i, :].reshape(1, 300))[2])
-    #     # input_representation = np.mean(input_rep, axis=0)
-    #     # rcgan.g_AB = load_model("toretro")
-    #     retro_representation = rcgan.g_AB.predict(data["X_test"][i, :].reshape(1, 300))
-    #     # rcgan.g_BA = load_model("fromretro")
-    #     # output_rep = []
-    #     # for i in range(rep_amount):
-    #     #     output_rep.append(output_vae.decoder.predict(retro_representation))
-    #     #     # output_rep.append(rcgan.g_BA.predict(retro_representation))
-    #     # # rcgan.combined=load_model("combined_model")
-    #     # output_ = np.mean(output_rep, axis=0)
-    #     find_closest(retro_representation)
-    #     gc.collect()
-
-

@@ -18,9 +18,7 @@ original = 'crawl-300d-2M.h5'
 # retrofitted = 'fasttext-opensubtitles-retrofit.h5'
 retrofitted = 'crawl-300d-2M-retrofit.h5'
 
-print("Searching in")
-print(directory)
-print("for:",original,retrofitted)
+
 
 def process_line(line):
     linesplit = line.split(" ")
@@ -96,8 +94,13 @@ datasets = {
     'crawl':['crawl-300d-2M.h5','crawl-300d-2M-retrofit.h5']
 }
 def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
+
     global original,retrofitted
     original,retrofitted = datasets[dataset]
+    print("Searching in")
+    print(directory)
+    print("for:", original, retrofitted)
+
     o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
 
     # print(asarray1.shape)
@@ -192,7 +195,7 @@ def find_word(word,retro=True):
     print("Word not found...")
 
 
-def find_cross_closest(vec1, vec2, n_top, closest=0):
+def find_cross_closest(vec1, vec2, n_top, closest=0,verbose=False):
     #TODO SKIP THE NEIGHBORS OF THE ONE WE DO NOT COMPARE AGAINST
     results = []
     if closest == 0:
@@ -210,7 +213,8 @@ def find_cross_closest(vec1, vec2, n_top, closest=0):
     final_n_results_words = []
     for i in range(n_top):
         # i += skip
-        print(closest_words[sorted_results[i][0]], sorted_results[i][1])
+        if verbose:
+            print(closest_words[sorted_results[i][0]], sorted_results[i][1])
         final_n_results_words.append(closest_words[sorted_results[i][0]])
         final_n_results.append(closest_words[sorted_results[i][0]])
     return final_n_results_words,final_n_results
