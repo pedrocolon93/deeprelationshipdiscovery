@@ -1,5 +1,8 @@
 import gc
+import math
 import multiprocessing
+import operator
+
 import os
 import pickle
 from multiprocessing.pool import Pool
@@ -11,8 +14,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.contrib.learn.python.learn.estimators._sklearn import train_test_split
 
-directory = '/home/conceptnet/conceptnet5/data/vectors/'
+directory = './'
 # directory = '/home/pedro/Documents/mltests/retrogan/'
+# directory = '/home/conceptnet/conceptnet5/data/vectors/'
 # original = 'fasttext-opensubtitles.h5'
 original = 'crawl-300d-2M.h5'
 # retrofitted = 'fasttext-opensubtitles-retrofit.h5'
@@ -122,7 +126,78 @@ def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
     # print("Size of common vocabulary:" + str(len(common_vocabulary)))
     return common_vectors_train, common_retro_vectors_train, common_vectors_test, common_retro_vectors_test
 
+def load_training_input_4(seed=42, test_split=0.1, dataset="fasttext"):
+    global original, retrofitted
+    if os.path.exists("filtered_x") and os.path.exists("filtered_y"):
+        print("REusing cache")
+        X_train = pd.read_hdf("filtered_x", 'mat', encoding='utf-8')
+        Y_train = pd.read_hdf("filtered_y",'mat',encoding='utf-8')
+        return np.array(X_train.values), np.array(Y_train.values)
 
+    original, retrofitted = datasets[dataset]
+    print("Searching in")
+    print(directory)
+    print("for:", original, retrofitted)
+
+    o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
+
+    # print(asarray1.shape)
+    # print(o["index"][0])
+    # print(o["columns"][0][:])
+    r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
+    r_sub = r.loc[o.index.intersection(r.index), :]
+    del r
+    gc.collect()
+    # print(asarray2.shape)
+    #X_train, X_test, y_train, y_test = train_test_split(o.values, r_sub.values, test_size=test_split,
+    #                                                    random_state=seed)
+    #common_vectors_train = X_train
+    #common_retro_vectors_train = y_train
+    #common_vectors_test = X_test
+    #common_retro_vectors_test = y_test
+    # del retrowords, retrovectors, words, vectors
+    # del o
+    # gc.collect()
+    # print("Size of common vocabulary:" + str(len(common_vocabulary)))
+    #return common_vectors_train, common_retro_vectors_train, common_vectors_test, common_retro_vectors_test
+    # Filter out words that have not changed too much.
+    cns = []
+
+    def dot_product2(v1, v2):
+        return sum(map(operator.mul, v1, v2))
+
+    def vector_cos5(v1, v2):
+        prod = dot_product2(v1, v2)
+        len1 = math.sqrt(dot_product2(v1, v1))
+        len2 = math.sqrt(dot_product2(v2, v2))
+        return prod / (len1 * len2)
+    tot = 0
+    minval = 1
+    maxval = 0
+    print(len(o.values))
+
+    for i in range(len(o.values)):
+        if i%100000==0 and i!=0:
+            # break
+            print(i)
+        x = o.iloc[i,:]
+        y = r_sub.iloc[i,:]
+        cn = vector_cos5(x, y)
+        # tot+=cn
+        # minval=min(cn,minval)
+        # maxval = max(cn,maxval)
+        if cn<0.95:
+            cns.append(i)
+        # print(i,tot/(i+1.0),minval,maxval)
+    # cns = np.array(cns)
+
+    # diag = filter(lambda x: x<0.85,[ for x,y in zip(o.values,r_sub.values)])
+    # print(len(diag))
+    X_train = o.iloc[cns, :]
+    Y_train = r_sub.iloc[cns, :]
+    X_train.to_hdf("filtered_x", "mat")
+    Y_train.to_hdf("filtered_y","mat")
+    return np.array(X_train.values),np.array(Y_train.values)
     # print(r_sub)
 
 def load_training_input_2(limit=10000,normalize=True, seed = 42,test_split=0.1):
