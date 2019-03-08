@@ -49,14 +49,14 @@ cutoff_threshold_reached = False
 if __name__ == '__main__':
 
     # find n synonyms using basic word embedding
-    nearest_concepts_amount = 300
+    nearest_concepts_amount = 100
     # concept_1 = "dog"
     # concept_1 = "man"
-    concept_1 = "potato"
+    concept_1 = "dog"
     relationship_type = "/r/Desires"
     # relationship_type = "/r/FormOf"
-    # concept_2 = "pizza"
-    concept_2 ="woman"
+    concept_2 = "pizza"
+    # concept_2 ="woman"
     # concept_2 = "food"
 
     print(concept_1,relationship_type,concept_2)
@@ -70,13 +70,14 @@ if __name__ == '__main__':
     print("Done.\nLoading concept 2 cross closest neighbors.")
     concept2_neighbors_words,concept2_neighbors_vectors = find_cross_closest(concept_vectors[0],concept_vectors[1],n_top=nearest_concepts_amount,closest=1)
     print("Done")
-    cutoff_amount = 1
+    cutoff_amount = 3
     # Nearest together concepts
     ##TODO FIND THE NEAREST CONCEPTS TO THE ADDITION/SUBTRACTION OF THE 2 CONCEPTS
     current_iter = 0
     thread_list = []
     threadlimit = 16
     count=0
+    print("Parameters cutoff:%i nearest concepts amount:%i" %(cutoff_amount,nearest_concepts_amount))
     def query_function(c2_idx,concept2_neighbor,lock):
         global connection_amount,connection_weight,cutoff_threshold_reached,count
         amount, weight = CNQuery().query(concept1_neighbor, concept2_neighbor, relationship_type)

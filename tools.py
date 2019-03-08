@@ -14,7 +14,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.contrib.learn.python.learn.estimators._sklearn import train_test_split
 
-directory = './'
+directory = './retrogan/'
 # directory = '/home/pedro/Documents/mltests/retrogan/'
 # directory = '/home/conceptnet/conceptnet5/data/vectors/'
 # original = 'fasttext-opensubtitles.h5'

@@ -6,12 +6,14 @@ from random import shuffle
 import sklearn
 
 import numpy as np
-from keras.layers import BatchNormalization, Lambda
+from keras.engine import Layer
+from keras.layers import BatchNormalization, Lambda, merge, add, multiply
 from keras.layers import Input, Dense, Dropout, Concatenate
 from keras.layers.advanced_activations import LeakyReLU
 from keras.models import Model
 from keras.optimizers import Adam, RMSprop, SGD
 from keras.utils import plot_model
+from keras import backend as K
 from tqdm import tqdm
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
@@ -27,6 +29,37 @@ seed(1)
 from tensorflow import set_random_seed
 set_random_seed(2)
 
+
+class ConstMultiplierLayer(Layer):
+    def __init__(self, **kwargs):
+        super(ConstMultiplierLayer, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.k = self.add_weight(
+            name='k',
+            shape=(),
+            initializer='zeros',
+            dtype='float32',
+            trainable=True,
+        )
+        super(ConstMultiplierLayer, self).build(input_shape)
+
+    def call(self, x, **kwargs):
+        return K.tf.multiply(self.k, x)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+def attention(input_dim,layer_input):
+    # ATTENTION PART STARTS HERE
+    attention_probs = Dense(input_dim, activation='softmax')(layer_input)
+    attention_mul = multiply([layer_input, attention_probs]
+                             )
+    attention_scale = ConstMultiplierLayer()(attention_mul)
+    attention = add([layer_input, attention_scale])
+    # ATTENTION PART FINISHES HERE
+    return attention
 
 class RetroCycleGAN():
     def __init__(self, save_index = "0"):
@@ -45,18 +78,19 @@ class RetroCycleGAN():
         self.lambda_cycle = 3                 # Cycle-consistency loss
         self.lambda_id = 0.4 * self.lambda_cycle    # Identity loss
 
-        lr = 0.00002
+        d_lr = 0.0004
+        g_lr = 0.0001
         cv = 0.5
         cn = 4
         self.d_A = self.build_discriminator(name="notretrodis")
         self.d_B = self.build_discriminator(name="retrodis")
-        def create_opt():
+        def create_opt(lr):
             return Adam(lr, clipvalue=cv,clipnorm=cn)
         self.d_A.compile(loss='mse',
-            optimizer=create_opt(),
+            optimizer=create_opt(d_lr),
             metrics=['accuracy'])
         self.d_B.compile(loss='mse',
-            optimizer=create_opt(),
+            optimizer=create_opt(d_lr),
             metrics=['accuracy'])
 
         #-------------------------
@@ -103,7 +137,7 @@ class RetroCycleGAN():
                             loss_weights=[  1, 1,
                                             self.lambda_cycle, self.lambda_cycle,
                                             self.lambda_id, self.lambda_id ],
-                            optimizer=create_opt())
+                            optimizer=create_opt(g_lr))
 
         # plot_model(self.combined)
     def build_generator(self,name):
@@ -123,25 +157,15 @@ class RetroCycleGAN():
             #
             return d
 
-        def deconv2d(layer_input, skip_input, filters, f_size=7, dropout_rate=0.3):
-            """Layers used during upsampling"""
-            # u = UpSampling2D(size=2)(layer_input)
-            # u = Conv2D(filters, kernel_size=f_size, strides=1, padding='same', activation='relu')(u)
-            u = Dense(filters)(layer_input)
-            # u = LeakyReLU(alpha=0.0002)(u)
-
-            # if dropout_rate:
-            #     u = Dropout(dropout_rate)(u)
-            u = BatchNormalization()(u)
-            u = Concatenate()([u, skip_input])
-            return u
-
         # Image input
         latent_dim = 128
         inpt = Input(shape=self.img_shape)
-        # Downsampling
-        d0 = conv2d(inpt, self.gf*8,normalization=False)
+        #Input attention mechanism
+        attn = attention(self.img_cols,inpt)
+        #Continue into fc layers
+        d0 = conv2d(attn, self.gf*8,normalization=False)
         d2 = conv2d(d0, self.gf*8)
+        #Sampling for it
         # mean/var layers
         z_mean = Dense(latent_dim,
                             name='z_mean')(d2)
@@ -152,7 +176,10 @@ class RetroCycleGAN():
         # note that "output_shape" isn't necessary with the TensorFlow backend
         z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
 
-        d3 = conv2d(z, self.gf*8,normalization=True)
+        #Last 2 fc layers
+        #Maybe attention
+        attn2 = attention(latent_dim, z)
+        d3 = conv2d(attn2, self.gf*8,normalization=True)
         d4 = conv2d(d3, self.gf*8,normalization=False)
 
         # Upsampling
@@ -174,7 +201,8 @@ class RetroCycleGAN():
             return d
 
         inpt = Input(shape=self.img_shape)
-        d1 = d_layer(inpt, self.df*8, normalization=False)
+        attn = attention(self.img_cols,inpt)
+        d1 = d_layer(attn, self.df*8, normalization=False)
         d2 = d_layer(d1, self.df*4)
         d3 = d_layer(d2, self.df*2)
         d4 = d_layer(d3, self.df*1)
@@ -205,7 +233,7 @@ class RetroCycleGAN():
 
         start_time = datetime.datetime.now()
         # self.load_weights(extension="0")
-        self.load_weights()
+        # self.load_weights()
         for idx, word in enumerate(testwords):
            print(word)
            retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, 300))
