@@ -8,7 +8,7 @@ import sklearn
 
 import numpy as np
 from keras.engine import Layer
-from keras.layers import BatchNormalization, Lambda, merge, add, multiply, Conv1D, Reshape, Flatten
+from keras.layers import BatchNormalization, Lambda, merge, add, multiply, Conv1D, Reshape, Flatten, UpSampling1D
 from keras.layers import Input, Dense, Dropout, Concatenate
 from keras.layers.advanced_activations import LeakyReLU
 from keras.models import Model
@@ -54,9 +54,9 @@ class ConstMultiplierLayer(Layer):
         return input_shape
 
 
-def attention(input_dim,layer_input):
+def attention(layer_input):
     # ATTENTION PART STARTS HERE
-    attention_probs = Dense(input_dim, activation='softmax')(layer_input)
+    attention_probs = Dense(layer_input._keras_shape[1], activation='softmax')(layer_input)
     attention_mul = multiply([layer_input, attention_probs]
                              )
     attention_scale = ConstMultiplierLayer()(attention_mul)
@@ -160,43 +160,48 @@ class RetroCycleGAN():
             #
             return d
 
-        def conv1d(layer_input,filters,f_size=6,normalization=True):
-            x = Reshape((-1, 1))(layer_input)
-            d = Conv1D(filters,f_size,strides=2)(x)
-            d = Flatten()(d)
+        def conv1d(layer_input,filters,f_size=6,strides=1,normalization=True):
+            d = Conv1D(filters,f_size,strides=strides,)(layer_input)
+            return d
+
+        def deconv1d(layer_input,filters,f_size=6,strides=1,normalization=True):
+            d = UpSampling1D(filters,f_size,strides=strides,)(layer_input)
             return d
 
 
         # Image input
-        latent_dim = 128
         inpt = Input(shape=self.img_shape)
         #Continue into fc layers
         d0 = dense(inpt, self.gf*8,normalization=False)
-        t1 = conv1d(d0,self.gf*8,f_size=6)
-        d1 = dense(t1,self.gf*8)
-        #Input attention mechanism
+        r = Reshape((-1, 1))(d0)
+        # Downscaling
+        # t1 = conv1d(r,self.gf*8,f_size=6)
+        t2 = conv1d(r,self.gf*4,f_size=6,strides=1)
+        t3 = conv1d(t2,self.gf,f_size=6,strides=2)
+        f = Flatten()(t3)
+        attn = attention(f)
 
-        attn = attention(self.gf*8,d1)
-        d2 = dense(attn, self.gf*8)
-        #Sampling for it
-        # mean/var layers
-        z_mean = Dense(latent_dim,
-                            name='z_mean')(d2)
-        z_log_var = Dense(latent_dim,
-                               name='z_log_var')(d2)
-
-        # use reparameterization trick to push the sampling out as input
-        # note that "output_shape" isn't necessary with the TensorFlow backend
-        z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
+        # VAE Like layer
+        # latent_dim = 128
+        # z_mean = Dense(latent_dim,
+        #                     name='z_mean')(d2)
+        # z_log_var = Dense(latent_dim,
+        #                        name='z_log_var')(d2)
+        #
+        # # use reparameterization trick to push the sampling out as input
+        # # note that "output_shape" isn't necessary with the TensorFlow backend
+        # z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
 
         #Last 2 fc layers
         #Maybe attention
-        d3 = dense(z, self.gf*8,normalization=False)
-        attn2 = attention(self.gf*8, d3)
-
-        d4 = dense(attn2, self.gf*8,normalization=False)
+        # r = Reshape((-1, 1))(attn)
+        # # Downscaling
+        # t4 = conv1d(r, self.gf, f_size=4)
+        # t5 = conv1d(t4, self.gf *2, f_size=4)
+        # f = Flatten()(t5)
+        # f = UpSampling1D(size=2)(t5)
+        d4 = dense(attn, self.gf*8,normalization=False)
         output_img = Dense(300)(d4)
-
         return Model(inpt, output_img,name=name)
 
     def build_discriminator(self,name):
