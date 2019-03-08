@@ -8,7 +8,7 @@ import sklearn
 
 import numpy as np
 from keras.engine import Layer
-from keras.layers import BatchNormalization, Lambda, merge, add, multiply
+from keras.layers import BatchNormalization, Lambda, merge, add, multiply, Conv1D, Reshape, Flatten
 from keras.layers import Input, Dense, Dropout, Concatenate
 from keras.layers.advanced_activations import LeakyReLU
 from keras.models import Model
@@ -146,7 +146,7 @@ class RetroCycleGAN():
     def build_generator(self,name):
         """U-Net Generator"""
 
-        def conv2d(layer_input, filters, f_size=6, normalization=True):
+        def dense(layer_input, filters, f_size=6, normalization=True):
             """Layers used during downsampling"""
             # d = Conv2D(filters, kernel_size=f_size, strides=2, padding='same')(layer_input)
             d = Dense(filters,activation="relu")(layer_input)
@@ -160,14 +160,24 @@ class RetroCycleGAN():
             #
             return d
 
+        def conv1d(layer_input,filters,f_size=6,normalization=True):
+            x = Reshape((-1, 1))(layer_input)
+            d = Conv1D(filters,f_size,strides=2)(x)
+            d = Flatten()(d)
+            return d
+
+
         # Image input
         latent_dim = 128
         inpt = Input(shape=self.img_shape)
         #Continue into fc layers
-        d0 = conv2d(inpt, self.gf*8,normalization=False)
+        d0 = dense(inpt, self.gf*8,normalization=False)
+        t1 = conv1d(d0,self.gf*8,f_size=6)
+        d1 = dense(t1,self.gf*8)
         #Input attention mechanism
-        attn = attention(self.gf*8,d0)
-        d2 = conv2d(attn, self.gf*8)
+
+        attn = attention(self.gf*8,d1)
+        d2 = dense(attn, self.gf*8)
         #Sampling for it
         # mean/var layers
         z_mean = Dense(latent_dim,
@@ -181,10 +191,10 @@ class RetroCycleGAN():
 
         #Last 2 fc layers
         #Maybe attention
-        d3 = conv2d(z, self.gf*8,normalization=False)
+        d3 = dense(z, self.gf*8,normalization=False)
         attn2 = attention(self.gf*8, d3)
 
-        d4 = conv2d(attn2, self.gf*8,normalization=False)
+        d4 = dense(attn2, self.gf*8,normalization=False)
         output_img = Dense(300)(d4)
 
         return Model(inpt, output_img,name=name)
