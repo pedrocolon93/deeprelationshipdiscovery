@@ -4,3 +4,4 @@ dataset2/
 mnist/
 retrogan/
 *.pickle
+.idea/
