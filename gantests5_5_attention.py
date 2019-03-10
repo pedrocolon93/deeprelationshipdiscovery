@@ -8,6 +8,7 @@ import sklearn
 
 import numpy as np
 from keras.engine import Layer
+from keras.engine.saving import load_model
 from keras.layers import BatchNormalization, Lambda, merge, add, multiply, Conv1D, Reshape, Flatten, UpSampling1D
 from keras.layers import Input, Dense, Dropout, Concatenate
 from keras.layers.advanced_activations import LeakyReLU
@@ -59,10 +60,9 @@ def attention(layer_input):
     attention_probs = Dense(layer_input._keras_shape[1], activation='softmax')(layer_input)
     attention_mul = multiply([layer_input, attention_probs]
                              )
-    # attention_scale = ConstMultiplierLayer()(attention_mul)
-    # attention = add([layer_input, attention_scale])
+    attention_scale = ConstMultiplierLayer()(attention_mul)
+    attention = add([layer_input, attention_scale])
     # ATTENTION PART FINISHES HERE
-    attention = attention_mul
     return attention
 
 class RetroCycleGAN():
@@ -75,8 +75,8 @@ class RetroCycleGAN():
         self.save_index = save_index
 
         # Number of filters in the first layer of G and D
-        self.gf = 32
-        self.df = 64
+        self.gf = 16
+        self.df = 32
 
         # Loss weights
         self.lambda_cycle = 3                 # Cycle-consistency loss
@@ -149,21 +149,13 @@ class RetroCycleGAN():
 
         def dense(layer_input, filters, f_size=6, normalization=True):
             """Layers used during downsampling"""
-            # d = Conv2D(filters, kernel_size=f_size, strides=2, padding='same')(layer_input)
             d = Dense(filters,activation="relu")(layer_input)
-            # d = LeakyReLU(alpha=0.0002)(d)
             if normalization:
                 d = BatchNormalization()(d)
-            # x = self.add_layer(self.inputs, self.intermediate_dim, False)
-            # # intermediate_layers
-            # for i in range(self.intermediate_layer_count):
-            #     x = self.add_layer(x, self.intermediate_dim, True, True, True)
-            #
             return d
 
         def conv1d(layer_input,filters,f_size=6,strides=1,normalization=True):
             d = Conv1D(filters,f_size,strides=strides,)(layer_input)
-            d = BatchNormalization()(d)
             return d
 
         def deconv1d(layer_input,filters,f_size=6,strides=1,normalization=True):
@@ -178,8 +170,8 @@ class RetroCycleGAN():
         r = Reshape((-1, 1))(d0)
         # Downscaling
         # t1 = conv1d(r,self.gf*8,f_size=6)
-        t2 = conv1d(r,self.gf*4,f_size=6,strides=1)
-        t3 = conv1d(t2,self.gf,f_size=6,strides=2)
+        t2 = conv1d(r,self.gf*4,f_size=8,strides=1)
+        t3 = conv1d(t2,self.gf,f_size=4,strides=2)
         f = Flatten()(t3)
         attn = attention(f)
 
@@ -218,12 +210,11 @@ class RetroCycleGAN():
             return d
 
         inpt = Input(shape=self.img_shape)
-        d1 = d_layer(inpt, self.df*8, normalization=False)
-        # attn = attention(self.df*8,d1)
+        d1 = d_layer(inpt, self.df*16, normalization=False)
+        d1 = d_layer(d1, self.df*8)
         d2 = d_layer(d1, self.df*4)
         d3 = d_layer(d2, self.df*2)
         d4 = d_layer(d3, self.df*1)
-
         validity = Dense(1)(d4)
         return Model(inpt, validity,name=name)
 
@@ -234,11 +225,11 @@ class RetroCycleGAN():
             self.combined.reset_states()
             self.d_B.reset_states()
             self.d_A.reset_states()
-            self.d_A.load_weights("fromretrodis")
-            self.d_B.load_weights("toretrodis")
-            self.g_AB.load_weights("toretro")
-            self.g_BA.load_weights("fromretro")
-            self.combined.load_weights("combined_model")
+            self.d_A=load_model("fromretrodis")
+            self.d_B=load_model("toretrodis")
+            self.g_AB=load_model("toretro")
+            self.g_BA=load_model("fromretro")
+            self.combined=load_model("combined_model")
 
         except Exception as e:
             print(e)
@@ -262,9 +253,9 @@ class RetroCycleGAN():
         X_train = Y_train = X_test = Y_test = None
 
         seed = 32
-        # X_train, Y_train = load_training_input_4(dataset=dataset)
+        X_train, Y_train = load_training_input_4(dataset=dataset)
         print("Done")
-        X_train, Y_train, X_test, Y_test = load_training_input_3(seed=seed,test_split=0.001,dataset=dataset)
+        # X_train, Y_train, X_test, Y_test = load_training_input_3(seed=seed,test_split=0.001,dataset=dataset)
 
         def load_batch(batch_size=2):
             l = X_train.shape[0]
@@ -353,15 +344,15 @@ class RetroCycleGAN():
                 print(e)
 
         self.save_model()
-        # return X_train, Y_train,X_train,Y_train
-        return X_train, Y_train, X_test, Y_test
+        return X_train, Y_train,X_train,Y_train
+        # return X_train, Y_train, X_test, Y_test
 
     def save_model(self):
-        self.d_A.save("fromretrodis")
-        self.d_B.save("toretrodis")
-        self.g_AB.save("toretrogen")
-        self.g_BA.save("fromretrogen")
-        self.combined.save("combined_model")
+        self.d_A.save("fromretrodis",include_optimizer=False)
+        self.d_B.save("toretrodis",include_optimizer=False)
+        self.g_AB.save("toretrogen", include_optimizer=False)
+        self.g_BA.save("fromretrogen", include_optimizer=False)
+        self.combined.save("combined_model", include_optimizer=False)
 
 
 if __name__ == '__main__':
