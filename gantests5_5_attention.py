@@ -225,11 +225,11 @@ class RetroCycleGAN():
             self.combined.reset_states()
             self.d_B.reset_states()
             self.d_A.reset_states()
-            self.d_A=load_model("fromretrodis")
-            self.d_B=load_model("toretrodis")
-            self.g_AB=load_model("toretro")
-            self.g_BA=load_model("fromretro")
-            self.combined=load_model("combined_model")
+            self.d_A=load_model("fromretrodis.h5")
+            self.d_B=load_model("toretrodis.h5")
+            self.g_AB=load_model("toretro.h5")
+            self.g_BA=load_model("fromretro.h5")
+            self.combined=load_model("combined_model.h5")
 
         except Exception as e:
             print(e)
@@ -348,11 +348,11 @@ class RetroCycleGAN():
         # return X_train, Y_train, X_test, Y_test
 
     def save_model(self):
-        self.d_A.save("fromretrodis",include_optimizer=False)
-        self.d_B.save("toretrodis",include_optimizer=False)
-        self.g_AB.save("toretrogen", include_optimizer=False)
-        self.g_BA.save("fromretrogen", include_optimizer=False)
-        self.combined.save("combined_model", include_optimizer=False)
+        self.d_A.save("fromretrodis.h5",include_optimizer=False)
+        self.d_B.save("toretrodis.h5",include_optimizer=False)
+        self.g_AB.save("toretrogen.h5", include_optimizer=False)
+        self.g_BA.save("fromretrogen.h5", include_optimizer=False)
+        self.combined.save("combined_model.h5", include_optimizer=False)
 
 
 if __name__ == '__main__':

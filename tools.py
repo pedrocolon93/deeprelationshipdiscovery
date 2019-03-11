@@ -318,7 +318,7 @@ def find_closest(pred_y,n_top=5,retro=True,skip=0,retrowords=None,retrovectors=N
     gc.collect()
     return final_n_results_words,final_n_results
 
-def find_closest_2(pred_y,n_top=5,retro=True,skip=0):
+def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True):
     o = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
     results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300), pred_y.reshape(1,300)),np.array(o.iloc[0:100000,:]))))]
     sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
@@ -326,7 +326,8 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0):
     final_n_results_words = []
     for i in range(n_top):
         # i += skip
-        # print(retrowords[sorted_results[i][0]],sorted_results[i][1])
+        if(verbose):
+            print(o.index[sorted_results[i][0]])
         final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
         final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
 
