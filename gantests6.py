@@ -14,7 +14,7 @@ from keras.models import Model
 from keras.optimizers import Adam, Nadam, Adadelta, RMSprop, SGD
 from sklearn.metrics import mean_squared_error
 
-from tools import load_training_input_2, find_word, find_closest, find_in_fasttext, find_in_numberbatch
+from tools import load_training_input_2, find_word, find_closest, find_in_fasttext, find_in_retrofitted
 
 
 class RetroPixGAN():
@@ -228,7 +228,7 @@ class RetroPixGAN():
                 if batch_i % sample_interval == 0 and not batch_i ==0:
                     testwords = ["human", "dog", "cat", "potato", "fat"]
                     fastext_version = find_in_fasttext(testwords)
-                    retro_version = find_in_numberbatch(testwords)
+                    retro_version = find_in_retrofitted(testwords)
                     for idx, word in enumerate(testwords):
                         print(word)
                         retro_representation = self.generator.predict(fastext_version[idx].reshape(1, 300))
@@ -261,7 +261,7 @@ if __name__ == '__main__':
     data = pickle.load(open('training_testing.data', 'rb'))
     testwords = ["human","dog","cat","potato","fat"]
     fastext_version = find_in_fasttext(testwords)
-    retro_version = find_in_numberbatch(testwords)
+    retro_version = find_in_retrofitted(testwords)
     for idx,word in enumerate(testwords):
         print(word)
         retro_representation = rcgan.generator.predict(fastext_version[idx].reshape(1, 300))

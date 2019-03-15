@@ -95,7 +95,9 @@ def load_training_input(limit=10000):
 
 datasets = {
     'fasttext':['fasttext-opensubtitles.h5','fasttext-opensubtitles-retrofit.h5'],
-    'crawl':['crawl-300d-2M.h5','crawl-300d-2M-retrofit.h5']
+    'crawl':['crawl-300d-2M.h5','crawl-300d-2M-retrofit.h5'],
+    'w2v':['w2v-google-news.h5','w2v-google-news-retrofit.h5'],
+    'retrogan':[None,'retroembeddings.h5']
 }
 def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
 
@@ -126,13 +128,17 @@ def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
     # print("Size of common vocabulary:" + str(len(common_vocabulary)))
     return common_vectors_train, common_retro_vectors_train, common_vectors_test, common_retro_vectors_test
 
-def load_training_input_4(seed=42, test_split=0.1, dataset="fasttext"):
+def load_noisiest_words(seed=42, test_split=0.1, dataset="fasttext"):
     global original, retrofitted
-    if os.path.exists("filtered_x") and os.path.exists("filtered_y"):
-        print("REusing cache")
+    if os.path.exists("filtered_x") and os.path.exists("filtered_y") and \
+            os.path.exists("filtered_x_test") and os.path.exists("filtered_x_test"):
+        print("Reusing cache")
         X_train = pd.read_hdf("filtered_x", 'mat', encoding='utf-8')
         Y_train = pd.read_hdf("filtered_y",'mat',encoding='utf-8')
-        return np.array(X_train.values), np.array(Y_train.values)
+        X_test = pd.read_hdf("filtered_x_test", "mat",encoding='utf-8')
+        Y_test = pd.read_hdf("filtered_y_test", "mat",encoding='utf-8')
+
+        return np.array(X_train.values), np.array(Y_train.values), np.array(X_test.values), np.array(Y_test.values)
 
     original, retrofitted = datasets[dataset]
     print("Searching in")
@@ -140,26 +146,11 @@ def load_training_input_4(seed=42, test_split=0.1, dataset="fasttext"):
     print("for:", original, retrofitted)
 
     o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
-
-    # print(asarray1.shape)
-    # print(o["index"][0])
-    # print(o["columns"][0][:])
     r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
     r_sub = r.loc[o.index.intersection(r.index), :]
     del r
     gc.collect()
-    # print(asarray2.shape)
-    #X_train, X_test, y_train, y_test = train_test_split(o.values, r_sub.values, test_size=test_split,
-    #                                                    random_state=seed)
-    #common_vectors_train = X_train
-    #common_retro_vectors_train = y_train
-    #common_vectors_test = X_test
-    #common_retro_vectors_test = y_test
-    # del retrowords, retrovectors, words, vectors
-    # del o
-    # gc.collect()
-    # print("Size of common vocabulary:" + str(len(common_vocabulary)))
-    #return common_vectors_train, common_retro_vectors_train, common_vectors_test, common_retro_vectors_test
+
     # Filter out words that have not changed too much.
     cns = []
 
@@ -171,11 +162,9 @@ def load_training_input_4(seed=42, test_split=0.1, dataset="fasttext"):
         len1 = math.sqrt(dot_product2(v1, v1))
         len2 = math.sqrt(dot_product2(v2, v2))
         return prod / (len1 * len2)
-    tot = 0
-    minval = 1
-    maxval = 0
-    print(len(o.values))
 
+    print(len(o.values))
+    testindexes = []
     for i in range(len(o.values)):
         if i%100000==0 and i!=0:
             # break
@@ -183,22 +172,20 @@ def load_training_input_4(seed=42, test_split=0.1, dataset="fasttext"):
         x = o.iloc[i,:]
         y = r_sub.iloc[i,:]
         cn = vector_cos5(x, y)
-        # tot+=cn
-        # minval=min(cn,minval)
-        # maxval = max(cn,maxval)
         if cn<0.95:
             cns.append(i)
-        # print(i,tot/(i+1.0),minval,maxval)
-    # cns = np.array(cns)
-
-    # diag = filter(lambda x: x<0.85,[ for x,y in zip(o.values,r_sub.values)])
-    # print(len(diag))
+        else:
+            testindexes.append(i)
     X_train = o.iloc[cns, :]
     Y_train = r_sub.iloc[cns, :]
     X_train.to_hdf("filtered_x", "mat")
     Y_train.to_hdf("filtered_y","mat")
-    return np.array(X_train.values),np.array(Y_train.values)
-    # print(r_sub)
+    X_test = o.iloc[testindexes,:]
+    Y_test = r_sub.iloc[testindexes,:]
+    X_test.to_hdf("filtered_x_test", "mat")
+    Y_test.to_hdf("filtered_y_test", "mat")
+    return np.array(X_train.values),np.array(Y_train.values), np.array(X_test.values),np.array(Y_test.values)
+
 
 def load_training_input_2(limit=10000,normalize=True, seed = 42,test_split=0.1):
     global common_retro_vectors_train,common_retro_vectors_test,common_vectors_test,common_vectors_train
@@ -275,7 +262,7 @@ def find_cross_closest(vec1, vec2, n_top, closest=0,verbose=False):
     results = []
     if closest == 0:
         #explore the dot between vec1 and synonyms of vec2
-        closest_words, closest_vecs = find_closest_2(vec2,n_top=n_top)
+        closest_words, closest_vecs = find_closest_2(vec2,n_top=n_top,skip=15)
         results = [(idx, item) for idx, item in enumerate(
             list(map(lambda x: cosine_similarity( np.array(x).reshape(1, 300), np.array(vec1).reshape(1, 300))[0][0], closest_vecs)))]
     else:
@@ -286,7 +273,7 @@ def find_cross_closest(vec1, vec2, n_top, closest=0,verbose=False):
     sorted_results = sorted(results, key=lambda x: x[1], reverse=True)
     final_n_results = []
     final_n_results_words = []
-    for i in range(n_top):
+    for i in range(len(sorted_results)):
         # i += skip
         if verbose:
             print(closest_words[sorted_results[i][0]], sorted_results[i][1])
@@ -318,13 +305,18 @@ def find_closest(pred_y,n_top=5,retro=True,skip=0,retrowords=None,retrovectors=N
     gc.collect()
     return final_n_results_words,final_n_results
 
-def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True):
+def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
+                   , dataset="fasttext"):
+    original,retrofitted = datasets[dataset]
+
     o = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
     results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300), pred_y.reshape(1,300)),np.array(o.iloc[0:100000,:]))))]
     sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
     final_n_results = []
     final_n_results_words = []
     for i in range(n_top):
+        if i<skip:
+            continue
         # i += skip
         if(verbose):
             print(o.index[sorted_results[i][0]])
@@ -337,14 +329,16 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True):
 
 
 
-def find_in_fasttext(testwords,return_words=False):
+def find_in_fasttext(testwords,return_words=False, dataset="fasttext"):
+    original,retrofitted = datasets[dataset]
     o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
     # r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
     asarray1 = np.array(o.loc[["/c/en/"+x for x in testwords], :])
     return asarray1
 
-def find_in_numberbatch(testwords, return_words=False):
+def find_in_retrofitted(testwords, return_words=False, dataset="fasttext"):
     # o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
+    original,retrofitted = datasets[dataset]
     r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
     asarray1 = np.array(r.loc[["/c/en/" + x for x in testwords], :])
     return asarray1
