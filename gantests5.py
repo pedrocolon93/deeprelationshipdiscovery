@@ -16,7 +16,7 @@ from tqdm import tqdm
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
-from tools import find_in_fasttext, find_in_numberbatch, \
+from tools import find_in_fasttext, find_in_retrofitted, \
     load_training_input_3
 
 from numpy.random import seed
@@ -181,7 +181,7 @@ class RetroCycleGAN():
     def train(self, epochs, batch_size=1, sample_interval=50,noisy_entries_num=5,batches=900,dataset="fasttext",add_noise=False):
         testwords = ["human", "dog", "cat", "potato", "fat"]
         fastext_version = find_in_fasttext(testwords)
-        retro_version = find_in_numberbatch(testwords)
+        retro_version = find_in_retrofitted(testwords)
 
         start_time = datetime.datetime.now()
         # self.load_weights(extension="0")
@@ -320,7 +320,7 @@ if __name__ == '__main__':
     testwords = ["human","dog","cat","potato","fat"]
     fastext_version = find_in_fasttext(testwords)
     print(fastext_version)
-    retro_version = find_in_numberbatch(testwords)
+    retro_version = find_in_retrofitted(testwords)
     print(retro_version)
     # exit()
     for idx,word in enumerate(testwords):
