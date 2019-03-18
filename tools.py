@@ -97,7 +97,8 @@ datasets = {
     'fasttext':['fasttext-opensubtitles.h5','fasttext-opensubtitles-retrofit.h5'],
     'crawl':['crawl-300d-2M.h5','crawl-300d-2M-retrofit.h5'],
     'w2v':['w2v-google-news.h5','w2v-google-news-retrofit.h5'],
-    'retrogan':[None,'retroembeddings.h5']
+    'retrogan_plain':['crawl-300d-2M.h5','retroembeddings.h5'],
+    'retrogan_1b':['fasttext-opensubtitles.h5','retroembeddings_1b.h5']
 }
 def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
 

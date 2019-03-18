@@ -101,14 +101,14 @@ if __name__ == '__main__':
     to_retro_converter.load_weights("trained_retro_gans/1btokens/mae_0_01/toretrogen")
 
     # # Generate retrogan embeddings
-    # print("Generating embeddings")
-    # retro_df = pandas.DataFrame()
+    print("Generating embeddings")
+    retro_df = pandas.DataFrame()
     # word_embeddings = pd.read_hdf(tools.directory + tools.original, 'mat', encoding='utf-8')
     # vals = np.array(to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, 300))))
     # retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.index)
-    # retro_word_embeddings.to_hdf("retroembeddings_1btokens.h5", "mat")
+    # retro_word_embeddings.to_hdf("retroembeddings_1b.h5", "mat")
     # Specific word tests
-    dataset = "fasttext"
+    dataset = "retrogan_1b"
     print("The dataset is ",dataset)
     testwords = ["human","dog","cat","potato","fat"]
     print("The test words are:",testwords)
@@ -127,7 +127,7 @@ if __name__ == '__main__':
     for idx,word in enumerate(testwords):
         print(word)
         retro_representation = to_retro_converter.predict(fastext_version[idx].reshape(1, 300))
-        find_closest_2(retro_representation,dataset="retrogan")
+        find_closest_2(retro_representation,dataset="retrogan_1b")
         print(sklearn.metrics.mean_absolute_error(retro_version[idx], retro_representation.reshape((300,))))
     # print("Evaluating in the entire test dataset for the error.")
     # Load the testing data
