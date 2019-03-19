@@ -5,7 +5,7 @@ from multiprocessing.pool import Pool
 from random import shuffle
 
 from keras import Input, Model
-from keras.layers import Dense, Concatenate
+from keras.layers import Dense, Concatenate, BatchNormalization
 from keras.optimizers import Adam
 from keras.utils import plot_model
 from tqdm import tqdm
@@ -40,9 +40,11 @@ def create_model():
     # Concatenate both expansions
     merge1 = Concatenate()([wv1_expansion_3, wv2_expansion_3])
     merge_expand = Dense(expansion_size)(merge1)
+    merge_expand = BatchNormalization()(merge_expand)
     # Add atention layer
     merge_attention = attention(merge_expand)
     attention_expand = Dense(expansion_size)(merge_attention)
+    attention_expand = BatchNormalization()(attention_expand)
     semi_final_layer = Dense(expansion_size)(attention_expand)
     # Output layer
     amount_of_relations = len(relations)
