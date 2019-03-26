@@ -8,23 +8,19 @@ import sklearn
 
 import numpy as np
 from keras.engine import Layer
-from keras.layers import BatchNormalization, Lambda, merge, add, multiply, Conv1D, Reshape, Flatten, UpSampling1D
-from keras.layers import Input, Dense, Dropout, Concatenate
-from keras.layers.advanced_activations import LeakyReLU
+from keras.layers import BatchNormalization, multiply, Conv1D, Reshape, Flatten, UpSampling1D
+from keras.layers import Input, Dense
 from keras.models import Model
-from keras.optimizers import Adam, RMSprop, SGD
-from keras.utils import plot_model
+from keras.optimizers import Adam
 from keras import backend as K
 from tqdm import tqdm
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
 from tools import find_in_fasttext, find_in_retrofitted, \
-    load_training_input_3, load_noisiest_words
+    load_training_input_3
 
 from numpy.random import seed
-
-from vaetest4 import sampling
 
 seed(1)
 from tensorflow import set_random_seed

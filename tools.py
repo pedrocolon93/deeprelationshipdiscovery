@@ -96,9 +96,7 @@ def load_training_input(limit=10000):
 datasets = {
     'fasttext':['fasttext-opensubtitles.h5','fasttext-opensubtitles-retrofit.h5'],
     'crawl':['crawl-300d-2M.h5','crawl-300d-2M-retrofit.h5'],
-    'w2v':['w2v-google-news.h5','w2v-google-news-retrofit.h5'],
-    'retrogan_plain':['crawl-300d-2M.h5','retroembeddings.h5'],
-    'retrogan_1b':['fasttext-opensubtitles.h5','retroembeddings_1b.h5']
+    'w2v':['w2v-google-news.h5','w2v-google-news-retrofit.h5']
 }
 def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
 
@@ -185,6 +183,66 @@ def load_noisiest_words(seed=42, test_split=0.1, dataset="fasttext"):
     Y_test = r_sub.iloc[testindexes,:]
     X_test.to_hdf("filtered_x_test", "mat")
     Y_test.to_hdf("filtered_y_test", "mat")
+    return np.array(X_train.values),np.array(Y_train.values), np.array(X_test.values),np.array(Y_test.values)
+
+def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95):
+    global original, retrofitted
+    if os.path.exists(os.path.join(save_folder,"filtered_x")) and os.path.exists(os.path.join(save_folder,"filtered_y")) and \
+            os.path.exists(os .path.join(save_folder,"filtered_x_test")) and os.path.exists(os.path.join(save_folder,"filtered_x_test"))\
+            and cache:
+        print("Reusing cache")
+        X_train = pd.read_hdf(os.path.join(save_folder,"filtered_x"), 'mat', encoding='utf-8')
+        Y_train = pd.read_hdf(os.path.join(save_folder,"filtered_y"),'mat',encoding='utf-8')
+        X_test = pd.read_hdf(os.path.join(save_folder,"filtered_x_test"), "mat",encoding='utf-8')
+        Y_test = pd.read_hdf(os.path.join(save_folder,"filtered_y_test"), "mat",encoding='utf-8')
+
+        return np.array(X_train.values), np.array(Y_train.values), np.array(X_test.values), np.array(Y_test.values)
+
+    original = dataset["original"]
+    retrofitted = dataset["retrofitted"]
+    directory = dataset["directory"]
+    print("Searching")
+    print("for:", original, retrofitted)
+
+    o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
+    r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
+    r_sub = r.loc[o.index.intersection(r.index), :]
+    del r
+    gc.collect()
+
+    # Filter out words that have not changed too much.
+    cns = []
+
+    def dot_product2(v1, v2):
+        return sum(map(operator.mul, v1, v2))
+
+    def vector_cos5(v1, v2):
+        prod = dot_product2(v1, v2)
+        len1 = math.sqrt(dot_product2(v1, v1))
+        len2 = math.sqrt(dot_product2(v2, v2))
+        return prod / (len1 * len2)
+
+    print(len(o.values))
+    testindexes = []
+    for i in range(len(o.values)):
+        if i%100000==0 and i!=0:
+            # break
+            print(i)
+        x = o.iloc[i,:]
+        y = r_sub.iloc[i,:]
+        cn = vector_cos5(x, y)
+        if cn<threshold:
+            cns.append(i)
+        else:
+            testindexes.append(i)
+    X_train = o.iloc[cns, :]
+    Y_train = r_sub.iloc[cns, :]
+    X_train.to_hdf(os.path.join(save_folder,"filtered_x"), "mat")
+    Y_train.to_hdf(os.path.join(save_folder,"filtered_y"),"mat")
+    X_test = o.iloc[testindexes,:]
+    Y_test = r_sub.iloc[testindexes,:]
+    X_test.to_hdf(os.path.join(save_folder,"filtered_x_test"), "mat")
+    Y_test.to_hdf(os.path.join(save_folder,"filtered_y_test"), "mat")
     return np.array(X_train.values),np.array(Y_train.values), np.array(X_test.values),np.array(Y_test.values)
 
 
@@ -328,6 +386,26 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
     gc.collect()
     return final_n_results_words,final_n_results
 
+def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True):
+    o = pd.read_hdf(dataset, 'mat', encoding='utf-8')
+    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300),
+                                                                                         pred_y.reshape(1,300)),
+                                                             np.array(o.iloc[0:100000,:])
+                                                             )))]
+    sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
+    final_n_results = []
+    final_n_results_words = []
+    for i in range(n_top):
+        if(verbose):
+            print(o.index[sorted_results[i][0]])
+        final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
+        final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
+
+    del o,results,sorted_results
+    gc.collect()
+    return final_n_results_words,final_n_results
+
+
 
 
 def find_in_fasttext(testwords,return_words=False, dataset="fasttext"):
@@ -343,3 +421,9 @@ def find_in_retrofitted(testwords, return_words=False, dataset="fasttext"):
     r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
     asarray1 = np.array(r.loc[["/c/en/" + x for x in testwords], :])
     return asarray1
+
+def find_in_dataset(testwords,dataset):
+    r = pd.read_hdf(dataset, 'mat', encoding='utf-8')
+    asarray1 = np.array(r.loc[["/c/en/" + x for x in testwords], :])
+    return asarray1
+

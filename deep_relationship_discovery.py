@@ -1,5 +1,6 @@
 import json
 import multiprocessing
+import os
 from multiprocessing import Queue
 from multiprocessing.pool import Pool
 from random import shuffle
@@ -29,14 +30,23 @@ def create_model():
     # Input needs to be 2 word vectors
     wv1 = Input(shape=(300,), name="retro_word_1")
     wv2 = Input(shape=(300,), name="retro_word_2")
-    expansion_size = 512
+    expansion_size = 256
     # Expand and contract the 2 word vectors
     wv1_expansion_1 = Dense(expansion_size)(wv1)
+    wv1_expansion_1 = BatchNormalization()(wv1_expansion_1)
     wv1_expansion_2 = Dense(int(expansion_size / 2))(wv1_expansion_1)
+    wv1_expansion_2 = BatchNormalization()(wv1_expansion_2)
     wv1_expansion_3 = Dense(int(expansion_size / 4))(wv1_expansion_2)
+    wv1_expansion_3 = BatchNormalization()(wv1_expansion_3)
+
+
     wv2_expansion_1 = Dense(expansion_size)(wv2)
+    wv2_expansion_1 = BatchNormalization()(wv2_expansion_1)
     wv2_expansion_2 = Dense(int(expansion_size / 2))(wv2_expansion_1)
+    wv2_expansion_2 = BatchNormalization()(wv2_expansion_2)
     wv2_expansion_3 = Dense(int(expansion_size / 4))(wv2_expansion_2)
+    wv2_expansion_3 = BatchNormalization()(wv2_expansion_3)
+
     # Concatenate both expansions
     merge1 = Concatenate()([wv1_expansion_3, wv2_expansion_3])
     merge_expand = Dense(expansion_size)(merge1)
@@ -117,10 +127,22 @@ def train_on_assertions(model, data, epoch_amount=50, batch_size=1):
             iter+=1
             # print(data_dict["output"].replace("/r/", ""),"Loss:", loss)
         print("Avg loss",total_loss/iter)
+        print("Saving...")
+        save_folder = "drd"
+        try:
+            os.mkdir(save_folder)
+        except Exception as e:
+            print(e)
+        for key in model.keys():
+            model[key].save(save_folder+"/"+key+".model")
             # exit()
 
 
 def create_data():
+    if os.path.exists("valid_rels.hd5"):
+        print("Using cache")
+        return
+
     retroembeddings = "retrogan/retroembeddings.h5"
     assertionspath = "retrogan/conceptnet-assertions-5.6.0.csv"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
@@ -156,7 +178,7 @@ def load_data(path):
 
 if __name__ == '__main__':
     model = create_model()
-    # data = create_data()
+    data = create_data()
     data = load_data("valid_rels.hd5")
     trained_model = train_on_assertions(model, data)
 

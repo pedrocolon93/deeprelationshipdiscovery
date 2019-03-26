@@ -7,7 +7,7 @@ if __name__ == '__main__':
     word_tuples = []
     my_word_tuples = []
     nb_word_tuples = []
-    retrowords = pd.read_hdf("../retrogan/retroembeddings.h5", 'mat', encoding='utf-8')
+    retrowords = pd.read_hdf("../retroembeddings.h5", 'mat', encoding='utf-8')
     numberbatch = pd.read_hdf("../retrogan/numberbatch.h5")
     with open('combined.csv') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
@@ -70,4 +70,6 @@ if __name__ == '__main__':
         if tup[0][1] != tup[1][1]:
             errors+=1
         print(tup)
+    print(errors)
+    print(len(word_tuples))
 

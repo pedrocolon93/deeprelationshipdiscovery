@@ -1,8 +1,6 @@
 from __future__ import print_function, division
 
-import datetime
 import os
-from random import shuffle
 
 import pandas
 import sklearn
@@ -11,24 +9,18 @@ import pandas as pd
 import numpy as np
 from keras.engine import Layer
 from keras.engine.saving import load_model
-from keras.layers import BatchNormalization, Lambda, merge, add, multiply, Conv1D, Reshape, Flatten, UpSampling1D
-from keras.layers import Input, Dense, Dropout, Concatenate
-from keras.layers.advanced_activations import LeakyReLU
-from keras.models import Model
-from keras.optimizers import Adam, RMSprop, SGD
-from keras.utils import plot_model
+from keras.layers import add, multiply
+from keras.layers import Dense
+from keras.optimizers import Adam
 from keras import backend as K
-from tqdm import tqdm
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
 import tools
 from tools import find_in_fasttext, find_in_retrofitted, \
-    load_training_input_3, load_noisiest_words, find_closest_2
+    find_closest_2
 
 from numpy.random import seed
-
-from vaetest4 import sampling
 
 seed(1)
 from tensorflow import set_random_seed
@@ -83,39 +75,59 @@ if __name__ == '__main__':
         num_CPU = 1
         num_GPU = 0
 
-    # Software config options
+    # TF config options
     config = tf.ConfigProto(intra_op_parallelism_threads=num_cores,
                         inter_op_parallelism_threads=num_cores,
                         allow_soft_placement=True,
                         device_count = {'CPU' : num_CPU,
                                         'GPU' : num_GPU})
     config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+
     # config.log_device_placement = True  # to log device placement (on which device the operation ran)
 
 
     sess = tf.Session(config=config)
     set_session(sess)  # set this TensorFlow session as the default session for Keras
 
-    to_retro_converter = load_model("trained_retro_gans/1btokens/mae_0_01/toretrogen", custom_objects={"ConstMultiplierLayer":ConstMultiplierLayer},compile=False)
-    to_retro_converter.compile(optimizer=Adam(),loss=['mae'])
-    to_retro_converter.load_weights("trained_retro_gans/1btokens/mae_0_01/toretrogen")
 
-    # # Generate retrogan embeddings
+    # Software parameters
+    trained_model_path = "trained_retro_gans/crawl/mae_0_01/toretrogen"
+    retrogan_word_vector_output_path = "./retroembeddings.h5"
+    dataset = 'crawl'
+    print("Dataset:",tools.datasets[dataset])
+    plain_word_vector_path = plain_retrofit_vector_path = tools.directory
+    plain_word_vector_path += tools.datasets[dataset][0]
+    plain_retrofit_vector_path += tools.datasets[dataset][1]
+
+
+    # Load the model and init the weights
+    to_retro_converter = load_model(trained_model_path,
+                                    custom_objects={"ConstMultiplierLayer":ConstMultiplierLayer},
+                                    compile=False)
+    to_retro_converter.compile(optimizer=Adam(),loss=['mae'])
+    to_retro_converter.load_weights(trained_model_path)
+
+    # Generate retrogan embeddings
     print("Generating embeddings")
     retro_df = pandas.DataFrame()
-    # word_embeddings = pd.read_hdf(tools.directory + tools.original, 'mat', encoding='utf-8')
-    # vals = np.array(to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, 300))))
-    # retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.index)
-    # retro_word_embeddings.to_hdf("retroembeddings_1b.h5", "mat")
+    word_embeddings = pd.read_hdf(plain_word_vector_path, 'mat', encoding='utf-8')
+    vals = np.array(to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, 300))))
+    retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.index)
+    retro_word_embeddings.to_hdf(retrogan_word_vector_output_path, "mat")
+
+
     # Specific word tests
-    dataset = "retrogan_1b"
     print("The dataset is ",dataset)
     testwords = ["human","dog","cat","potato","fat"]
-    print("The test words are:",testwords)
+    print("The test word vectors are:",testwords)
+    # ft version
     fastext_version = find_in_fasttext(testwords,dataset=dataset)
     print("The original vectors are",fastext_version)
+    # original retrofitted version
     retro_version = find_in_retrofitted(testwords, dataset=dataset)
-    print("The retrofitted vectors are",retro_version)
+    print("The original retrofitted vectors are",retro_version)
+
+    # Check the closest by cosine dist
     print("Finding the words that are closest in the default numberbatch mappings")
     for idx,word in enumerate(testwords):
         print(word)
@@ -127,8 +139,9 @@ if __name__ == '__main__':
     for idx,word in enumerate(testwords):
         print(word)
         retro_representation = to_retro_converter.predict(fastext_version[idx].reshape(1, 300))
-        find_closest_2(retro_representation,dataset="retrogan_1b")
+        tools.find_closest_in_dataset(retro_representation,retrogan_word_vector_output_path)
         print(sklearn.metrics.mean_absolute_error(retro_version[idx], retro_representation.reshape((300,))))
+
     # print("Evaluating in the entire test dataset for the error.")
     # Load the testing data
     # X_train,Y_train,X_test,Y_test = load_noisiest_words(dataset=dataset)

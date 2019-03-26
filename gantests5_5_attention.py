@@ -9,23 +9,19 @@ import sklearn
 import numpy as np
 from keras.engine import Layer
 from keras.engine.saving import load_model
-from keras.layers import BatchNormalization, Lambda, merge, add, multiply, Conv1D, Reshape, Flatten, UpSampling1D
-from keras.layers import Input, Dense, Dropout, Concatenate
-from keras.layers.advanced_activations import LeakyReLU
+from keras.layers import BatchNormalization, add, multiply, Conv1D, Reshape, Flatten, UpSampling1D
+from keras.layers import Input, Dense
 from keras.models import Model
-from keras.optimizers import Adam, RMSprop, SGD
-from keras.utils import plot_model
+from keras.optimizers import Adam
 from keras import backend as K
 from tqdm import tqdm
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
 from tools import find_in_fasttext, find_in_retrofitted, \
-    load_training_input_3, load_noisiest_words
+    load_noisiest_words, load_noisiest_words_dataset, find_in_dataset
 
 from numpy.random import seed
-
-from vaetest4 import sampling
 
 seed(1)
 from tensorflow import set_random_seed
@@ -66,7 +62,8 @@ def attention(layer_input):
     return attention
 
 class RetroCycleGAN():
-    def __init__(self, save_index = "0"):
+    def __init__(self, save_index = "0",save_folder="./"):
+        self.save_folder = save_folder
         # Input shape
         self.img_rows = 1
         self.img_cols = 300
@@ -234,10 +231,10 @@ class RetroCycleGAN():
         except Exception as e:
             print(e)
 
-    def train(self, epochs, batch_size=1, sample_interval=50,noisy_entries_num=5,batches=900,dataset="fasttext",add_noise=False):
+    def train(self, epochs, dataset, batch_size=1, sample_interval=50,noisy_entries_num=5,batches=900,add_noise=False):
         testwords = ["human", "dog", "cat", "potato", "fat"]
-        fastext_version = find_in_fasttext(testwords)
-        retro_version = find_in_retrofitted(testwords)
+        fastext_version = find_in_dataset(testwords,dataset="fasttext_model/unfitted.hd5")
+        retro_version = find_in_dataset(testwords, dataset="fasttext_model/fitted.hd5")
 
         start_time = datetime.datetime.now()
         # self.load_weights(extension="0")
@@ -253,7 +250,10 @@ class RetroCycleGAN():
         X_train = Y_train = X_test = Y_test = None
 
         seed = 32
-        X_train, Y_train, X_test, Y_test = load_noisiest_words(dataset=dataset)
+        X_train, Y_train, X_test, Y_test = load_noisiest_words_dataset(dataset,
+                                                                       save_folder="fasttext_model/",
+                                                                       threshold=1,
+                                                                       cache=False)
         print("Done")
         # X_train, Y_train, X_test, Y_test = load_training_input_3(seed=seed,test_split=0.001,dataset=dataset)
 
@@ -348,11 +348,11 @@ class RetroCycleGAN():
         # return X_train, Y_train, X_test, Y_test
 
     def save_model(self):
-        self.d_A.save("fromretrodis.h5",include_optimizer=False)
-        self.d_B.save("toretrodis.h5",include_optimizer=False)
-        self.g_AB.save("toretrogen.h5", include_optimizer=False)
-        self.g_BA.save("fromretrogen.h5", include_optimizer=False)
-        self.combined.save("combined_model.h5", include_optimizer=False)
+        self.d_A.save(os.path.join(self.save_folder,"fromretrodis.h5"),include_optimizer=False)
+        self.d_B.save(os.path.join(self.save_folder,"toretrodis.h5"),include_optimizer=False)
+        self.g_AB.save(os.path.join(self.save_folder,"toretrogen.h5"), include_optimizer=False)
+        self.g_BA.save(os.path.join(self.save_folder,"fromretrogen.h5"), include_optimizer=False)
+        self.combined.save(os.path.join(self.save_folder,"combined_model.h5"), include_optimizer=False)
 
 
 if __name__ == '__main__':
@@ -363,16 +363,24 @@ if __name__ == '__main__':
     sess = tf.Session(config=config)
     set_session(sess)  # set this TensorFlow session as the default session for Keras
 
-    rcgan = RetroCycleGAN()
-    X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=32, sample_interval=100,dataset='crawl')
+    save_folder = "fasttext_model/trained_retrogan"
+    if not os.path.exists(save_folder):
+        os.mkdir(save_folder)
+
+    rcgan = RetroCycleGAN(save_folder=save_folder)
+    X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=32, sample_interval=100,
+                                                   dataset={"original":"unfitted.hd5",
+                                                                        "retrofitted":"fitted.hd5",
+                                                            "directory":"./fasttext_model/"})
     # rcgan.combined.load_weights("combined_model")
     # exit()
     # rcgan.g_AB.load_weights("toretro")
     # data = pickle.load(open('training_testing.data', 'rb'))
     testwords = ["human","dog","cat","potato","fat"]
-    fastext_version = find_in_fasttext(testwords)
+
+    fastext_version = find_in_dataset(testwords,dataset="fasttext_model/unfitted.hd5")
     print(fastext_version)
-    retro_version = find_in_retrofitted(testwords)
+    retro_version = find_in_dataset(testwords,dataset="fasttext_model/fitted.hd5")
     print(retro_version)
     # exit()
     for idx,word in enumerate(testwords):
