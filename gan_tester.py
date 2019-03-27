@@ -115,6 +115,8 @@ if __name__ == '__main__':
     retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.index)
     retro_word_embeddings.to_hdf(retrogan_word_vector_output_path, "mat")
 
+    print("Exitting")
+    exit()
 
     # Specific word tests
     print("The dataset is ",dataset)

@@ -21,7 +21,7 @@ if __name__ == '__main__':
             vec = vec.split(" ")
             name = vec[0]
             vector = vec[1:-1]
-            indexes.append(name)
+            indexes.append(standardized_concept_uri("en",name))
             vectors.append(np.array([float(x) for x in vector]))
             line+=1
 
