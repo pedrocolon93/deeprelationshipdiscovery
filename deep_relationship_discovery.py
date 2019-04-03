@@ -11,9 +11,12 @@ from keras.optimizers import Adam
 from keras.utils import plot_model
 from tqdm import tqdm
 
-from gan_tester import attention
+from gan_tester import attention, ConstMultiplierLayer
 import pandas as pd
 import csv
+from keras.engine.saving import load_model
+from conceptnet5.vectors import standardized_concept_uri
+
 
 relations = ["/r/RelatedTo", "/r/FormOf", "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf",
              "/r/AtLocation",
@@ -119,11 +122,13 @@ def train_on_assertions(model, data, epoch_amount=50, batch_size=1):
         iter = 0
         for data_dict in load_batch():
             # print(data_dict)
-            total_loss+=model[data_dict["output"].replace("/r/", "")].train_on_batch(
-                x={'retro_word_1': data_dict["retro_word_1"],
-                   'retro_word_2': data_dict["retro_word_2"],
+            loss = model[data_dict["output"].replace("/r/", "")].train_on_batch(
+                x={'retro_word_1': [data_dict["retro_word_1"],data_dict["retro_word_2"]],
+                   'retro_word_2': [data_dict["retro_word_2"],data_dict["retro_word_1"]]
                    },
-                y=np.array([data_dict["y"]]))
+                y=np.array([data_dict["y"],data_dict["y"]]))
+            print("Loss",data_dict["output"].replace("/r/", ""),loss)
+            total_loss+=loss
             iter+=1
             # print(data_dict["output"].replace("/r/", ""),"Loss:", loss)
         print("Avg loss",total_loss/iter)
@@ -143,7 +148,7 @@ def create_data():
         print("Using cache")
         return
 
-    retroembeddings = "retrogan/retroembeddings.h5"
+    retroembeddings = "retroembeddings.h5"
     assertionspath = "retrogan/conceptnet-assertions-5.6.0.csv"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     valid_relations = []
@@ -176,10 +181,35 @@ def load_data(path):
     return data
 
 
+def test_model(model_dict):
+    print("testing")
+    retroembeddings = "retroembeddings.h5"
+    retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
+    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","gun")]).reshape(1,300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","kill")]).reshape(1,300)
+    res = model_dict["UsedFor"].predict(x={"retro_word_1":w1,
+                                     "retro_word_2":w2})
+    print(res)
+
+def load_model_ours(save_folder = "./retrogan/drd",model_name="all"):
+    model_dict = {}
+    if model_name == 'all':
+        for rel in relations:
+            print("Loading",rel)
+            layer_name = rel.replace("/r/", "")
+            model_dict[layer_name] = load_model(save_folder+"/"+layer_name+".model",custom_objects={"ConstMultiplierLayer":ConstMultiplierLayer})
+    else:
+        layer_name = model_name.replace("/r/", "")
+        model_dict[layer_name] = load_model(save_folder + "/" + layer_name + ".model",
+                                            custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
+    return model_dict
+
+
 if __name__ == '__main__':
     model = create_model()
-    data = create_data()
+    # data = create_data()
     data = load_data("valid_rels.hd5")
-    trained_model = train_on_assertions(model, data)
-
+    train_on_assertions(model, data)
+    model = load_model_ours(model_name="UsedFor")
+    test_model(model)
     # Output needs to be the relationship weights

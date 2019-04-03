@@ -238,7 +238,7 @@ class RetroCycleGAN():
 
         start_time = datetime.datetime.now()
         # self.load_weights(extension="0")
-        # self.load_weights()
+        self.load_weights()
         for idx, word in enumerate(testwords):
            print(word)
            retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, 300))
@@ -252,8 +252,8 @@ class RetroCycleGAN():
         seed = 32
         X_train, Y_train, X_test, Y_test = load_noisiest_words_dataset(dataset,
                                                                        save_folder="fasttext_model/",
-                                                                       threshold=1,
-                                                                       cache=False)
+                                                                       threshold=0.95,
+                                                                       cache=True)
         print("Done")
         # X_train, Y_train, X_test, Y_test = load_training_input_3(seed=seed,test_split=0.001,dataset=dataset)
 
@@ -267,6 +267,7 @@ class RetroCycleGAN():
                 imgs_B = Y_train[ixs]
                 yield imgs_A,imgs_B
         for epoch in range(epochs+1):
+            noise = np.random.normal(size=(batch_size,300),scale=0.01)
             for batch_i, (imgs_A, imgs_B) in enumerate(load_batch(batch_size)):
                 # ----------------------
                 #  Train Discriminators
@@ -284,6 +285,9 @@ class RetroCycleGAN():
                 # imgs_A = noise
                 # imgs_B =imgs
                 # Translate images to opposite domain
+                if epoch%2==0:
+                    imgs_A = np.add(noise[0:imgs_A.shape[0],:],imgs_A)
+
                 fake_B = self.g_AB.predict(imgs_A)
                 fake_A = self.g_BA.predict(imgs_B)
 

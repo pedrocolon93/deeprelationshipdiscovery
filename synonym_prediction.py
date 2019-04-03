@@ -50,38 +50,46 @@ cutoff_threshold_reached = False
 if __name__ == '__main__':
 
     # find n synonyms using basic word embedding
-    nearest_concepts_amount = 150
-    # concept_1 = "dog"
+    nearest_concepts_amount = 50
+    cross_concepts_amount = 150
+    concept_1 = "phone"
     # concept_1 = "man"
-    concept_1 = "man"
+    # concept_1 = "smartphone"
+    # concept_1 = "uber"
+    # concept_1 = "application"
     # relationship_type = "/r/Desires"
-    relationship_type = "/r/FormOf"
+    # relationship_type = "/r/FormOf"
+    # relationship_type = "/r/NotCapableOf"
+    # relationship_type = "/r/UsedFor"
+    relationship_type = "/r/CapableOf"
     # concept_2 = "pizza"
-    concept_2 ="woman"
+    # concept_2 ="rideshare"
     # concept_2 = "food"
+    concept_2 = "picture"
 
     print(concept_1,relationship_type,concept_2)
-    concept_vectors = find_in_retrofitted([concept_1, concept_2], return_words=True)
+    concept_vectors = find_in_retrofitted([concept_1, concept_2], return_words=True,dataset="numberbatch")
     # Nearest to concepts
     # concept1_neighbors_words,concept1_neighbors_vectors = find_closest(concept_vectors[0],n_top=nearest_concepts_amount, skip=0)
     # concept2_neighbors_words,concept2_neighbors_vectors = find_closest(concept_vectors[1],n_top=nearest_concepts_amount, skip=0)
     # Nearest across concepts
     print("Loading concept 1 cross closest neighbors")
-    concept1_neighbors_words,concept1_neighbors_vectors = find_cross_closest(concept_vectors[0],concept_vectors[1],n_top=nearest_concepts_amount,closest=0,verbose=True)
+    # c1w, c1v,c1ww = find_closest_2(concept_vectors[0],n_top=nearest_concepts_amount)
+    concept1_neighbors_words,concept1_neighbors_vectors = find_cross_closest(concept_vectors[0],concept_vectors[1],n_top=cross_concepts_amount,closest=0,verbose=True)
+
     print("Done.\nLoading concept 2 cross closest neighbors.")
-    concept2_neighbors_words,concept2_neighbors_vectors = find_cross_closest(concept_vectors[0],concept_vectors[1],n_top=nearest_concepts_amount,closest=1,verbose=True)
+    concept2_neighbors_words,concept2_neighbors_vectors = find_cross_closest(concept_vectors[0],concept_vectors[1],n_top=cross_concepts_amount,closest=1,verbose=True)
     print("Done")
-    filtered = [(x,y) for x,y in zip(concept2_neighbors_words,concept2_neighbors_vectors) if x not in concept1_neighbors_words]
-    concept2_neighbors_words = concept2_neighbors_vectors = []
-    for word,vector in filtered:
-        concept2_neighbors_words.append(word)
-        concept2_neighbors_vectors.append(vector)
+    filtered = [x for x in concept2_neighbors_words if x not in concept1_neighbors_words]
+    c2w = c2v = []
+    for word in filtered:
+        c2w.append(word)
     cutoff_amount = 20
     # Nearest together concepts
     ##TODO FIND THE NEAREST CONCEPTS TO THE ADDITION/SUBTRACTION OF THE 2 CONCEPTS
     current_iter = 0
     thread_list = []
-    threadlimit = 16
+    threadlimit = 8
     count=0
     print("Parameters cutoff:%i nearest concepts amount:%i" %(cutoff_amount,nearest_concepts_amount))
     def query_function(c2_idx,concept2_neighbor,lock):
@@ -95,10 +103,10 @@ if __name__ == '__main__':
         if connection_amount >= cutoff_amount:
             cutoff_threshold_reached = True
         lock.release()
-
+    print(str(len(concept1_neighbors_words)*len(c2w)))
     for c1_idx, concept1_neighbor in enumerate(concept1_neighbors_words):
         lock = Lock()
-        for c2_idx, concept2_neighbor in enumerate(concept2_neighbors_words):
+        for c2_idx, concept2_neighbor in enumerate(c2w):
             lock.acquire()
             if cutoff_threshold_reached:
                 lock.release()

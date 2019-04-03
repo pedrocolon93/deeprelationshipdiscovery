@@ -23,7 +23,7 @@ if __name__ == '__main__':
             txt = ""
             for line in x: txt+=line
             text_in_files.append(txt)
-        break
+
     #clean
     readable_doc = Document(text_in_files[0])
     pure_text = remove_tags(str(readable_doc.title())+" "+str(readable_doc.summary()))

@@ -96,7 +96,9 @@ def load_training_input(limit=10000):
 datasets = {
     'fasttext':['fasttext-opensubtitles.h5','fasttext-opensubtitles-retrofit.h5'],
     'crawl':['crawl-300d-2M.h5','crawl-300d-2M-retrofit.h5'],
-    'w2v':['w2v-google-news.h5','w2v-google-news-retrofit.h5']
+    'w2v':['w2v-google-news.h5','w2v-google-news-retrofit.h5'],
+    'numberbatch':['mini.h5','mini.h5'],
+    'retrogan':["retroembeddings.h5","retroembeddings.h5"]
 }
 def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
 
@@ -321,23 +323,30 @@ def find_cross_closest(vec1, vec2, n_top, closest=0,verbose=False):
     results = []
     if closest == 0:
         #explore the dot between vec1 and synonyms of vec2
-        closest_words, closest_vecs = find_closest_2(vec2,n_top=n_top,skip=15)
+        closest_words, closest_vecs = find_closest_2(vec2,n_top=n_top,dataset='numberbatch')
         results = [(idx, item) for idx, item in enumerate(
             list(map(lambda x: cosine_similarity( np.array(x).reshape(1, 300), np.array(vec1).reshape(1, 300))[0][0], closest_vecs)))]
     else:
         #explore the dot between vec2 and synonyms of vec1
-        closest_words, closest_vecs = find_closest_2(vec1,n_top=n_top)
+        closest_words, closest_vecs = find_closest_2(vec1,n_top=n_top,dataset='numberbatch')
         results = [(idx, item) for idx, item in enumerate(
             list(map(lambda x: cosine_similarity(np.array(x).reshape(1, 300), np.array(vec2).reshape(1, 300))[0][0], closest_vecs)))]
     sorted_results = sorted(results, key=lambda x: x[1], reverse=True)
     final_n_results = []
     final_n_results_words = []
+    final_n_results_weights = []
     for i in range(len(sorted_results)):
+        if len(final_n_results)==n_top:
+            print("Full")
+            break
         # i += skip
         if verbose:
             print(closest_words[sorted_results[i][0]], sorted_results[i][1])
         final_n_results_words.append(closest_words[sorted_results[i][0]])
-        final_n_results.append(closest_words[sorted_results[i][0]])
+        final_n_results.append(np.array(closest_vecs[sorted_results[i][0]]))
+        final_n_results_weights.append(sorted_results[i][1])
+
+    # return final_n_results_words,final_n_results,final_n_results_weights
     return final_n_results_words,final_n_results
 
 
@@ -367,12 +376,17 @@ def find_closest(pred_y,n_top=5,retro=True,skip=0,retrowords=None,retrovectors=N
 def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
                    , dataset="fasttext"):
     original,retrofitted = datasets[dataset]
-
+    print("Loading")
     o = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
-    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300), pred_y.reshape(1,300)),np.array(o.iloc[0:100000,:]))))]
+    print("Filtering")
+    o = o.loc[[x for x in o.index if '/c/en/' in x and "." not in x],:]
+    print("Done")
+    # print(o)
+    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300), pred_y.reshape(1,300)),np.array(o.iloc[:,:]))))]
     sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
     final_n_results = []
     final_n_results_words = []
+    final_n_results_weights = []
     for i in range(n_top):
         if i<skip:
             continue
@@ -381,16 +395,18 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
             print(o.index[sorted_results[i][0]])
         final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
         final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
-
+        final_n_results_weights.append(sorted_results[i][1])
     del o,results,sorted_results
     gc.collect()
+    # return final_n_results_words,final_n_results,final_n_results_weights
     return final_n_results_words,final_n_results
 
 def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True):
+
     o = pd.read_hdf(dataset, 'mat', encoding='utf-8')
     results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300),
                                                                                          pred_y.reshape(1,300)),
-                                                             np.array(o.iloc[0:100000,:])
+                                                             np.array(o.iloc[:,:])
                                                              )))]
     sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
     final_n_results = []

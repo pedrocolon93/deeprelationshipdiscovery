@@ -91,9 +91,11 @@ if __name__ == '__main__':
 
 
     # Software parameters
-    trained_model_path = "trained_retro_gans/crawl/mae_0_01/toretrogen"
+    trained_model_path = "fasttext_model/trained_retrogan/toretrogen.h5"
     retrogan_word_vector_output_path = "./retroembeddings.h5"
-    dataset = 'crawl'
+    dataset = 'mine'
+    tools.directory = "fasttext_model/"
+    tools.datasets["mine"] = ["unfitted.hd5","fitted.hd5"]
     print("Dataset:",tools.datasets[dataset])
     plain_word_vector_path = plain_retrofit_vector_path = tools.directory
     plain_word_vector_path += tools.datasets[dataset][0]
@@ -114,9 +116,6 @@ if __name__ == '__main__':
     vals = np.array(to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, 300))))
     retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.index)
     retro_word_embeddings.to_hdf(retrogan_word_vector_output_path, "mat")
-
-    print("Exitting")
-    exit()
 
     # Specific word tests
     print("The dataset is ",dataset)
