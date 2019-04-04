@@ -222,11 +222,11 @@ class RetroCycleGAN():
             self.combined.reset_states()
             self.d_B.reset_states()
             self.d_A.reset_states()
-            self.d_A=load_model("fromretrodis.h5")
-            self.d_B=load_model("toretrodis.h5")
-            self.g_AB=load_model("toretro.h5")
-            self.g_BA=load_model("fromretro.h5")
-            self.combined=load_model("combined_model.h5")
+            self.d_A.load_weights(os.path.join(self.save_folder,"fromretrodis.h5"))
+            self.d_B.load_weights(os.path.join(self.save_folder,"toretrodis.h5"))
+            self.g_AB.load_weights(os.path.join(self.save_folder,"toretro.h5"))
+            self.g_BA.load_weights(os.path.join(self.save_folder,"fromretro.h5"))
+            self.combined.load_weights(os.path.join(self.save_folder,"combined_model.h5"))
 
         except Exception as e:
             print(e)

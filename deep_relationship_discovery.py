@@ -59,6 +59,7 @@ def create_model():
     attention_expand = Dense(expansion_size)(merge_attention)
     attention_expand = BatchNormalization()(attention_expand)
     semi_final_layer = Dense(expansion_size)(attention_expand)
+    common_layers_model = Model([wv1, wv2],semi_final_layer,name="Common layers")
     # Output layer
     amount_of_relations = len(relations)
     # One big layer
@@ -68,7 +69,7 @@ def create_model():
     losses = []
     model_dict = {}
     for rel in relations:
-        task_layer = Dense(tl_neurons)(semi_final_layer)
+        task_layer = Dense(tl_neurons)(common_layers_model)
         layer_name = rel.replace("/r/", "")
         loss = "mean_squared_error"
         losses.append(loss)
@@ -79,6 +80,7 @@ def create_model():
         # drd.summary()
         # plot_model(drd)
         model_dict[layer_name] = drd
+    model_dict["common"]=common_layers_model
     return model_dict
 
 

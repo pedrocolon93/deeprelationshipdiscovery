@@ -349,6 +349,51 @@ def find_cross_closest(vec1, vec2, n_top, closest=0,verbose=False):
     # return final_n_results_words,final_n_results,final_n_results_weights
     return final_n_results_words,final_n_results
 
+def find_cross_closest_2(vec1, vec2, projection_count=10,projection_cloud_count=20,n_top=200 ,closest=0,verbose=False):
+    #TODO SKIP THE NEIGHBORS OF THE ONE WE DO NOT COMPARE AGAINST
+    results = []
+    #find the projection of one concept unto the other
+    if closest == 0:
+        #explore the dot between vec1 and synonyms of vec2
+        closest_words, closest_vecs = find_closest_2(vec2,n_top=n_top,dataset='numberbatch',keep_o=True)
+        results = [(idx, item) for idx, item in enumerate(
+            list(map(lambda x: cosine_similarity( np.array(x).reshape(1, 300), np.array(vec1).reshape(1, 300))[0][0], closest_vecs)))]
+    else:
+        #explore the dot between vec2 and synonyms of vec1
+        closest_words, closest_vecs = find_closest_2(vec1,n_top=n_top,dataset='numberbatch',keep_o=True)
+        results = [(idx, item) for idx, item in enumerate(
+            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, 300), np.array(vec2).reshape(1, 300))[0][0], closest_vecs)))]
+    sorted_results = sorted(results, key=lambda x: x[1], reverse=True)
+
+    final_n_results = []
+    final_n_results_words = []
+    final_n_results_weights = []
+    print("Finding the cloud of concepts around the cross closest")
+    for res_idx, res in enumerate(sorted_results):
+        if res_idx>projection_count:
+            break
+        if closest_words[sorted_results[res_idx][0]] in final_n_results_words:
+            projection_count+=1
+            continue
+        final_n_results_words.append(closest_words[sorted_results[res_idx][0]])
+        final_n_results.append(np.array(closest_vecs[sorted_results[res_idx][0]]))
+        # now add the ones around that
+        fin_aroud_vec = np.array(closest_vecs[sorted_results[res_idx][0]])
+        #the projection cloud
+        projection_cloud_words, projection_cloud_vecs = find_closest_2(fin_aroud_vec, n_top=projection_cloud_count, dataset='numberbatch',keep_o=True)
+        ordered_projection_results = [(idx, item) for idx, item in enumerate(
+            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, 300), fin_aroud_vec.reshape(1, 300))[0][0],
+                     projection_cloud_vecs)))]
+        for pcres_idx, pcres in enumerate(ordered_projection_results):
+            print("Working in",closest_words[sorted_results[res_idx][0]],res, "Cloud concept",closest_words[ordered_projection_results[pcres_idx][0]],pcres)
+            if closest_words[ordered_projection_results[pcres_idx][0]] not in final_n_results_words:
+                final_n_results_words.append(closest_words[ordered_projection_results[pcres_idx][0]])
+                final_n_results.append(np.array(closest_vecs[ordered_projection_results[pcres_idx][0]]))
+    if verbose: print("Finally",final_n_results_words)
+
+    # return final_n_results_words,final_n_results,final_n_results_weights
+    return final_n_results_words,final_n_results
+
 
 def find_closest(pred_y,n_top=5,retro=True,skip=0,retrowords=None,retrovectors=None):
     if not (retrovectors is not None and retrowords is not None):
@@ -373,14 +418,24 @@ def find_closest(pred_y,n_top=5,retro=True,skip=0,retrowords=None,retrovectors=N
     gc.collect()
     return final_n_results_words,final_n_results
 
+o = None
 def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
-                   , dataset="fasttext"):
-    original,retrofitted = datasets[dataset]
-    print("Loading")
-    o = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
-    print("Filtering")
-    o = o.loc[[x for x in o.index if '/c/en/' in x and "." not in x],:]
-    print("Done")
+                   , dataset="fasttext", keep_o=False):
+    original, retrofitted = datasets[dataset]
+    if keep_o:
+        global o
+        if o is None:
+            print("Loading")
+            o = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
+            print("Filtering")
+            o = o.loc[[x for x in o.index if '/c/en/' in x and "." not in x],:]
+            print("Done")
+    else:
+        print("Loading")
+        o = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
+        print("Filtering")
+        o = o.loc[[x for x in o.index if '/c/en/' in x and "." not in x], :]
+        print("Done")
     # print(o)
     results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300), pred_y.reshape(1,300)),np.array(o.iloc[:,:]))))]
     sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
@@ -396,7 +451,9 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
         final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
         final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
         final_n_results_weights.append(sorted_results[i][1])
-    del o,results,sorted_results
+    del results,sorted_results
+    if not keep_o:
+        del o
     gc.collect()
     # return final_n_results_words,final_n_results,final_n_results_weights
     return final_n_results_words,final_n_results
