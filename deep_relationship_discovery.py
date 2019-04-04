@@ -69,7 +69,7 @@ def create_model():
     losses = []
     model_dict = {}
     for rel in relations:
-        task_layer = Dense(tl_neurons)(common_layers_model)
+        task_layer = Dense(tl_neurons)(common_layers_model.output)
         layer_name = rel.replace("/r/", "")
         loss = "mean_squared_error"
         losses.append(loss)
@@ -122,7 +122,10 @@ def train_on_assertions(model, data, epoch_amount=50, batch_size=1):
     for epoch_amount in range(epoch_amount):
         total_loss = 0
         iter = 0
+        exclude = ["/r/UsedFor"]
         for data_dict in load_batch():
+            if data_dict["output"].replace("/r/", "") not in exclude:
+                continue
             # print(data_dict)
             loss = model[data_dict["output"].replace("/r/", "")].train_on_batch(
                 x={'retro_word_1': [data_dict["retro_word_1"],data_dict["retro_word_2"]],
@@ -209,8 +212,8 @@ def load_model_ours(save_folder = "./retrogan/drd",model_name="all"):
 
 if __name__ == '__main__':
     model = create_model()
-    # data = create_data()
-    data = load_data("valid_rels.hd5")
+    data = create_data()
+    # data = load_data("valid_rels.hd5")
     train_on_assertions(model, data)
     model = load_model_ours(model_name="UsedFor")
     test_model(model)
