@@ -9,7 +9,7 @@ from keras.engine.saving import load_model
 from keras.optimizers import Adam
 from scipy.stats import spearmanr
 
-from gan_tester import ConstMultiplierLayer
+from retrogan_trainer import ConstMultiplierLayer
 
 if __name__ == '__main__':
     word_tuples = []

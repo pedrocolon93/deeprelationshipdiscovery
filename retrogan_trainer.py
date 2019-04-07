@@ -9,7 +9,7 @@ import sklearn
 import numpy as np
 from keras.engine import Layer
 from keras.engine.saving import load_model
-from keras.layers import BatchNormalization, add, multiply, Conv1D, Reshape, Flatten, UpSampling1D
+from keras.layers import BatchNormalization, add, multiply, Conv1D, Reshape, Flatten, UpSampling1D, MaxPooling1D
 from keras.layers import Input, Dense
 from keras.models import Model
 from keras.optimizers import Adam
@@ -168,9 +168,10 @@ class RetroCycleGAN():
         r = Reshape((-1, 1))(d0)
         # Downscaling
         # t1 = conv1d(r,self.gf*8,f_size=6)
-        t2 = conv1d(r,self.gf*4,f_size=8,strides=0)
-        t3 = conv1d(t2,self.gf,f_size=4,strides=0)
-        f = Flatten()(t3)
+        t2 = conv1d(r,self.gf*4,f_size=8)
+        t3 = conv1d(t2,self.gf,f_size=4)
+        f = MaxPooling1D(pool_size=4)(t3)
+        f = Flatten()(f)
         attn = attention(f)
 
         # VAE Like layer
@@ -240,7 +241,7 @@ class RetroCycleGAN():
 
         start_time = datetime.datetime.now()
         # self.load_weights(extension="0")
-        self.load_weights()
+        # self.load_weights()
         for idx, word in enumerate(testwords):
            print(word)
            retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, 300))
