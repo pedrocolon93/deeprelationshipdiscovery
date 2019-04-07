@@ -9,12 +9,13 @@ from keras.engine.saving import load_model
 from keras.optimizers import Adam
 from scipy.stats import spearmanr, pearsonr
 
-from gan_tester import ConstMultiplierLayer
+from retrogan_generatorandtester import ConstMultiplierLayer
 
 if __name__ == '__main__':
     word_tuples = []
     my_word_tuples = []
-    # nb_word_tuples = []
+    nb_word_tuples = []
+    numberbatch = pd.read_hdf("../retrogan/numberbatch.h5","mat",encoding="utf-8")
     retrowords = pd.read_hdf("../retroembeddings.h5", 'mat', encoding='utf-8')
     ft_model = fastText.load_model("../fasttext_model/cc.en.300.bin")
     trained_model_path = "../fasttext_model/trained_retrogan/toretrogen.h5"
@@ -53,25 +54,26 @@ if __name__ == '__main__':
             score = cosine_similarity(mw1,mw2)
 
             my_word_tuples.append((row[0],row[1],score))
-            # try:
+            try:
             #     idx1 = "/c/en/" + row[0].lower()
             #     idx2 = "/c/en/" + row[1].lower()
-            #     nw1 = numberbatch.loc[idx1]
-            #     nw2 = numberbatch.loc[idx2]
-            #     score = cosine_similarity(nw1,nw2)
-            # except Exception as e:
-            #     print("Not found for")
-            #     print(e)
-            #     # print(row[0])
-            #     # print(row[1])
-            #     score = 0
-            # nb_word_tuples.append((row[0], row[1], score))
+                nw1 = numberbatch.loc[idx1]
+                nw2 = numberbatch.loc[idx2]
+                score = cosine_similarity(nw1,nw2)
+            except Exception as e:
+                print("Not found for")
+                print(e)
+                # print(row[0])
+                # print(row[1])
+                score = 0
+            nb_word_tuples.append((row[0], row[1], score))
         print(f'Processed {line_count} lines.')
     print(len(missed_words))
     print(missed_words)
     print(pearsonr([float(x[2]) for x in word_tuples],[float(x[2]) for x in my_word_tuples]))
     print(spearmanr([x[2] for x in word_tuples],[x[2] for x in my_word_tuples]))
-    # print(spearmanr([x[2] for x in word_tuples],[x[2] for x in nb_word_tuples]))
+    print(pearsonr([float(x[2]) for x in word_tuples],[float(x[2]) for x in nb_word_tuples]))
+    print(spearmanr([x[2] for x in word_tuples],[x[2] for x in nb_word_tuples]))
     word_tuples = sorted(word_tuples,key=lambda x:(x[0],x[2]))
     my_word_tuples = sorted(my_word_tuples,key=lambda x:(x[0],x[2]))
     # nb_word_tuples = sorted(nb_word_tuples,key=lambda x:(x[0],x[2]))
@@ -87,10 +89,10 @@ if __name__ == '__main__':
         print(tup)
     print(errors)
     print(len(word_tuples))
-    # errors = 0
-    # print("NB")
-    # for tup in zip(word_tuples,nb_word_tuples):
-    #     if tup[0][1] != tup[1][1]:
-    #         errors+=1
-    #     print(tup)
-
+    errors = 0
+    print("NB")
+    for tup in zip(word_tuples,nb_word_tuples):
+        if tup[0][1] != tup[1][1]:
+            errors+=1
+        print(tup)
+    print(errors)

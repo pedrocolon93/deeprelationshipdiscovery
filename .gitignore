@@ -5,3 +5,10 @@ mnist/
 retrogan/
 *.pickle
 .idea/
+/fasttext_model/filtered_y
+/fasttext_model/unfitted.hd5
+/fasttext_model/filtered_x
+/fasttext_model/filtered_y_test
+/fasttext_model/filtered_x_test
+/fasttext_model/fitted-debias.hd5
+/fasttext_model/trained_retrogan/
