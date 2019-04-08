@@ -372,7 +372,7 @@ if __name__ == '__main__':
 
     save_folder = "fasttext_model/trained_retrogan/"+str(datetime.datetime.now())
     if not os.path.exists(save_folder):
-        os.mkdir(save_folder)
+        os.makedirs(save_folder,exist_ok=True)
 
     rcgan = RetroCycleGAN(save_folder=save_folder)
     X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=32, sample_interval=100,
