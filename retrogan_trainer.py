@@ -377,7 +377,7 @@ if __name__ == '__main__':
     rcgan = RetroCycleGAN(save_folder=save_folder)
     X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=32, sample_interval=100,
                                                    dataset={"original":"unfitted.hd5",
-                                                                        "retrofitted":"fitted-debias.hd5",
+                                                                        "retrofitted":"fitted.hd5",
                                                             "directory":"./fasttext_model/"})
     # rcgan.combined.load_weights("combined_model")
     # exit()
