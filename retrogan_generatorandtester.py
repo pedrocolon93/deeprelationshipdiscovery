@@ -92,16 +92,16 @@ if __name__ == '__main__':
 
 
     # Software parameters
-    trained_model_path = "fasttext_model/trained_retrogan/toretrogen.h5"
+    trained_model_path = "trained_models/retrogans/2019-04-07 21:33:44.223104/toretrogen.h5"
     retroembeddings_folder = "./trained_models/retroembeddings/"+str(datetime.datetime.now())
     try:
         os.mkdir(retroembeddings_folder)
     except:
         pass
-    retrogan_word_vector_output_path = retroembeddings_folder+"retroembeddings.h5"
+    retrogan_word_vector_output_path = retroembeddings_folder+"/"+"retroembeddings.h5"
     dataset = 'mine'
     tools.directory = "fasttext_model/"
-    tools.datasets["mine"] = ["unfitted.hd5","fitted-debias.hd5"]
+    tools.datasets["mine"] = ["unfitted.hd5","fitted.hd5"]
     print("Dataset:",tools.datasets[dataset])
     plain_word_vector_path = plain_retrofit_vector_path = tools.directory
     plain_word_vector_path += tools.datasets[dataset][0]

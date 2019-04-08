@@ -7,7 +7,7 @@ if __name__ == '__main__':
     word_tuples = []
     my_word_tuples = []
     nb_word_tuples = []
-    retrowords = pd.read_hdf("../retroembeddings.h5", 'mat', encoding='utf-8')
+    retrowords = pd.read_hdf("../trained_models/retroembeddings/2019-04-08 13:03:02.430691/retroembeddings.h5", 'mat', encoding='utf-8')
     numberbatch = pd.read_hdf("../retrogan/numberbatch.h5")
     with open('combined.csv') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')

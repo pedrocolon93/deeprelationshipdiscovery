@@ -1,3 +1,4 @@
+import datetime
 import json
 import multiprocessing
 import os
@@ -5,6 +6,7 @@ from multiprocessing import Queue
 from multiprocessing.pool import Pool
 from random import shuffle
 
+import fastText
 from keras import Input, Model
 from keras.layers import Dense, Concatenate, BatchNormalization
 from keras.optimizers import Adam
@@ -67,23 +69,28 @@ def create_model():
     # One big layer
     # final = Dense(amount_of_relations)(semi_final_layer)
     # Many tasks
-    task_layer_neurons = 20
+    task_layer_neurons = 256
     losses = []
     model_dict = {}
     for rel in relations:
         task_layer = Dense(task_layer_neurons,activation='relu')(common_layers_model.output)
         task_layer = BatchNormalization()(task_layer)
+        task_layer = attention(task_layer)
+        task_layer = Dense(task_layer_neurons,activation='relu')(task_layer)
+        task_layer = BatchNormalization()(task_layer)
+
         layer_name = rel.replace("/r/", "")
         loss = "mean_squared_error"
         losses.append(loss)
 
         drd = Model([wv1, wv2], Dense(1)(task_layer),name=layer_name)
-        optimizer = Adam(lr=0.0002)
+        optimizer = Adam(lr=0.00002)
         drd.compile(optimizer=optimizer, loss=[loss])
         # drd.summary()
         # plot_model(drd)
         model_dict[layer_name] = drd
     model_dict["common"]=common_layers_model
+    common_layers_model.summary()
     return model_dict
 
 
@@ -104,7 +111,8 @@ import numpy as np
 
 
 def train_on_assertions(model, data, epoch_amount=50, batch_size=1,save_folder = "drd"):
-    retroembeddings = "retroembeddings.h5"
+
+    retroembeddings = "retrogan/numberbatch.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
 
     def load_batch():
@@ -129,11 +137,7 @@ def train_on_assertions(model, data, epoch_amount=50, batch_size=1,save_folder =
     for epoch_amount in range(epoch_amount):
         total_loss = 0
         iter = 0
-        exclude = ["/r/RelatedTo", "/r/FormOf", "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf",
-             "/r/AtLocation",
-             "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
-             "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/Desires", "/r/CreatedBy", "/r/Synonym",
-             "/r/Antonym", ]
+        exclude = ["/r/RelatedTo", "/r/IsA", "/r/PartOf", "/r/UsedFor"]
         for data_dict in load_batch():
             if data_dict["output"] not in exclude:
                 continue
@@ -165,9 +169,7 @@ def create_data(use_cache=True):
         print("Using cache")
         return pd.read_hdf("valid_rels.hd5","mat")
 
-    retroembeddings = "retroembeddings.h5"
     assertionspath = "retrogan/conceptnet-assertions-5.6.0.csv"
-    retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     valid_relations = []
     with open(assertionspath) as assertionsfile:
         assertions = csv.reader(assertionsfile, delimiter="\t")
@@ -176,15 +178,19 @@ def create_data(use_cache=True):
             row_num += 1
             if row_num % 100000 == 0: print(row_num)
             try:
-                a = retrofitted_embeddings.loc[assertion_row[2]]
-                b = retrofitted_embeddings.loc[assertion_row[3]]
-                if not assertion_row[1] in relations:
+                if "/c/en/" not in assertion_row[2] or "/c/en/" not in assertion_row[3] or \
+                        assertion_row[1] not in relations:
                     continue
                 info = json.loads(assertion_row[4])
                 weight = info["weight"]
-                valid_relations.append([assertion_row[1], assertion_row[2], assertion_row[3], weight])
+                c1_split = assertion_row[2].split("/")
+                c1 = "/c/en/"+c1_split[2]
+                c2_split = assertion_row[3].split("/")
+                c2 = "/c/en/"+c2_split[2]
+                valid_relations.append([assertion_row[1], c1,c2, weight])
             except Exception as e:
-                pass
+                print(e)
+                # pass
                 # print(e)
             if len(valid_relations) % 10000 == 0:
                 print(len(valid_relations))
@@ -198,13 +204,13 @@ def load_data(path):
     return data
 
 
-def test_model(model_dict):
+def test_model(model_dict,model_name):
     print("testing")
-    retroembeddings = "retroembeddings.h5"
+    retroembeddings = "trained_models/retroembeddings/2019-04-08 13:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","dog")]).reshape(1,300)
     w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","animal")]).reshape(1,300)
-    res = model_dict["IsA"].predict(x={"retro_word_1":w1,
+    res = model_dict[model_name].predict(x={"retro_word_1":w1,
                                      "retro_word_2":w2})
     print(res)
 
@@ -217,19 +223,29 @@ def load_model_ours(save_folder = "./drd",model_name="all"):
             model_dict[layer_name] = load_model(save_folder+"/"+layer_name+".model",custom_objects={"ConstMultiplierLayer":ConstMultiplierLayer})
     else:
         layer_name = model_name.replace("/r/", "")
+        print("Loading models")
         model_dict[layer_name] = load_model(save_folder + "/" + layer_name + ".model",
                                             custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
-    model_dict["common"] = load_model(save_folder + "/" + "common" + ".model",
-                                            custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
+        print("Loading weights")
+        model_dict[layer_name].load_weights(save_folder + "/" + layer_name + ".model")
+    # model_dict["common"] = load_model(save_folder + "/" + "common" + ".model",
+    #                                         custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
     return model_dict
 
 
 if __name__ == '__main__':
+    save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
+
+    print("Creating model...")
     model = create_model()
+    print("Done\nLoading data")
     # model = load_model_ours()
     data = create_data(use_cache=True)
     # data = load_data("valid_rels.hd5")
+    print("Done\nTraining")
     train_on_assertions(model, data)
-    model = load_model_ours(model_name="UsedFor")
-    test_model(model)
+    print("Done\n")
+    model_name = "IsA"
+    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-08 13:43:00.000000",model_name=model_name)
+    test_model(model,model_name=model_name)
     # Output needs to be the relationship weights
