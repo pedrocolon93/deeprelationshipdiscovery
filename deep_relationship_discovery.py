@@ -16,7 +16,7 @@ import csv
 from keras.engine.saving import load_model
 from conceptnet5.vectors import standardized_concept_uri
 
-from retrogan_trainer_small import attention, ConstMultiplierLayer
+from retrogan_trainer import attention, ConstMultiplierLayer
 
 relations = ["/r/RelatedTo", "/r/FormOf", "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf",
              "/r/AtLocation",
@@ -67,11 +67,11 @@ def create_model():
     # One big layer
     # final = Dense(amount_of_relations)(semi_final_layer)
     # Many tasks
-    tl_neurons = 20
+    task_layer_neurons = 20
     losses = []
     model_dict = {}
     for rel in relations:
-        task_layer = Dense(tl_neurons,activation='relu')(common_layers_model.output)
+        task_layer = Dense(task_layer_neurons,activation='relu')(common_layers_model.output)
         task_layer = BatchNormalization()(task_layer)
         layer_name = rel.replace("/r/", "")
         loss = "mean_squared_error"
