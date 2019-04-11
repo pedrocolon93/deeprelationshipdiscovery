@@ -1,34 +1,28 @@
-import datetime
+import csv
 import json
-import multiprocessing
 import os
 from multiprocessing import Queue
-from multiprocessing.pool import Pool
 from random import shuffle
 
-import fastText
+import pandas as pd
+from conceptnet5.vectors import standardized_concept_uri
 from keras import Input, Model
+from keras.engine.saving import load_model
 from keras.layers import Dense, Concatenate, BatchNormalization
 from keras.optimizers import Adam
-from keras.utils import plot_model
 from tqdm import tqdm
-
-import pandas as pd
-import csv
-from keras.engine.saving import load_model
-from conceptnet5.vectors import standardized_concept_uri
 
 from retrogan_trainer import attention, ConstMultiplierLayer
 
-relations = ["/r/RelatedTo", "/r/FormOf", "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf",
-             "/r/AtLocation",
-             "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
-             "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/Desires", "/r/CreatedBy", "/r/Synonym",
-             "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails",
-             "/r/MannerOf",
-             "/r/LocatedNear", "/r/HasContext", "/r/SimilarTo", "/r/EtymologicallyRelatedTo",
-             "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
-             "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
+relations = [ "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]#,
+             # "/r/AtLocation",
+             # "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
+             # "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
+             # "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails",
+             # "/r/MannerOf","/r/RelatedTo",
+             # "/r/LocatedNear", "/r/HasContext", "/r/FormOf","/r/SimilarTo", "/r/EtymologicallyRelatedTo",
+             # "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
+             # "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
 
 
 def create_model():
@@ -37,7 +31,7 @@ def create_model():
     wv2 = Input(shape=(300,), name="retro_word_2")
     expansion_size = 512
     # Expand and contract the 2 word vectors
-    wv1_expansion_1 = Dense(expansion_size)(wv1)
+    wv1_expansion_1 = Dense(expansion_size*2)(wv1)
     wv1_expansion_1 = BatchNormalization()(wv1_expansion_1)
     wv1_expansion_2 = Dense(int(expansion_size / 2),activation='relu')(wv1_expansion_1)
     wv1_expansion_2 = BatchNormalization()(wv1_expansion_2)
@@ -45,8 +39,7 @@ def create_model():
     wv1_expansion_3 = Dense(int(expansion_size / 4),activation='relu')(wv1_expansion_2)
     wv1_expansion_3 = BatchNormalization()(wv1_expansion_3)
 
-
-    wv2_expansion_1 = Dense(expansion_size)(wv2)
+    wv2_expansion_1 = Dense(expansion_size*2)(wv2)
     wv2_expansion_1 = BatchNormalization()(wv2_expansion_1)
     wv2_expansion_2 = Dense(int(expansion_size / 2),activation='relu')(wv2_expansion_1)
     wv2_expansion_2 = BatchNormalization()(wv2_expansion_2)
@@ -63,6 +56,7 @@ def create_model():
     attention_expand = Dense(expansion_size,activation='relu')(merge_attention)
     attention_expand = BatchNormalization()(attention_expand)
     semi_final_layer = Dense(expansion_size,activation='relu')(attention_expand)
+    semi_final_layer = BatchNormalization()(semi_final_layer)
     common_layers_model = Model([wv1, wv2],semi_final_layer,name="Common layers")
     # Output layer
     amount_of_relations = len(relations)
@@ -84,7 +78,7 @@ def create_model():
         losses.append(loss)
 
         drd = Model([wv1, wv2], Dense(1)(task_layer),name=layer_name)
-        optimizer = Adam(lr=0.00002)
+        optimizer = Adam(lr=0.000002)
         drd.compile(optimizer=optimizer, loss=[loss])
         # drd.summary()
         # plot_model(drd)
@@ -110,51 +104,74 @@ def trio(relation, start, end):
 import numpy as np
 
 
-def train_on_assertions(model, data, epoch_amount=50, batch_size=1,save_folder = "drd"):
+def train_on_assertions(model, data, epoch_amount=50, batch_size=32,save_folder = "drd"):
 
-    retroembeddings = "retrogan/numberbatch.h5"
+    retroembeddings = "trained_models/retroembeddings/2019-04-08 13:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
-
-    def load_batch():
-        l = len(data.index)
+    training_data_dict = {}
+    training_func_dict = {}
+    def load_batch(output_name):
+        print("Loading batch for",output_name)
+        #TODO LOAD BATCH OF A CERTAIN TYPE
+        if output_name not in training_data_dict.keys():
+            training_data_dict[output] = []
+            for i in tqdm(range(len(data))):
+                stuff = data.iloc[i]
+                if str(stuff[0])==output_name:
+                    training_data_dict[output].append(i)
+        print("\nDone\n")
+        l = len(training_data_dict[output_name])
         iterable = list(range(0, l))
         shuffle(iterable)
-        for ndx in tqdm(range(0, l, batch_size), ncols=30):
+        for ndx in tqdm(range(0, l, batch_size)):
             try:
                 ixs = iterable[ndx:min(ndx + batch_size, l)]
-                stuff = data.iloc[ixs]
-                data_dict = {
-                    "y": float(np.array(stuff[3])[0]),
-                    "output": str(np.array(stuff[0])[0]),
-                    "retro_word_1": np.array(retrofitted_embeddings.loc[stuff[1].iloc[-1]]),
-                    "retro_word_2": np.array(retrofitted_embeddings.loc[stuff[2].iloc[-1]])
-                }
-                yield data_dict
+                x_1 = []
+                x_2 = []
+                y = []
+                for ix in ixs:
+                    stuff = data.iloc[training_data_dict[output][ix]]
+                    x_1.append(np.array(retrofitted_embeddings.loc[stuff[1]]))
+                    x_2.append(np.array(retrofitted_embeddings.loc[stuff[2]]))
+                    y.append(float(stuff[3]))
+                yield np.array(x_1),np.array(x_2),np.array(y)
             except Exception as e:
                 print(e)
-                print("Continuing")
+                return False
+        return True
+
 
     for epoch_amount in range(epoch_amount):
         total_loss = 0
         iter = 0
-        exclude = ["/r/RelatedTo", "/r/IsA", "/r/PartOf", "/r/UsedFor"]
-        for data_dict in load_batch():
-            if data_dict["output"] not in exclude:
-                continue
-            # print(data_dict)
-            loss = model[data_dict["output"].replace("/r/", "")].train_on_batch(
-                x={'retro_word_1': np.array([data_dict["retro_word_1"],data_dict["retro_word_2"]]),
-                   'retro_word_2': np.array([data_dict["retro_word_2"],data_dict["retro_word_1"]])
-                   },
-                y=np.array([data_dict["y"],data_dict["y"]]))
-            if loss>15:
-                print("Loss",data_dict["output"].replace("/r/", ""),loss)
-            total_loss+=loss
-            iter+=1
-            # print(data_dict["output"].replace("/r/", ""),"Loss:", loss)
+        exclude = [ "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]
+        shuffle(exclude)
+        for output in exclude:
+            training_func_dict[output] = load_batch(output)
+        window_loss = 0
+        tasks_completed = {}
+        for task in exclude:
+            tasks_completed[task] = False
+        while True:
+            for output in exclude:
+                try:
+                    x_1,x_2,y = training_func_dict[output].__next__()
+                    # print(x_1.shape)
+                    # print(x_2.shape)
+                    # print(y.shape)
+                    loss = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1':x_1,'retro_word_2':x_2},y=y)
+                    total_loss+=loss
+                    iter+=1
+                    print("Loss",output,loss)
+                except Exception as e:
+                    # print("Error in",output,str(e))
+                    tasks_completed[output] = True
+            if False not in tasks_completed.values():
+                for output in exclude:
+                    training_func_dict[output] = load_batch(output)
+                break
         print("Avg loss",total_loss/iter)
         print("Saving...")
-
         try:
             os.mkdir(save_folder)
         except Exception as e:
@@ -209,7 +226,7 @@ def test_model(model_dict,model_name):
     retroembeddings = "trained_models/retroembeddings/2019-04-08 13:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","dog")]).reshape(1,300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","animal")]).reshape(1,300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","potato")]).reshape(1,300)
     res = model_dict[model_name].predict(x={"retro_word_1":w1,
                                      "retro_word_2":w2})
     print(res)
@@ -228,13 +245,13 @@ def load_model_ours(save_folder = "./drd",model_name="all"):
                                             custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
         print("Loading weights")
         model_dict[layer_name].load_weights(save_folder + "/" + layer_name + ".model")
-    # model_dict["common"] = load_model(save_folder + "/" + "common" + ".model",
-    #                                         custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
+    model_dict["common"] = load_model(save_folder + "/" + "common" + ".model",
+                                            custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
     return model_dict
 
 
 if __name__ == '__main__':
-    save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
+    # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
 
     print("Creating model...")
     model = create_model()
@@ -245,7 +262,7 @@ if __name__ == '__main__':
     print("Done\nTraining")
     train_on_assertions(model, data)
     print("Done\n")
-    model_name = "IsA"
+    # model_name = "RelatedTo"
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-08 13:43:00.000000",model_name=model_name)
-    test_model(model,model_name=model_name)
+    # test_model(model,model_name=model_name)
     # Output needs to be the relationship weights
