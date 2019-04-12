@@ -26,7 +26,7 @@ relations = [ "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/
 
 def conv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
     d = Conv1D(filters, f_size, strides=strides, activation="relu")(layer_input)
-
+    return d
 
 def create_model():
     # Input needs to be 2 word vectors
@@ -47,7 +47,7 @@ def create_model():
 
     wv2_expansion_1 = Dense(expansion_size*2)(wv2)
     wv2_expansion_1 = BatchNormalization()(wv2_expansion_1)
-    r_2 = Reshape((-1, 1))(wv1_expansion_1)
+    r_2 = Reshape((-1, 1))(wv2_expansion_1)
     t2 = conv1d(r_2, filters, f_size=4)
     f2 = MaxPooling1D(pool_size=4)(t2)
     f2 = Flatten()(f2)
@@ -114,9 +114,9 @@ def trio(relation, start, end):
 import numpy as np
 
 
-def train_on_assertions(model, data, epoch_amount=50, batch_size=32,save_folder = "drd"):
+def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder = "drd"):
 
-    retroembeddings = "trained_models/retroembeddings/2019-04-08 13:03:02.430691/retroembeddings.h5"
+    retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
     training_data_dict = {}
     training_func_dict = {}
@@ -234,7 +234,7 @@ def load_data(path):
 
 def test_model(model_dict,model_name):
     print("testing")
-    retroembeddings = "trained_models/retroembeddings/2019-04-08 13:03:02.430691/retroembeddings.h5"
+    retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","cat")]).reshape(1,300)
     w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","potato ")]).reshape(1,300)
@@ -274,6 +274,6 @@ if __name__ == '__main__':
     # train_on_assertions(model, data)
     # print("Done\n")
     model_name = "IsA"
-    model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-11 16:31:00.000000",model_name=model_name)
+    model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-1116:31:00.000000",model_name=model_name)
     test_model(model,model_name=model_name)
     # Output needs to be the relationship weights
