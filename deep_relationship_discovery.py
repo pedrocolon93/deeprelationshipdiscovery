@@ -173,7 +173,8 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
                     # loss_2 = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1':x_2,'retro_word_2':x_1},y=y)
                     total_loss+=loss
                     iter+=1
-                    print("Loss",output,loss)
+                    if loss>10:
+                        print("Loss",output,loss)
                 except Exception as e:
                     # print("Error in",output,str(e))
                     tasks_completed[output] = True
