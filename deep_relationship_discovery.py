@@ -151,7 +151,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
         return True
 
 
-    for epoch_amount in range(epoch_amount):
+    for epoch in range(epoch_amount):
         total_loss = 0
         iter = 0
         exclude = [ "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]
@@ -182,6 +182,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
                     training_func_dict[output] = load_batch(output)
                 break
         print("Avg loss",total_loss/iter)
+        print(str(epoch)+"/"+str(epoch_amount))
         print("Saving...")
         try:
             os.mkdir(save_folder)
@@ -264,16 +265,16 @@ def load_model_ours(save_folder = "./drd",model_name="all"):
 if __name__ == '__main__':
     # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
 
-    # print("Creating model...")
-    # model = create_model()
-    # print("Done\nLoading data")
-    # # model = load_model_ours()
-    # data = create_data(use_cache=True)
-    # # data = load_data("valid_rels.hd5")
-    # print("Done\nTraining")
-    # train_on_assertions(model, data)
-    # print("Done\n")
-    model_name = "IsA"
-    model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-1116:31:00.000000",model_name=model_name)
-    test_model(model,model_name=model_name)
+    print("Creating model...")
+    model = create_model()
+    print("Done\nLoading data")
+    # model = load_model_ours()
+    data = create_data(use_cache=True)
+    # data = load_data("valid_rels.hd5")
+    print("Done\nTraining")
+    train_on_assertions(model, data)
+    print("Done\n")
+    # model_name = "IsA"
+    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-1116:31:00.000000",model_name=model_name)
+    # test_model(model,model_name=model_name)
     # Output needs to be the relationship weights
