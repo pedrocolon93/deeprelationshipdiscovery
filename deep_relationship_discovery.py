@@ -8,7 +8,7 @@ import pandas as pd
 from conceptnet5.vectors import standardized_concept_uri
 from keras import Input, Model
 from keras.engine.saving import load_model
-from keras.layers import Dense, Concatenate, BatchNormalization
+from keras.layers import Dense, Concatenate, BatchNormalization, Conv1D, Reshape, MaxPooling1D, Flatten
 from keras.optimizers import Adam
 from tqdm import tqdm
 
@@ -24,26 +24,36 @@ relations = [ "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/
              # "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
              # "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
 
+def conv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
+    d = Conv1D(filters, f_size, strides=strides, activation="relu")(layer_input)
+
 
 def create_model():
     # Input needs to be 2 word vectors
     wv1 = Input(shape=(300,), name="retro_word_1")
     wv2 = Input(shape=(300,), name="retro_word_2")
     expansion_size = 512
+    filters = 16
     # Expand and contract the 2 word vectors
     wv1_expansion_1 = Dense(expansion_size*2)(wv1)
     wv1_expansion_1 = BatchNormalization()(wv1_expansion_1)
-    wv1_expansion_2 = Dense(int(expansion_size / 2),activation='relu')(wv1_expansion_1)
-    wv1_expansion_2 = BatchNormalization()(wv1_expansion_2)
-    wv1_expansion_2 = attention(wv1_expansion_2)
+    r_1 = Reshape((-1, 1))(wv1_expansion_1)
+    t1 = conv1d(r_1, filters, f_size=4)
+    f1 = MaxPooling1D(pool_size=4)(t1)
+    f1 = Flatten()(f1)
+    wv1_expansion_2 = attention(f1)
     wv1_expansion_3 = Dense(int(expansion_size / 4),activation='relu')(wv1_expansion_2)
     wv1_expansion_3 = BatchNormalization()(wv1_expansion_3)
 
     wv2_expansion_1 = Dense(expansion_size*2)(wv2)
     wv2_expansion_1 = BatchNormalization()(wv2_expansion_1)
-    wv2_expansion_2 = Dense(int(expansion_size / 2),activation='relu')(wv2_expansion_1)
-    wv2_expansion_2 = BatchNormalization()(wv2_expansion_2)
-    wv2_expansion_2 = attention(wv2_expansion_2)
+    r_2 = Reshape((-1, 1))(wv1_expansion_1)
+    t2 = conv1d(r_2, filters, f_size=4)
+    f2 = MaxPooling1D(pool_size=4)(t2)
+    f2 = Flatten()(f2)
+    # wv2_expansion_2 = Dense(int(expansion_size / 2),activation='relu')(wv2_expansion_1)
+    # wv2_expansion_2 = BatchNormalization()(wv2_expansion_2)
+    wv2_expansion_2 = attention(f2)
     wv2_expansion_3 = Dense(int(expansion_size / 4),activation='relu')(wv2_expansion_2)
     wv2_expansion_3 = BatchNormalization()(wv2_expansion_3)
 
@@ -160,6 +170,7 @@ def train_on_assertions(model, data, epoch_amount=50, batch_size=32,save_folder 
                     # print(x_2.shape)
                     # print(y.shape)
                     loss = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1':x_1,'retro_word_2':x_2},y=y)
+                    # loss_2 = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1':x_2,'retro_word_2':x_1},y=y)
                     total_loss+=loss
                     iter+=1
                     print("Loss",output,loss)
@@ -225,8 +236,8 @@ def test_model(model_dict,model_name):
     print("testing")
     retroembeddings = "trained_models/retroembeddings/2019-04-08 13:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
-    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","dog")]).reshape(1,300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","potato")]).reshape(1,300)
+    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","cat")]).reshape(1,300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","potato ")]).reshape(1,300)
     res = model_dict[model_name].predict(x={"retro_word_1":w1,
                                      "retro_word_2":w2})
     print(res)
@@ -253,16 +264,16 @@ def load_model_ours(save_folder = "./drd",model_name="all"):
 if __name__ == '__main__':
     # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
 
-    print("Creating model...")
-    model = create_model()
-    print("Done\nLoading data")
-    # model = load_model_ours()
-    data = create_data(use_cache=True)
-    # data = load_data("valid_rels.hd5")
-    print("Done\nTraining")
-    train_on_assertions(model, data)
-    print("Done\n")
-    # model_name = "RelatedTo"
-    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-08 13:43:00.000000",model_name=model_name)
-    # test_model(model,model_name=model_name)
+    # print("Creating model...")
+    # model = create_model()
+    # print("Done\nLoading data")
+    # # model = load_model_ours()
+    # data = create_data(use_cache=True)
+    # # data = load_data("valid_rels.hd5")
+    # print("Done\nTraining")
+    # train_on_assertions(model, data)
+    # print("Done\n")
+    model_name = "IsA"
+    model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-11 16:31:00.000000",model_name=model_name)
+    test_model(model,model_name=model_name)
     # Output needs to be the relationship weights
