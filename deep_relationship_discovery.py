@@ -14,8 +14,8 @@ from tqdm import tqdm
 
 from retrogan_trainer import attention, ConstMultiplierLayer
 
-relations = [ "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]#,
-             # "/r/AtLocation",
+relations = [ "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]#,
+             # "/r/AtLocation", "/r/IsA",
              # "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
              # "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
              # "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails",
@@ -33,7 +33,7 @@ def create_model():
     wv1 = Input(shape=(300,), name="retro_word_1")
     wv2 = Input(shape=(300,), name="retro_word_2")
     expansion_size = 512
-    filters = 16
+    filters = 8
     # Expand and contract the 2 word vectors
     wv1_expansion_1 = Dense(expansion_size*2)(wv1)
     wv1_expansion_1 = BatchNormalization()(wv1_expansion_1)
@@ -154,7 +154,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
     for epoch in range(epoch_amount):
         total_loss = 0
         iter = 0
-        exclude = [ "/r/IsA", "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]
+        exclude = relations
         shuffle(exclude)
         for output in exclude:
             training_func_dict[output] = load_batch(output)
@@ -178,7 +178,8 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
                 except Exception as e:
                     # print("Error in",output,str(e))
                     tasks_completed[output] = True
-            if False not in tasks_completed.values():
+            if False not in tasks_completed.values() or \
+                    len([x for x in tasks_completed.values() if x])/len(tasks_completed.values())>0.6:
                 for output in exclude:
                     training_func_dict[output] = load_batch(output)
                 break
@@ -192,7 +193,9 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
         for key in model.keys():
             model[key].save(save_folder+"/"+key+".model")
             # exit()
-
+        print("Testing")
+        model_name = "Desires"
+        test_model(model, model_name=model_name)
 
 def create_data(use_cache=True):
     if os.path.exists("valid_rels.hd5") and use_cache:
@@ -238,8 +241,8 @@ def test_model(model_dict,model_name):
     print("testing")
     retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
-    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","cat")]).reshape(1,300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","potato ")]).reshape(1,300)
+    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","animal")]).reshape(1,300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","food ")]).reshape(1,300)
     res = model_dict[model_name].predict(x={"retro_word_1":w1,
                                      "retro_word_2":w2})
     print(res)
@@ -270,12 +273,12 @@ if __name__ == '__main__':
     model = create_model()
     print("Done\nLoading data")
     # model = load_model_ours()
-    data = create_data(use_cache=True)
+    data = create_data(use_cache=False)
     # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
     train_on_assertions(model, data)
     print("Done\n")
-    # model_name = "IsA"
-    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-1116:31:00.000000",model_name=model_name)
-    # test_model(model,model_name=model_name)
+    model_name = "Desires"
+    model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-1116:31:00.000000",model_name=model_name)
+    test_model(model,model_name=model_name)
     # Output needs to be the relationship weights
