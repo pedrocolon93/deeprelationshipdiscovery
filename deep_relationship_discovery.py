@@ -4,6 +4,7 @@ import os
 from multiprocessing import Queue
 from random import shuffle
 
+import gc
 import pandas as pd
 from conceptnet5.vectors import standardized_concept_uri
 from keras import Input, Model
@@ -241,13 +242,12 @@ def load_data(path):
     data = pd.read_hdf(path, "mat", encoding="utf-8")
     return data
 
+w1 = None
+w2 = None
 
 def test_model(model_dict,model_name):
     print("testing")
-    retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
-    retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
-    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","door")]).reshape(1,300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","car ")]).reshape(1,300)
+    global w1,w2
     res = model_dict[model_name].predict(x={"retro_word_1":w1,
                                      "retro_word_2":w2})
     print(res)
@@ -273,7 +273,13 @@ def load_model_ours(save_folder = "./drd",model_name="all"):
 
 if __name__ == '__main__':
     # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
-
+    retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
+    retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
+    global w1,w2
+    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","door")]).reshape(1,300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","car ")]).reshape(1,300)
+    del retrofitted_embeddings
+    gc.collect()
     print("Creating model...")
     model = create_model()
     print("Done\nLoading data")
