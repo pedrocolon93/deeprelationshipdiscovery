@@ -123,6 +123,7 @@ import numpy as np
 def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder = "drd"):
 
     retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
+    # retroembeddings = "retrogan/numberbatch.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
     training_data_dict = {}
     training_func_dict = {}
@@ -146,10 +147,16 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
                 x_2 = []
                 y = []
                 for ix in ixs:
-                    stuff = data.iloc[training_data_dict[output][ix]]
-                    x_1.append(np.array(retrofitted_embeddings.loc[stuff[1]]))
-                    x_2.append(np.array(retrofitted_embeddings.loc[stuff[2]]))
-                    y.append(float(stuff[3]))
+                    try:
+                        stuff = data.iloc[training_data_dict[output][ix]]
+                        l1 = np.array(retrofitted_embeddings.loc[stuff[1]])
+                        l2 = np.array(retrofitted_embeddings.loc[stuff[2]])
+                        x_1.append(l1)
+                        x_2.append(l2)
+                        y.append(float(stuff[3]))
+                    except:
+                        continue
+                # print(np.array(x_1),np.array(x_2),np.array(y))
                 yield np.array(x_1),np.array(x_2),np.array(y)
             except Exception as e:
                 print(e)
@@ -183,7 +190,8 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
                         print("Loss",output,loss)
                 except Exception as e:
                     # print("Error in",output,str(e))
-                    tasks_completed[output] = True
+                    if 'the label' not in str(e):
+                        tasks_completed[output] = True
             if False not in tasks_completed.values() or \
                     len([x for x in tasks_completed.values() if x])/len(tasks_completed.values())>0.6:
                 for output in exclude:
@@ -223,6 +231,7 @@ def create_data(use_cache=True):
                 info = json.loads(assertion_row[4])
                 weight = info["weight"]
                 c1_split = assertion_row[2].split("/")
+                print(c1_split)
                 c1 = "/c/en/"+c1_split[3]
                 c2_split = assertion_row[3].split("/")
                 c2 = "/c/en/"+c2_split[3]
@@ -282,7 +291,7 @@ if __name__ == '__main__':
     model = create_model()
     print("Done\nLoading data")
     # model = load_model_ours()
-    data = create_data(use_cache=False)
+    data = create_data(use_cache=True)
     # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
     train_on_assertions(model, data)
