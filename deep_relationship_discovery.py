@@ -242,8 +242,6 @@ def load_data(path):
     data = pd.read_hdf(path, "mat", encoding="utf-8")
     return data
 
-w1 = None
-w2 = None
 
 def test_model(model_dict,model_name):
     print("testing")
