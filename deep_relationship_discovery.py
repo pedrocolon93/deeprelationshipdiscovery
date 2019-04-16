@@ -14,8 +14,9 @@ from tqdm import tqdm
 
 from retrogan_trainer import attention, ConstMultiplierLayer
 
-relations = [ "/r/PartOf", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]#,
-             # "/r/AtLocation", "/r/IsA",
+relations = ["/r/PartOf"]
+             # "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]
+             # "/r/AtLocation",
              # "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
              # "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
              # "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails",
@@ -37,23 +38,25 @@ def create_model():
     # Expand and contract the 2 word vectors
     wv1_expansion_1 = Dense(expansion_size*2)(wv1)
     wv1_expansion_1 = BatchNormalization()(wv1_expansion_1)
-    r_1 = Reshape((-1, 1))(wv1_expansion_1)
-    t1 = conv1d(r_1, filters, f_size=4)
-    f1 = MaxPooling1D(pool_size=4)(t1)
-    f1 = Flatten()(f1)
-    wv1_expansion_2 = attention(f1)
+    # r_1 = Reshape((-1, 1))(wv1_expansion_1)
+    # t1 = conv1d(r_1, filters, f_size=4)
+    # f1 = MaxPooling1D(pool_size=4)(t1)
+    # f1 = Flatten()(f1)
+    # wv1_expansion_2 = attention(f1)
+    wv1_expansion_2 = attention(wv1_expansion_1)
     wv1_expansion_3 = Dense(int(expansion_size / 4),activation='relu')(wv1_expansion_2)
     wv1_expansion_3 = BatchNormalization()(wv1_expansion_3)
 
     wv2_expansion_1 = Dense(expansion_size*2)(wv2)
     wv2_expansion_1 = BatchNormalization()(wv2_expansion_1)
-    r_2 = Reshape((-1, 1))(wv2_expansion_1)
-    t2 = conv1d(r_2, filters, f_size=4)
-    f2 = MaxPooling1D(pool_size=4)(t2)
-    f2 = Flatten()(f2)
-    # wv2_expansion_2 = Dense(int(expansion_size / 2),activation='relu')(wv2_expansion_1)
-    # wv2_expansion_2 = BatchNormalization()(wv2_expansion_2)
-    wv2_expansion_2 = attention(f2)
+    # r_2 = Reshape((-1, 1))(wv2_expansion_1)
+    # t2 = conv1d(r_2, filters, f_size=4)
+    # f2 = MaxPooling1D(pool_size=4)(t2)
+    # f2 = Flatten()(f2)
+    # wv2_expansion_2 = attention(f2)
+    wv2_expansion_2 = Dense(int(expansion_size / 2),activation='relu')(wv2_expansion_1)
+    wv2_expansion_2 = BatchNormalization()(wv2_expansion_2)
+    wv2_expansion_2 = attention(wv2_expansion_2)
     wv2_expansion_3 = Dense(int(expansion_size / 4),activation='relu')(wv2_expansion_2)
     wv2_expansion_3 = BatchNormalization()(wv2_expansion_3)
 
@@ -67,9 +70,11 @@ def create_model():
     attention_expand = BatchNormalization()(attention_expand)
     semi_final_layer = Dense(expansion_size,activation='relu')(attention_expand)
     semi_final_layer = BatchNormalization()(semi_final_layer)
-    common_layers_model = Model([wv1, wv2],semi_final_layer,name="Common layers")
+    # common_layers_model = Model([wv1, wv2],semi_final_layer,name="Common layers")
+    # common_optimizer = Adam(lr=0.000002)
+    # common_layers_model.compile()
     # Output layer
-    amount_of_relations = len(relations)
+    # amount_of_relations = len(relations)
     # One big layer
     # final = Dense(amount_of_relations)(semi_final_layer)
     # Many tasks
@@ -77,7 +82,7 @@ def create_model():
     losses = []
     model_dict = {}
     for rel in relations:
-        task_layer = Dense(task_layer_neurons,activation='relu')(common_layers_model.output)
+        task_layer = Dense(task_layer_neurons,activation='relu')(semi_final_layer)
         task_layer = BatchNormalization()(task_layer)
         task_layer = attention(task_layer)
         task_layer = Dense(task_layer_neurons,activation='relu')(task_layer)
@@ -88,13 +93,13 @@ def create_model():
         losses.append(loss)
 
         drd = Model([wv1, wv2], Dense(1)(task_layer),name=layer_name)
-        optimizer = Adam(lr=0.000002)
+        optimizer = Adam(lr=0.0002)
         drd.compile(optimizer=optimizer, loss=[loss])
-        # drd.summary()
+        drd.summary()
         # plot_model(drd)
         model_dict[layer_name] = drd
-    model_dict["common"]=common_layers_model
-    common_layers_model.summary()
+    # model_dict["common"]=common_layers_model
+    # common_layers_model.summary()
     return model_dict
 
 
@@ -194,7 +199,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
             model[key].save(save_folder+"/"+key+".model")
             # exit()
         print("Testing")
-        model_name = "Desires"
+        model_name = "PartOf"
         test_model(model, model_name=model_name)
 
 def create_data(use_cache=True):
@@ -241,8 +246,8 @@ def test_model(model_dict,model_name):
     print("testing")
     retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
-    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","animal")]).reshape(1,300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","food ")]).reshape(1,300)
+    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","door")]).reshape(1,300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","car ")]).reshape(1,300)
     res = model_dict[model_name].predict(x={"retro_word_1":w1,
                                      "retro_word_2":w2})
     print(res)
@@ -273,7 +278,7 @@ if __name__ == '__main__':
     model = create_model()
     print("Done\nLoading data")
     # model = load_model_ours()
-    data = create_data(use_cache=False)
+    data = create_data(use_cache=True)
     # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
     train_on_assertions(model, data)
