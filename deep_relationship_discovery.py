@@ -223,9 +223,9 @@ def create_data(use_cache=True):
                 info = json.loads(assertion_row[4])
                 weight = info["weight"]
                 c1_split = assertion_row[2].split("/")
-                c1 = "/c/en/"+c1_split[2]
+                c1 = "/c/en/"+c1_split[3]
                 c2_split = assertion_row[3].split("/")
-                c2 = "/c/en/"+c2_split[2]
+                c2 = "/c/en/"+c2_split[3]
                 valid_relations.append([assertion_row[1], c1,c2, weight])
             except Exception as e:
                 print(e)
