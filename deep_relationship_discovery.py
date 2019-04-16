@@ -90,7 +90,7 @@ def create_model():
         task_layer = BatchNormalization()(task_layer)
 
         layer_name = rel.replace("/r/", "")
-        loss = "mean_squared_error"
+        loss = "mean_absolute_error"
         losses.append(loss)
 
         drd = Model([wv1, wv2], Dense(1)(task_layer),name=layer_name)
@@ -282,7 +282,7 @@ if __name__ == '__main__':
     model = create_model()
     print("Done\nLoading data")
     # model = load_model_ours()
-    data = create_data(use_cache=True)
+    data = create_data(use_cache=False)
     # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
     train_on_assertions(model, data)
