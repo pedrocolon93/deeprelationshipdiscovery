@@ -15,8 +15,7 @@ from tqdm import tqdm
 
 from retrogan_trainer import attention, ConstMultiplierLayer
 
-relations = ["/r/PartOf"]
-             # "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]
+relations = ["/r/PartOf","/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]
              # "/r/AtLocation",
              # "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
              # "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
@@ -90,7 +89,7 @@ def create_model():
         task_layer = BatchNormalization()(task_layer)
 
         layer_name = rel.replace("/r/", "")
-        loss = "mean_absolute_error"
+        loss = "mean_squared_error"
         losses.append(loss)
 
         drd = Model([wv1, wv2], Dense(1)(task_layer),name=layer_name)
