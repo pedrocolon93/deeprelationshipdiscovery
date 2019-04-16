@@ -126,15 +126,15 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
     training_data_dict = {}
     training_func_dict = {}
+    for i in tqdm(range(len(data))):
+        stuff = data.iloc[i]
+        if stuff[0] not in training_data_dict.keys():
+            training_data_dict[stuff[0]] = []
+        training_data_dict[stuff[0]].append(i)
+
     def load_batch(output_name):
         print("Loading batch for",output_name)
         #TODO LOAD BATCH OF A CERTAIN TYPE
-        if output_name not in training_data_dict.keys():
-            training_data_dict[output] = []
-            for i in tqdm(range(len(data))):
-                stuff = data.iloc[i]
-                if str(stuff[0])==output_name:
-                    training_data_dict[output].append(i)
         print("\nDone\n")
         l = len(training_data_dict[output_name])
         iterable = list(range(0, l))
