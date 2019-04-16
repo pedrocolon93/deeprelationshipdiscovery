@@ -15,15 +15,15 @@ from tqdm import tqdm
 
 from retrogan_trainer import attention, ConstMultiplierLayer
 
-relations = ["/r/PartOf","/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]
-             # "/r/AtLocation",
-             # "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
-             # "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
-             # "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails",
-             # "/r/MannerOf","/r/RelatedTo",
-             # "/r/LocatedNear", "/r/HasContext", "/r/FormOf","/r/SimilarTo", "/r/EtymologicallyRelatedTo",
-             # "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
-             # "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
+relations = ["/r/PartOf","/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires",
+             "/r/AtLocation",
+             "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
+             "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
+             "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails",
+             "/r/MannerOf","/r/RelatedTo",
+             "/r/LocatedNear", "/r/HasContext", "/r/FormOf","/r/SimilarTo", "/r/EtymologicallyRelatedTo",
+             "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
+             "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
 
 def conv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
     d = Conv1D(filters, f_size, strides=strides, activation="relu")(layer_input)
@@ -230,7 +230,7 @@ def create_data(use_cache=True):
                 info = json.loads(assertion_row[4])
                 weight = info["weight"]
                 c1_split = assertion_row[2].split("/")
-                print(c1_split)
+                # print(c1_split)
                 c1 = "/c/en/"+c1_split[3]
                 c2_split = assertion_row[3].split("/")
                 c2 = "/c/en/"+c2_split[3]
@@ -282,20 +282,20 @@ if __name__ == '__main__':
     retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     global w1,w2
-    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","door")]).reshape(1,300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","car ")]).reshape(1,300)
+    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","table")]).reshape(1,300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","car")]).reshape(1,300)
     del retrofitted_embeddings
-    gc.collect()
-    print("Creating model...")
-    model = create_model()
-    print("Done\nLoading data")
-    # model = load_model_ours()
-    data = create_data(use_cache=False)
-    # data = load_data("valid_rels.hd5")
-    print("Done\nTraining")
-    train_on_assertions(model, data)
-    print("Done\n")
-    model_name = "Desires"
-    model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-1116:31:00.000000",model_name=model_name)
+    # gc.collect()
+    # print("Creating model...")
+    # model = create_model()
+    # print("Done\nLoading data")
+    # # model = load_model_ours()
+    # data = create_data(use_cache=False)
+    # # data = load_data("valid_rels.hd5")
+    # print("Done\nTraining")
+    # train_on_assertions(model, data)
+    # print("Done\n")
+    model_name = "IsA"
+    model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-1613:43:00.000000",model_name=model_name)
     test_model(model,model_name=model_name)
     # Output needs to be the relationship weights
