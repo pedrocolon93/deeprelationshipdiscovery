@@ -291,7 +291,7 @@ if __name__ == '__main__':
     model = create_model()
     print("Done\nLoading data")
     # model = load_model_ours()
-    data = create_data(use_cache=True)
+    data = create_data(use_cache=False)
     # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
     train_on_assertions(model, data)
