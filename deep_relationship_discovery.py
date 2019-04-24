@@ -190,7 +190,7 @@ def train_on_assertions(model,prob_model, data, epoch_amount=100, batch_size=32,
                     if loss>10:
                         print("Loss",output,loss)
                 except Exception as e:
-                    # print("Error in",output,str(e))
+                    print("Error in",output,str(e))
                     if 'the label' not in str(e):
                         tasks_completed[output] = True
             if False not in tasks_completed.values() or \
