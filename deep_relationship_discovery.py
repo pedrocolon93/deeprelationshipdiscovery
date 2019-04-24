@@ -246,14 +246,16 @@ def load_data(path):
     return data
 
 
-def test_model(model_dict,normalizers,model_name):
+def test_model(model_dict,model_name="all",normalizers=None):
     print("testing")
     global w1,w2
     res = model_dict[model_name].predict(x={"retro_word_1":w1,
                                      "retro_word_2":w2})
-    norm_res = normalizers[model_name].transform(res)
     print(res)
-    print(norm_res)
+    if normalizers is not None:
+        norm_res = normalizers[model_name].transform(res)
+        print(norm_res)
+
 
 def normalize_outputs(model,save_folder="./drd",use_cache=True):
     save_path = save_folder+"/"+"normalization_dict.pickle"
@@ -302,8 +304,9 @@ def load_model_ours(save_folder = "./drd",model_name="all"):
                                             custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
         print("Loading weights")
         model_dict[layer_name].load_weights(save_folder + "/" + layer_name + ".model")
-    model_dict["common"] = load_model(save_folder + "/" + "common" + ".model",
-                                            custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
+
+    # model_dict["common"] = load_model(save_folder + "/" + "common" + ".model",
+    #                                         custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
     return model_dict
 
 
@@ -317,18 +320,18 @@ if __name__ == '__main__':
     w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","phone")]).reshape(1,300)
     w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","app")]).reshape(1,300)
     model_name = "UsedFor"
-    # del retrofitted_embeddings
-    # gc.collect()
-    # print("Creating model...")
-    # model = create_model()
-    # print("Done\nLoading data")
-    # # model = load_model_ours()
-    # data = create_data(use_cache=False)
+    del retrofitted_embeddings
+    gc.collect()
+    print("Creating model...")
+    model = create_model()
+    print("Done\nLoading data")
+    # model = load_model_ours()
+    data = create_data(use_cache=True)
     # # data = load_data("valid_rels.hd5")
-    # print("Done\nTraining")
-    # train_on_assertions(model, data)
-    # print("Done\n")
-    model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name=model_name)
+    print("Done\nTraining")
+    train_on_assertions(model, data)
+    print("Done\n")
+    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name=model_name)
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name="all")
     # normalizers = normalize_outputs(model,save_folder="trained_models/deepreldis/2019-04-1614:43:00.000000")
     # normalizers = normalize_outputs(model,use_cache=False)
