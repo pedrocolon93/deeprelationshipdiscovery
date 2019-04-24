@@ -84,6 +84,7 @@ def create_model():
     task_layer_neurons = 256
     losses = []
     model_dict = {}
+    prob_model_dict = {}
     #FOR PICS
     model_outs = []
     for rel in relations:
@@ -102,19 +103,25 @@ def create_model():
         probability = Dense(units=1,activation='sigmoid')(task_layer)
         scale = ConstMultiplierLayer()(task_layer)
         out = multiply([scale,probability])
+
         model_outs.append(out)
+        drdp = Model([wv1,wv2],probability,name=layer_name+"probability")
         drd = Model([wv1, wv2], out,name=layer_name)
         optimizer = Adam(lr=0.0002)
         drd.compile(optimizer=optimizer, loss=[loss])
+        drdp.compile(optimizer=optimizer, loss=[loss])
+        drdp.summary()
         drd.summary()
         # plot_model(drd)
         model_dict[layer_name] = drd
+        prob_model_dict[layer_name] = drdp
+
     # plot_model(Model([wv1,wv2],model_outs,name="Deep_Relationship_Discovery"),show_shapes=True,to_file="DRD.png")
     # model_dict["common"]=common_layers_model
     common_layers_model.summary()
-    return model_dict
+    return model_dict,prob_model_dict
 
-def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder = "drd"):
+def train_on_assertions(model,prob_model, data, epoch_amount=100, batch_size=32,save_folder = "drd"):
 
     retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     # retroembeddings = "retrogan/numberbatch.h5"
@@ -200,10 +207,13 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
             print(e)
         for key in model.keys():
             model[key].save(save_folder+"/"+key+".model")
+        for key in prob_model.keys():
+            prob_model[key].save(save_folder + "/" + key + "probability.model")
             # exit()
         print("Testing")
         model_name = "PartOf"
         test_model(model, model_name=model_name)
+        test_model(prob_model,model_name=model_name)
 
 def create_data(use_cache=True):
     if os.path.exists("tmp/valid_rels.hd5") and use_cache:
@@ -323,13 +333,13 @@ if __name__ == '__main__':
     del retrofitted_embeddings
     gc.collect()
     print("Creating model...")
-    model = create_model()
+    model,prob_model = create_model()
     print("Done\nLoading data")
     # model = load_model_ours()
     data = create_data(use_cache=True)
     # # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
-    train_on_assertions(model, data)
+    train_on_assertions(model,prob_model, data)
     print("Done\n")
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name=model_name)
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name="all")
