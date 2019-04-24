@@ -1,58 +1,13 @@
 from threading import Thread, Lock
 
-from os import wait
-from time import sleep
-from urllib.parse import urlencode
-
+from CNQuery import CNQuery
 from tools import *
 # import conceptnet5
-import requests
-
-class CNQuery():
-    def __init__(self):
-        self.base_url = "http://18.85.39.186/"
-        # self.base_url = "http://conceptnet.io/"
-        # node = / c / en / dog & other = / c / en / pizza
-
-    def parse(self, result):
-        amount = 0
-        weight = 0
-        if len(result['edges'])>0:
-            amount+=1
-            for edge in result["edges"]:
-                print(edge)
-                # amount+=1
-                weight+=edge["weight"]
-        else:
-            pass
-        return (amount,weight)
-
-    def add_identifier(self,node):
-        if "/c/en" in node:
-            return node
-        else:
-            return "/c/en/"+node
-    def query(self,node1,node2,relation='/r/Desires'):
-        getVars = {'node': self.add_identifier(node1), 'other': self.add_identifier(node2),'rel':relation}
-        url = self.base_url+"query?"
-        res = url+urlencode(getVars)
-        while True:
-            try:
-                urlres = requests.get(res)
-                break
-            except:
-                pass
-        # print(urlres)
-        urlres = urlres.json()
-        # print(urlres)
-        results = self.parse(urlres)
-        return results
-
 
 
 if __name__ == '__main__':
     # test connection
-    print(CNQuery().query('/c/en/man','/c/en/woman'))
+    print(CNQuery().query_and_parse('/c/en/man', '/c/en/woman'))
     # find n synonyms using basic word embedding
     nearest_concepts_amount = 50
     cross_concepts_amount = 400
@@ -147,7 +102,7 @@ if __name__ == '__main__':
                     connection_weight+=wght
                 thread_list.clear()
             def query_function(concept2_neighbor):
-                amount, weight = CNQuery().query(concept1_neighbor, concept2_neighbor, relationship_type)
+                amount, weight = CNQuery().query_and_parse(concept1_neighbor, concept2_neighbor, relationship_type)
                 return amount, weight
             thread_list.append(ThreadWithReturnValue(group=None,target=query_function,args=(concept2_neighbor,)))
             # query_function(concept2_neighbor)

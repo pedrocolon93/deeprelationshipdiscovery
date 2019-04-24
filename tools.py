@@ -7,6 +7,8 @@ import os
 import pickle
 from multiprocessing.pool import Pool
 import pandas as pd
+from conceptnet5.api import standardize_uri
+from conceptnet5.nodes import standardized_concept_uri
 from keras import backend as K
 import numpy as np
 from scipy.spatial.distance import cosine
@@ -458,13 +460,23 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
     # return final_n_results_words,final_n_results,final_n_results_weights
     return final_n_results_words,final_n_results
 
-def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True):
-
-    o = pd.read_hdf(dataset, 'mat', encoding='utf-8')
-    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300),
+def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True,limit=None):
+    if type(dataset) is str:
+        o = pd.read_hdf(dataset, 'mat', encoding='utf-8')
+    elif type(dataset) is pd.DataFrame:
+        o = dataset
+    else:
+        raise Exception("Neither string nor dataframe provided as dataset")
+    if limit is None:
+        results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300),
                                                                                          pred_y.reshape(1,300)),
                                                              np.array(o.iloc[:,:])
                                                              )))]
+    else:
+        results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, 300),
+                                                                                               pred_y.reshape(1, 300)),
+                                                                   np.array(o.iloc[0:limit, :])
+                                                                   )))]
     sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
     final_n_results = []
     final_n_results_words = []
@@ -496,7 +508,15 @@ def find_in_retrofitted(testwords, return_words=False, dataset="fasttext"):
     return asarray1
 
 def find_in_dataset(testwords,dataset):
-    r = pd.read_hdf(dataset, 'mat', encoding='utf-8')
-    asarray1 = np.array(r.loc[["/c/en/" + x for x in testwords], :])
+    if type(dataset) is str:
+        r = pd.read_hdf(dataset, 'mat', encoding='utf-8')
+    elif type(dataset) is pd.DataFrame:
+        r = dataset
+    else:
+        raise Exception("Neither string nor dataframe provided as dataset")
+    asarray1 = r.loc[[standardized_concept_uri('en',x) for x in testwords], :]
+    # print(asarray1)
+    asarray1 = np.array(asarray1)
+    # print(asarray1)
     return asarray1
 

@@ -1,16 +1,19 @@
 import csv
 import json
 import os
-from multiprocessing import Queue
+import pickle
 from random import shuffle
 
 import gc
+import numpy as np
 import pandas as pd
+import sklearn
 from conceptnet5.vectors import standardized_concept_uri
 from keras import Input, Model
 from keras.engine.saving import load_model
-from keras.layers import Dense, Concatenate, BatchNormalization, Conv1D, Reshape, MaxPooling1D, Flatten
+from keras.layers import Dense, Concatenate, BatchNormalization, Conv1D, Multiply, multiply
 from keras.optimizers import Adam
+from keras.utils import plot_model
 from tqdm import tqdm
 
 from retrogan_trainer import attention, ConstMultiplierLayer
@@ -54,9 +57,9 @@ def create_model():
     # f2 = MaxPooling1D(pool_size=4)(t2)
     # f2 = Flatten()(f2)
     # wv2_expansion_2 = attention(f2)
-    wv2_expansion_2 = Dense(int(expansion_size / 2),activation='relu')(wv2_expansion_1)
-    wv2_expansion_2 = BatchNormalization()(wv2_expansion_2)
-    wv2_expansion_2 = attention(wv2_expansion_2)
+    # wv2_expansion_2 = Dense(int(expansion_size / 2),activation='relu')(wv2_expansion_1)
+    # wv2_expansion_2 = BatchNormalization()(wv2_expansion_1)
+    wv2_expansion_2 = attention(wv2_expansion_1)
     wv2_expansion_3 = Dense(int(expansion_size / 4),activation='relu')(wv2_expansion_2)
     wv2_expansion_3 = BatchNormalization()(wv2_expansion_3)
 
@@ -70,7 +73,7 @@ def create_model():
     attention_expand = BatchNormalization()(attention_expand)
     semi_final_layer = Dense(expansion_size,activation='relu')(attention_expand)
     semi_final_layer = BatchNormalization()(semi_final_layer)
-    # common_layers_model = Model([wv1, wv2],semi_final_layer,name="Common layers")
+    common_layers_model = Model([wv1, wv2],semi_final_layer,name="Common layers")
     # common_optimizer = Adam(lr=0.000002)
     # common_layers_model.compile()
     # Output layer
@@ -81,6 +84,8 @@ def create_model():
     task_layer_neurons = 256
     losses = []
     model_dict = {}
+    #FOR PICS
+    model_outs = []
     for rel in relations:
         task_layer = Dense(task_layer_neurons,activation='relu')(semi_final_layer)
         task_layer = BatchNormalization()(task_layer)
@@ -88,36 +93,26 @@ def create_model():
         task_layer = Dense(task_layer_neurons,activation='relu')(task_layer)
         task_layer = BatchNormalization()(task_layer)
 
+
         layer_name = rel.replace("/r/", "")
         loss = "mean_squared_error"
         losses.append(loss)
 
         drd = Model([wv1, wv2], Dense(1)(task_layer),name=layer_name)
+        # out = Dense(1,name=layer_name)(task_layer)
+        probability = Dense(units=1,activation='sigmoid')(task_layer)
+        scale = ConstMultiplierLayer()(task_layer)
+        out = multiply([scale,probability])
+        model_outs.append(out)
         optimizer = Adam(lr=0.0002)
         drd.compile(optimizer=optimizer, loss=[loss])
         drd.summary()
         # plot_model(drd)
         model_dict[layer_name] = drd
+    plot_model(Model([wv1,wv2],model_outs,name="Deep_Relationship_Discovery"),show_shapes=True,to_file="DRD.png")
     # model_dict["common"]=common_layers_model
-    # common_layers_model.summary()
+    common_layers_model.summary()
     return model_dict
-
-
-q = Queue()
-
-
-def initializer():
-    global q
-    pass
-
-
-def trio(relation, start, end):
-    tuple = (relation, start, end)
-    q.put(tuple)
-
-
-import numpy as np
-
 
 def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder = "drd"):
 
@@ -211,9 +206,9 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32,save_folder
         test_model(model, model_name=model_name)
 
 def create_data(use_cache=True):
-    if os.path.exists("valid_rels.hd5") and use_cache:
+    if os.path.exists("tmp/valid_rels.hd5") and use_cache:
         print("Using cache")
-        return pd.read_hdf("valid_rels.hd5","mat")
+        return pd.read_hdf("tmp/valid_rels.hd5","mat")
 
     assertionspath = "retrogan/conceptnet-assertions-5.6.0.csv"
     valid_relations = []
@@ -242,7 +237,7 @@ def create_data(use_cache=True):
             if len(valid_relations) % 10000 == 0:
                 print(len(valid_relations))
     af = pd.DataFrame(data=valid_relations, index=range(len(valid_relations)))
-    af.to_hdf("valid_rels.hd5", "mat")
+    af.to_hdf("tmp/valid_rels.hd5", "mat")
     return af
 
 
@@ -251,12 +246,45 @@ def load_data(path):
     return data
 
 
-def test_model(model_dict,model_name):
+def test_model(model_dict,normalizers,model_name):
     print("testing")
     global w1,w2
     res = model_dict[model_name].predict(x={"retro_word_1":w1,
                                      "retro_word_2":w2})
+    norm_res = normalizers[model_name].transform(res)
     print(res)
+    print(norm_res)
+
+def normalize_outputs(model,save_folder="./drd",use_cache=True):
+    save_path = save_folder+"/"+"normalization_dict.pickle"
+    if use_cache:
+        try:
+            norm_dict = pickle.load(open(save_path,'rb'))
+            return norm_dict
+        except Exception as e:
+            print(e)
+            print("Cache not found")
+
+    # Set up our variables
+    normalization_dict = {}
+    x1 = []
+    x2 = []
+    y = []
+
+    # Load our data
+    retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
+    retrofitted_embeddings = pd.read_hdf(retroembeddings,"mat")
+    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","iphone")]).reshape(1,300)
+    for i in range(len(retrofitted_embeddings.index)):
+        x1.append(w1)
+        x2.append(np.array(retrofitted_embeddings.iloc[i]).reshape(1,300))
+    for rel in relations:
+        rel_normer = sklearn.preprocessing.MinMaxScaler().fit(model[rel.replace("/r/", "")].predict(x={"retro_word_1":np.array(x1).reshape(len(x1),300),
+                                     "retro_word_2":np.array(x2).reshape(len(x1),300)}))
+        normalization_dict[rel.replace("/r/", "")] = rel_normer
+        print(rel_normer)
+    pickle.dump(normalization_dict,open(save_path,"wb"))
+    return normalization_dict
 
 def load_model_ours(save_folder = "./drd",model_name="all"):
     model_dict = {}
@@ -264,7 +292,9 @@ def load_model_ours(save_folder = "./drd",model_name="all"):
         for rel in relations:
             print("Loading",rel)
             layer_name = rel.replace("/r/", "")
-            model_dict[layer_name] = load_model(save_folder+"/"+layer_name+".model",custom_objects={"ConstMultiplierLayer":ConstMultiplierLayer})
+            model_dict[layer_name] = load_model(save_folder+"/"+layer_name+".model",
+                                                custom_objects={"ConstMultiplierLayer":ConstMultiplierLayer})
+
     else:
         layer_name = model_name.replace("/r/", "")
         print("Loading models")
@@ -277,13 +307,16 @@ def load_model_ours(save_folder = "./drd",model_name="all"):
     return model_dict
 
 
+
+
 if __name__ == '__main__':
     # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
     retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     global w1,w2
-    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","table")]).reshape(1,300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","car")]).reshape(1,300)
+    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","potato")]).reshape(1,300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en","picture")]).reshape(1,300)
+    model_name = "UsedFor"
     del retrofitted_embeddings
     gc.collect()
     print("Creating model...")
@@ -295,7 +328,9 @@ if __name__ == '__main__':
     print("Done\nTraining")
     train_on_assertions(model, data)
     print("Done\n")
-    model_name = "IsA"
-    model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-1613:43:00.000000",model_name=model_name)
-    test_model(model,model_name=model_name)
+    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-1614:43:00.000000",model_name=model_name)
+    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-1614:43:00.000000",model_name="all")
+    # normalizers = normalize_outputs(model,save_folder="trained_models/deepreldis/2019-04-1614:43:00.000000")
+    normalizers = normalize_outputs(model,use_cache=False)
+    test_model(model,normalizers,model_name=model_name)
     # Output needs to be the relationship weights

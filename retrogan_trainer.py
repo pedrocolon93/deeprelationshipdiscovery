@@ -14,6 +14,7 @@ from keras.layers import Input, Dense
 from keras.models import Model
 from keras.optimizers import Adam
 from keras import backend as K
+from keras.utils import plot_model
 from tqdm import tqdm
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
@@ -83,8 +84,8 @@ class RetroCycleGAN():
         g_lr = 0.0001
         cv = 0.5
         cn = 4
-        self.d_A = self.build_discriminator(name="notretrodis")
-        self.d_B = self.build_discriminator(name="retrodis")
+        self.d_A = self.build_discriminator(name="word_vector_discriminator")
+        self.d_B = self.build_discriminator(name="retrofitted_word_vector_discriminator")
         def create_opt(lr):
             return Adam(lr, clipvalue=cv,clipnorm=cn)
         self.d_A.compile(loss='mse',
@@ -100,13 +101,13 @@ class RetroCycleGAN():
         #-------------------------
 
         # Build the generators
-        self.g_AB = self.build_generator(name="toretro")
+        self.g_AB = self.build_generator(name="to_retro_generator")
         self.g_AB.summary()
-        self.g_BA = self.build_generator(name="fromretro")
+        self.g_BA = self.build_generator(name="from_retro_generator")
         self.g_BA.summary()
         # Input images from both domains
-        img_A = Input(shape=self.img_shape)
-        img_B = Input(shape=self.img_shape)
+        img_A = Input(shape=self.img_shape,name="plain_word_vector")
+        img_B = Input(shape=self.img_shape,name="retrofitted_word_vector")
 
         # Translate images to the other domain
         fake_B = self.g_AB(img_A)
@@ -140,7 +141,7 @@ class RetroCycleGAN():
                                             self.lambda_id, self.lambda_id ],
                             optimizer=create_opt(g_lr))
 
-        # plot_model(self.combined)
+        plot_model(self.combined,to_file="RetroGAN.png",show_shapes=True)
     def build_generator(self,name):
         """U-Net Generator"""
 
