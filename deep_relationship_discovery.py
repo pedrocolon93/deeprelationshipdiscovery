@@ -179,6 +179,8 @@ def train_on_assertions(model, prob_model, data, epoch_amount=100, batch_size=32
             for output in exclude:
                 try:
                     x_1, x_2, y = training_func_dict[output].__next__()
+                    x_1 = x_1.reshape(x_1.shape[0],x_1.shape[-1])
+                    x_2 = x_2.reshape(x_2.shape[0], x_2.shape[-1])
                     # print(x_1.shape)
                     # print(x_2.shape)
                     # print(y.shape)
