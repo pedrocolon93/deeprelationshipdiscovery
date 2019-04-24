@@ -13,7 +13,7 @@ from keras import Input, Model
 from keras.engine.saving import load_model
 from keras.layers import Dense, Concatenate, BatchNormalization, Conv1D, Multiply, multiply
 from keras.optimizers import Adam
-from keras.utils import plot_model
+# from keras.utils import plot_model
 from tqdm import tqdm
 
 from retrogan_trainer import attention, ConstMultiplierLayer
@@ -109,7 +109,7 @@ def create_model():
         drd.summary()
         # plot_model(drd)
         model_dict[layer_name] = drd
-    plot_model(Model([wv1,wv2],model_outs,name="Deep_Relationship_Discovery"),show_shapes=True,to_file="DRD.png")
+    # plot_model(Model([wv1,wv2],model_outs,name="Deep_Relationship_Discovery"),show_shapes=True,to_file="DRD.png")
     # model_dict["common"]=common_layers_model
     common_layers_model.summary()
     return model_dict
