@@ -141,7 +141,7 @@ def train_on_assertions(model, prob_model, data, epoch_amount=100, batch_size=32
         l = len(training_data_dict[output_name])
         iterable = list(range(0, l))
         shuffle(iterable)
-        for ndx in tqdm(range(0, l, batch_size)):
+        for ndx in range(0, l, batch_size):
             try:
                 ixs = iterable[ndx:min(ndx + batch_size, l)]
                 x_1 = []
@@ -150,8 +150,8 @@ def train_on_assertions(model, prob_model, data, epoch_amount=100, batch_size=32
                 for ix in ixs:
                     try:
                         stuff = data.iloc[training_data_dict[output][ix]]
-                        l1 = np.array(retrofitted_embeddings.loc[stuff[1]])
-                        l2 = np.array(retrofitted_embeddings.loc[stuff[2]])
+                        l1 = np.array(retrofitted_embeddings.loc[stuff[1]]).reshape(1,300)
+                        l2 = np.array(retrofitted_embeddings.loc[stuff[2]]).reshape(1,300)
                         x_1.append(l1)
                         x_2.append(l2)
                         y.append(float(stuff[3]))
@@ -164,7 +164,7 @@ def train_on_assertions(model, prob_model, data, epoch_amount=100, batch_size=32
                 return False
         return True
 
-    for epoch in range(epoch_amount):
+    for epoch in tqdm(range(epoch_amount)):
         total_loss = 0
         iter = 0
         exclude = relations
