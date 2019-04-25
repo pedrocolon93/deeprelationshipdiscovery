@@ -11,7 +11,7 @@ import sklearn
 from conceptnet5.vectors import standardized_concept_uri
 from keras import Input, Model
 from keras.engine.saving import load_model
-from keras.layers import Dense, Concatenate, BatchNormalization, Conv1D, multiply
+from keras.layers import Dense, Concatenate, BatchNormalization, Conv1D, multiply, Dropout
 from keras.optimizers import Adam
 # from keras.utils import plot_model
 from keras.utils import plot_model
@@ -103,7 +103,7 @@ def create_model():
 
         # out = Dense(1,name=layer_name)(task_layer)
         probability = Dense(units=1, activation='sigmoid',name=layer_name+"_prob")(task_layer)
-        scaler = Dense(units=1)(task_layer)
+        scaler = Dense(units=1)(Dropout(0.5)(task_layer))
         scaled_out = Dense(1)(multiply([probability,scaler]))
         # out = multiply([scale, probability])
         # scale = ConstMultiplierLayer()(probability)
@@ -264,10 +264,14 @@ def load_data(path):
 
 def test_model(model_dict, model_name="all", normalizers=None):
     print("testing")
-    global w1, w2
+    global w1, w2,w3
     res = model_dict[model_name].predict(x={"retro_word_1": w1,
                                             "retro_word_2": w2})
     print(res)
+    res = model_dict[model_name].predict(x={"retro_word_1": w1,
+                                            "retro_word_2": w3})
+    print(res)
+
     if normalizers is not None:
         norm_res = normalizers[model_name].transform(res)
         print(norm_res)
@@ -313,20 +317,28 @@ def load_model_ours(save_folder="./drd", model_name="all",probability_models=Fal
             print("Loading", rel)
             layer_name = rel.replace("/r/", "")
             if probability_models:
+                print("Loading",save_folder + "/" + layer_name + "probability.model")
                 model_dict[layer_name] = load_model(save_folder + "/" + layer_name + "probability.model",
                                                     custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
-
+                model_dict[layer_name].summary()
             else:
                 model_dict[layer_name] = load_model(save_folder + "/" + layer_name + ".model",
                                                     custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
 
     else:
         layer_name = model_name.replace("/r/", "")
-        print("Loading models")
-        model_dict[layer_name] = load_model(save_folder + "/" + layer_name + ".model",
-                                            custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
-        print("Loading weights")
-        model_dict[layer_name].load_weights(save_folder + "/" + layer_name + ".model")
+        if not probability_models:
+            print("Loading models")
+            model_dict[layer_name] = load_model(save_folder + "/" + layer_name + ".model",
+                                                custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
+            print("Loading weights")
+            model_dict[layer_name].load_weights(save_folder + "/" + layer_name + ".model")
+        else:
+            print("Loading models")
+            model_dict[layer_name] = load_model(save_folder + "/" + layer_name + "probability.model",
+                                                custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
+            print("Loading weights")
+            model_dict[layer_name].load_weights(save_folder + "/" + layer_name + "probability.model")
 
     # model_dict["common"] = load_model(save_folder + "/" + "common" + ".model",
     #                                         custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
@@ -337,23 +349,24 @@ if __name__ == '__main__':
     # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
     retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
-    global w1, w2
+    global w1, w2, w3
     w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "phone")]).reshape(1, 300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "beet")]).reshape(1, 300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "picture")]).reshape(1, 300)
+    w3 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "potato")]).reshape(1, 300)
     model_name = "UsedFor"
     del retrofitted_embeddings
     gc.collect()
-    print("Creating model...")
-    model, prob_model = create_model()
-    print("Done\nLoading data")
-    # model = load_model_ours()
-    data = create_data(use_cache=False)
-    # data = load_data("valid_rels.hd5")
-    print("Done\nTraining")
-    train_on_assertions(model, prob_model, data)
-    print("Done\n")
+    # print("Creating model...")
+    # model, prob_model = create_model()
+    # print("Done\nLoading data")
+    # # model = load_model_ours()
+    # data = create_data(use_cache=False)
+    # # data = load_data("valid_rels.hd5")
+    # print("Done\nTraining")
+    # train_on_assertions(model, prob_model, data)
+    # print("Done\n")
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name=model_name)
-    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_1_sigmoid",model_name="all",probability_models=True)
+    model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_2_sigmoid",model_name=model_name,probability_models=True)
     # normalizers = normalize_outputs(model,save_folder="trained_models/deepreldis/2019-04-1614:43:00.000000")
     # normalizers = normalize_outputs(model,use_cache=False)
     test_model(model, normalizers=None, model_name=model_name)
