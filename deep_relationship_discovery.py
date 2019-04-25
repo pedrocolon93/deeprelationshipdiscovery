@@ -265,16 +265,15 @@ def load_data(path):
 def test_model(model_dict, model_name="all", normalizers=None):
     print("testing")
     global w1, w2,w3
-    res = model_dict[model_name].predict(x={"retro_word_1": w1,
+    res1 = model_dict[model_name].predict(x={"retro_word_1": w1,
                                             "retro_word_2": w2})
-    print(res)
-    res = model_dict[model_name].predict(x={"retro_word_1": w1,
+    res2 = model_dict[model_name].predict(x={"retro_word_1": w1,
                                             "retro_word_2": w3})
-    print(res)
+    print(res1,res2)
 
-    if normalizers is not None:
-        norm_res = normalizers[model_name].transform(res)
-        print(norm_res)
+    # if normalizers is not None:
+    #     norm_res = normalizers[model_name].transform(res1)
+    #     print(norm_res)
 
 
 def normalize_outputs(model, save_folder="./drd", use_cache=True):
