@@ -14,19 +14,20 @@ from keras.engine.saving import load_model
 from keras.layers import Dense, Concatenate, BatchNormalization, Conv1D, multiply
 from keras.optimizers import Adam
 # from keras.utils import plot_model
+from keras.utils import plot_model
 from tqdm import tqdm
 
 from retrogan_trainer import attention, ConstMultiplierLayer
 
-relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires",
-             "/r/AtLocation",
-             "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
-             "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
-             "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails",
-             "/r/MannerOf", "/r/RelatedTo",
-             "/r/LocatedNear", "/r/HasContext", "/r/FormOf", "/r/SimilarTo", "/r/EtymologicallyRelatedTo",
-             "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
-             "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
+relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]#,
+             # "/r/AtLocation",
+             # "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
+             # "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
+             # "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails",
+             # "/r/MannerOf", "/r/RelatedTo",
+             # "/r/LocatedNear", "/r/HasContext", "/r/FormOf", "/r/SimilarTo", "/r/EtymologicallyRelatedTo",
+             # "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
+             # "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
 
 
 def conv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
@@ -102,18 +103,20 @@ def create_model():
 
         # out = Dense(1,name=layer_name)(task_layer)
         probability = Dense(units=1, activation='sigmoid',name=layer_name+"_prob")(task_layer)
+        scaler = Dense(units=1)(task_layer)
+        scaled_out = Dense(1)(multiply([probability,scaler]))
         # out = multiply([scale, probability])
-        scale = ConstMultiplierLayer()(probability)
+        # scale = ConstMultiplierLayer()(probability)
 
-        model_outs.append(scale)
+        model_outs.append(scaled_out)
         drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
-        drd = Model([wv1, wv2], scale, name=layer_name)
+        drd = Model([wv1, wv2], scaled_out, name=layer_name)
         optimizer = Adam(lr=0.0002)
         drd.compile(optimizer=optimizer, loss=[loss])
         drdp.compile(optimizer=optimizer, loss=[loss])
         drdp.summary()
         # drd.summary()
-        # plot_model(drd,show_shapes=True)
+        plot_model(drd,show_shapes=True)
         model_dict[layer_name] = drd
         prob_model_dict[layer_name] = drdp
 
@@ -303,14 +306,19 @@ def normalize_outputs(model, save_folder="./drd", use_cache=True):
     return normalization_dict
 
 
-def load_model_ours(save_folder="./drd", model_name="all"):
+def load_model_ours(save_folder="./drd", model_name="all",probability_models=False):
     model_dict = {}
     if model_name == 'all':
         for rel in relations:
             print("Loading", rel)
             layer_name = rel.replace("/r/", "")
-            model_dict[layer_name] = load_model(save_folder + "/" + layer_name + ".model",
-                                                custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
+            if probability_models:
+                model_dict[layer_name] = load_model(save_folder + "/" + layer_name + "probability.model",
+                                                    custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
+
+            else:
+                model_dict[layer_name] = load_model(save_folder + "/" + layer_name + ".model",
+                                                    custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
 
     else:
         layer_name = model_name.replace("/r/", "")
@@ -331,22 +339,22 @@ if __name__ == '__main__':
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     global w1, w2
     w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "phone")]).reshape(1, 300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "app")]).reshape(1, 300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "beet")]).reshape(1, 300)
     model_name = "UsedFor"
     del retrofitted_embeddings
     gc.collect()
     print("Creating model...")
     model, prob_model = create_model()
-    print("Done\nLoading data")
+    # print("Done\nLoading data")
     # model = load_model_ours()
-    data = create_data(use_cache=True)
-    # # data = load_data("valid_rels.hd5")
-    print("Done\nTraining")
-    train_on_assertions(model, prob_model, data)
-    print("Done\n")
+    # data = create_data(use_cache=True)
+    # data = load_data("valid_rels.hd5")
+    # print("Done\nTraining")
+    # train_on_assertions(model, prob_model, data)
+    # print("Done\n")
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name=model_name)
-    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name="all")
+    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_1_sigmoid",model_name="all",probability_models=True)
     # normalizers = normalize_outputs(model,save_folder="trained_models/deepreldis/2019-04-1614:43:00.000000")
     # normalizers = normalize_outputs(model,use_cache=False)
-    # test_model(model, normalizers=None, model_name=model_name)
+    test_model(model, normalizers=None, model_name=model_name)
     # Output needs to be the relationship weights
