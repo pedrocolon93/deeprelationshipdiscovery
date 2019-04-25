@@ -18,15 +18,15 @@ from tqdm import tqdm
 
 from retrogan_trainer import attention, ConstMultiplierLayer
 
-relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires"]#,
-             # "/r/AtLocation",
-             # "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
-             # "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
-             # "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails",
-             # "/r/MannerOf", "/r/RelatedTo",
-             # "/r/LocatedNear", "/r/HasContext", "/r/FormOf", "/r/SimilarTo", "/r/EtymologicallyRelatedTo",
-             # "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
-             # "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
+relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires",
+             "/r/AtLocation",
+             "/r/Causes", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
+             "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
+             "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails",
+             "/r/MannerOf", "/r/RelatedTo",
+             "/r/LocatedNear", "/r/HasContext", "/r/FormOf", "/r/SimilarTo", "/r/EtymologicallyRelatedTo",
+             "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
+             "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
 
 
 def conv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
@@ -155,7 +155,8 @@ def train_on_assertions(model, prob_model, data, epoch_amount=100, batch_size=32
                         x_1.append(l1)
                         x_2.append(l2)
                         y.append(float(stuff[3]))
-                    except:
+                    except Exception as e:
+                        # print(e)
                         continue
                 # print(np.array(x_1),np.array(x_2),np.array(y))
                 yield np.array(x_1), np.array(x_2), np.array(y)
@@ -179,11 +180,10 @@ def train_on_assertions(model, prob_model, data, epoch_amount=100, batch_size=32
             for output in exclude:
                 try:
                     x_1, x_2, y = training_func_dict[output].__next__()
-                    x_1 = x_1.reshape(x_1.shape[0],x_1.shape[-1])
-                    x_2 = x_2.reshape(x_2.shape[0], x_2.shape[-1])
                     # print(x_1.shape)
-                    # print(x_2.shape)
-                    # print(y.shape)
+                    x_1 = x_1.reshape(x_1.shape[0],x_1.shape[-1])
+                    # print(x_1.shape)
+                    x_2 = x_2.reshape(x_2.shape[0], x_2.shape[-1])
                     loss = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1': x_1, 'retro_word_2': x_2},
                                                                            y=y)
                     # loss_2 = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1':x_2,'retro_word_2':x_1},y=y)
@@ -191,6 +191,8 @@ def train_on_assertions(model, prob_model, data, epoch_amount=100, batch_size=32
                     iter += 1
                     if loss > 10:
                         print("Loss", output, loss)
+                    if iter%100:
+                        print(loss)
                 except Exception as e:
                     print("Error in", output, str(e))
                     if 'the label' not in str(e):
@@ -217,12 +219,10 @@ def train_on_assertions(model, prob_model, data, epoch_amount=100, batch_size=32
         test_model(model, model_name=model_name)
         test_model(prob_model, model_name=model_name)
 
-
 def create_data(use_cache=True):
     if os.path.exists("tmp/valid_rels.hd5") and use_cache:
         print("Using cache")
         return pd.read_hdf("tmp/valid_rels.hd5", "mat")
-
     assertionspath = "retrogan/conceptnet-assertions-5.6.0.csv"
     valid_relations = []
     with open(assertionspath) as assertionsfile:
@@ -244,8 +244,8 @@ def create_data(use_cache=True):
                 c2 = "/c/en/" + c2_split[3]
                 valid_relations.append([assertion_row[1], c1, c2, weight])
             except Exception as e:
-                print(e)
-                # pass
+                # print(e)
+                pass
                 # print(e)
             if len(valid_relations) % 10000 == 0:
                 print(len(valid_relations))
@@ -348,5 +348,5 @@ if __name__ == '__main__':
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name="all")
     # normalizers = normalize_outputs(model,save_folder="trained_models/deepreldis/2019-04-1614:43:00.000000")
     # normalizers = normalize_outputs(model,use_cache=False)
-    test_model(model, normalizers=None, model_name=model_name)
+    # test_model(model, normalizers=None, model_name=model_name)
     # Output needs to be the relationship weights
