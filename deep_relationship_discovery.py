@@ -87,7 +87,7 @@ def create_model():
     task_layer_neurons = 256
     losses = []
     model_dict = {}
-    prob_model_dict = {}
+    # prob_model_dict = {}
     # FOR PICS
     model_outs = []
     for rel in relations:
@@ -101,32 +101,32 @@ def create_model():
         loss = "mean_squared_error"
         losses.append(loss)
 
-        # out = Dense(1,name=layer_name)(task_layer)
-        probability = Dense(units=1, activation='sigmoid',name=layer_name+"_prob")(task_layer)
-        scaler = Dense(units=1)(Dropout(0.5)(task_layer))
-        scaled_out = Dense(1)(multiply([probability,scaler]))
+        out = Dense(1,name=layer_name)(task_layer)
+        # probability = Dense(units=1, activation='sigmoid',name=layer_name+"_prob")(task_layer)
+        # scaler = Dense(units=1)(Dropout(0.5)(task_layer))
+        # scaled_out = Dense(1)(multiply([probability,scaler]))
         # out = multiply([scale, probability])
         # scale = ConstMultiplierLayer()(probability)
 
-        model_outs.append(scaled_out)
-        drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
-        drd = Model([wv1, wv2], scaled_out, name=layer_name)
+        model_outs.append(out)
+        # drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
+        drd = Model([wv1, wv2], out, name=layer_name)
         optimizer = Adam(lr=0.0002)
         drd.compile(optimizer=optimizer, loss=[loss])
-        drdp.compile(optimizer=optimizer, loss=[loss])
-        drdp.summary()
-        # drd.summary()
+        # drdp.compile(optimizer=optimizer, loss=[loss])
+        # drdp.summary()
+        drd.summary()
         plot_model(drd,show_shapes=True)
         model_dict[layer_name] = drd
-        prob_model_dict[layer_name] = drdp
+        # prob_model_dict[layer_name] = drdp
 
     # plot_model(Model([wv1,wv2],model_outs,name="Deep_Relationship_Discovery"),show_shapes=True,to_file="DRD.png")
     # model_dict["common"]=common_layers_model
     common_layers_model.summary()
-    return model_dict, prob_model_dict
+    return model_dict#, prob_model_dict
 
 
-def train_on_assertions(model, prob_model, data, epoch_amount=100, batch_size=32, save_folder="drd"):
+def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd"):
     retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
     training_data_dict = {}
@@ -214,13 +214,13 @@ def train_on_assertions(model, prob_model, data, epoch_amount=100, batch_size=32
             print(e)
         for key in model.keys():
             model[key].save(save_folder + "/" + key + ".model")
-        for key in prob_model.keys():
-            prob_model[key].save(save_folder + "/" + key + "probability.model")
+        # for key in prob_model.keys():
+        #     prob_model[key].save(save_folder + "/" + key + "probability.model")
             # exit()
         print("Testing")
         model_name = "PartOf"
         test_model(model, model_name=model_name)
-        test_model(prob_model, model_name=model_name)
+        # test_model(prob_model, model_name=model_name)
 
 def create_data(use_cache=True):
     if os.path.exists("tmp/valid_rels.hd5") and use_cache:
@@ -356,13 +356,13 @@ if __name__ == '__main__':
     del retrofitted_embeddings
     gc.collect()
     print("Creating model...")
-    model, prob_model = create_model()
+    model = create_model()
     print("Done\nLoading data")
     # model = load_model_ours()
     data = create_data(use_cache=False)
     # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
-    train_on_assertions(model, prob_model, data)
+    train_on_assertions(model, data)
     print("Done\n")
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name=model_name)
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_2_sigmoid",model_name=model_name,probability_models=True)
