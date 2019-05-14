@@ -19,8 +19,9 @@ from tqdm import tqdm
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
+import tools
 from tools import find_in_fasttext, find_in_retrofitted, \
-    load_noisiest_words, load_noisiest_words_dataset, find_in_dataset
+    load_noisiest_words, load_noisiest_words_dataset, find_in_dataset, find_closest_2
 
 from numpy.random import seed
 
@@ -63,31 +64,35 @@ def attention(layer_input):
     return attention
 
 class RetroCycleGAN():
-    def __init__(self, save_index = "0",save_folder="./"):
+    def __init__(self, save_index = "0",save_folder="./", generator_size =32, 
+                 discriminator_size=64,word_vector_dimensions=300,
+                 discriminator_lr=0.0004,generator_lr=0.0001,
+                 lambda_cycle=3,lambda_id_weight=0.4,
+                 clip_value=0.5,cn=4):
         self.save_folder = save_folder
         # Input shape
-        self.img_rows = 1
-        self.img_cols = 300
-        self.channels = 1
-        self.img_shape = (self.img_cols,)#, self.channels)
+        self.word_vector_dimensions = word_vector_dimensions
+        self.img_shape = (self.word_vector_dimensions,)#, self.channels)
         self.save_index = save_index
 
         # Number of filters in the first layer of G and D
-        self.gf = 32
-        self.df = 64
+        self.gf = generator_size
+        self.df = discriminator_size
 
         # Loss weights
-        self.lambda_cycle = 3                 # Cycle-consistency loss
-        self.lambda_id = 0.4 * self.lambda_cycle    # Identity loss
+        self.lambda_cycle = lambda_cycle                 # Cycle-consistency loss
+        self.lambda_id = lambda_id_weight * self.lambda_cycle    # Identity loss
 
-        d_lr = 0.0004
-        g_lr = 0.0001
-        cv = 0.5
-        cn = 4
+        d_lr = discriminator_lr
+        g_lr = generator_lr
+        cv = clip_value
+        cn = cn
         self.d_A = self.build_discriminator(name="word_vector_discriminator")
         self.d_B = self.build_discriminator(name="retrofitted_word_vector_discriminator")
+        
         def create_opt(lr):
             return Adam(lr, clipvalue=cv,clipnorm=cn)
+        
         self.d_A.compile(loss='mse',
             optimizer=create_opt(d_lr),
             metrics=['accuracy'])
@@ -103,21 +108,22 @@ class RetroCycleGAN():
         # Build the generators
         self.g_AB = self.build_generator(name="to_retro_generator")
         self.g_AB.summary()
+        plot_model(self.g_AB,show_shapes=True)
         self.g_BA = self.build_generator(name="from_retro_generator")
         self.g_BA.summary()
         # Input images from both domains
-        img_A = Input(shape=self.img_shape,name="plain_word_vector")
-        img_B = Input(shape=self.img_shape,name="retrofitted_word_vector")
+        unfit_wv = Input(shape=self.img_shape,name="plain_word_vector")
+        fit_wv = Input(shape=self.img_shape,name="retrofitted_word_vector")
 
         # Translate images to the other domain
-        fake_B = self.g_AB(img_A)
-        fake_A = self.g_BA(img_B)
+        fake_B = self.g_AB(unfit_wv)
+        fake_A = self.g_BA(fit_wv)
         # Translate images back to original domain
         reconstr_A = self.g_BA(fake_B)
         reconstr_B = self.g_AB(fake_A)
         # Identity mapping of images
-        img_A_id = self.g_BA(img_A)
-        img_B_id = self.g_AB(img_B)
+        unfit_wv_id = self.g_BA(unfit_wv)
+        fit_wv_id = self.g_AB(fit_wv)
 
         # For the combined model we will only train the generators
         self.d_A.trainable = False
@@ -128,10 +134,10 @@ class RetroCycleGAN():
         valid_B = self.d_B(fake_B)
 
         # Combined model trains generators to fool discriminators
-        self.combined = Model(inputs=[img_A, img_B],
+        self.combined = Model(inputs=[unfit_wv, fit_wv],
                               outputs=[ valid_A, valid_B,
                                         reconstr_A, reconstr_B,
-                                        img_A_id, img_B_id ],
+                                        unfit_wv_id, fit_wv_id ],
                               name="combinedmodel")
         self.combined.compile(loss=['mse', 'mse',
                                     'mae', 'mae',
@@ -139,6 +145,8 @@ class RetroCycleGAN():
                             loss_weights=[  1, 1,
                                             self.lambda_cycle, self.lambda_cycle,
                                             self.lambda_id, self.lambda_id ],
+                              #TODO ADD A CUSTOM LOSS THAT SIMPLY ADDS A
+                              # GENERALIZATION CONSTRAINT ON THE MAE
                             optimizer=create_opt(g_lr))
 
         plot_model(self.combined,to_file="RetroGAN.png",show_shapes=True)
@@ -195,7 +203,7 @@ class RetroCycleGAN():
         # f = Flatten()(t5)
         # f = UpSampling1D(size=2)(t5)
         d4 = dense(attn, self.gf*8,normalization=False)
-        output_img = Dense(300)(d4)
+        output_img = Dense(dimensionality)(d4)
         return Model(inpt, output_img,name=name)
 
     def build_discriminator(self,name):
@@ -237,26 +245,26 @@ class RetroCycleGAN():
 
     def train(self, epochs, dataset, batch_size=1, sample_interval=50,noisy_entries_num=5,batches=900,add_noise=False):
         testwords = ["human", "dog", "cat", "potato", "fat"]
-        fastext_version = find_in_dataset(testwords,dataset="fasttext_model/unfitted.hd5")
-        retro_version = find_in_dataset(testwords, dataset="fasttext_model/fitted-debias.hd5")
+        fastext_version = find_in_dataset(testwords, dataset="bert_models/bert_unfitted")
+        retro_version = find_in_dataset(testwords, dataset="bert_models/bert_fitted.hd5")
 
         start_time = datetime.datetime.now()
         # self.load_weights(extension="0")
         # self.load_weights()
         for idx, word in enumerate(testwords):
            print(word)
-           retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, 300))
+           retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, dimensionality))
            print(sklearn.metrics.mean_absolute_error(retro_version[idx],
-                                                     retro_representation.reshape((300,))))
+                                                     retro_representation.reshape((dimensionality,))))
         # Adversarial loss ground truths
         # fake = np.random.uniform(0.0,0.1,size=(batch_size,))
 
         X_train = Y_train = X_test = Y_test = None
 
         seed = 32
-        X_train, Y_train, X_test, Y_test = load_noisiest_words_dataset(dataset,
-                                                                       save_folder="fasttext_model/",
-                                                                       threshold=0.95,
+        X_train, Y_train= load_noisiest_words_dataset(dataset,
+                                                                       save_folder="bert_models/",
+                                                                       threshold=0.735,
                                                                        cache=True)
         print("Done")
         # X_train, Y_train, X_test, Y_test = load_training_input_3(seed=seed,test_split=0.001,dataset=dataset)
@@ -271,7 +279,7 @@ class RetroCycleGAN():
                 imgs_B = Y_train[ixs]
                 yield imgs_A,imgs_B
         for epoch in range(epochs+1):
-            noise = np.random.normal(size=(batch_size,300),scale=0.01)
+            noise = np.random.normal(size=(batch_size,dimensionality),scale=0.01)
             for batch_i, (imgs_A, imgs_B) in enumerate(load_batch(batch_size)):
                 # ----------------------
                 #  Train Discriminators
@@ -344,9 +352,9 @@ class RetroCycleGAN():
                 # Check at end of epoch!
                 for idx, word in enumerate(testwords):
                     print(word)
-                    retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, 300))
+                    retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, dimensionality))
                     print(sklearn.metrics.mean_absolute_error(retro_version[idx],
-                                                              retro_representation.reshape((300,))))
+                                                              retro_representation.reshape((dimensionality,))))
                 self.save_model()
             except Exception as e:
                 print(e)
@@ -365,33 +373,47 @@ class RetroCycleGAN():
 
 if __name__ == '__main__':
     config = tf.ConfigProto()
+    global dimensionality
+    dimensionality = 768
     config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
     # config.log_device_placement = True  # to log device placement (on which device the operation ran)
     # (nothing gets printed in Jupyter, only if you run it standalone)
     sess = tf.Session(config=config)
     set_session(sess)  # set this TensorFlow session as the default session for Keras
-
-    save_folder = "fasttext_model/trained_retrogan/"+str(datetime.datetime.now())
+    postfix = "bert"
+    save_folder = "bert_models/trained_retrogan/"+str(datetime.datetime.now())+postfix
     if not os.path.exists(save_folder):
         os.makedirs(save_folder,exist_ok=True)
 
     rcgan = RetroCycleGAN(save_folder=save_folder)
+    # X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=32, sample_interval=100,
+    #                                                dataset={"original":"unfitted.hd5",
+    #                                                                     "retrofitted":"fitted.hd5",
+    #                                                         "directory":"./fasttext_model/"})
+    ds = {"original":"bert_unfitted",
+                                                                        "retrofitted":"bert_fitted.hd5",
+                                                            "directory":"./bert_models/"}
+    # load_noisiest_words_dataset(ds,
+    #                             save_folder="bert_models/",
+    #                             threshold=0.735,
+    #                             cache=False)
     X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=32, sample_interval=100,
-                                                   dataset={"original":"unfitted.hd5",
-                                                                        "retrofitted":"fitted.hd5",
-                                                            "directory":"./fasttext_model/"})
+                                                   dataset=ds)
     # rcgan.combined.load_weights("combined_model")
     # exit()
-    # rcgan.g_AB.load_weights("toretro")
+    rcgan.load_weights()
     # data = pickle.load(open('training_testing.data', 'rb'))
     testwords = ["human","dog","cat","potato","fat"]
 
-    fastext_version = find_in_dataset(testwords,dataset="fasttext_model/unfitted.hd5")
+    fastext_version = find_in_dataset(testwords,dataset="bert_models/bert_unfitted")
     print(fastext_version)
-    retro_version = find_in_dataset(testwords,dataset="fasttext_model/fitted.hd5")
+    retro_version = find_in_dataset(testwords,dataset="bert_models/bert_fitted.hd5")
     print(retro_version)
     # exit()
+    tools.datasets = {'bert':["bert_unfitted","bert_fitted.hd5"]}
+    tools.directory = ds["directory"]
     for idx,word in enumerate(testwords):
         print(word)
-        retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, 300))
-        print(sklearn.metrics.mean_absolute_error(retro_version[idx], retro_representation.reshape((300,))))
+        retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, dimensionality))
+        tools.find_closest_in_dataset(retro_representation, dataset="bert_models/bert_fitted.hd5",limit=400000)
+        print(sklearn.metrics.mean_absolute_error(retro_version[idx], retro_representation.reshape((dimensionality,))))

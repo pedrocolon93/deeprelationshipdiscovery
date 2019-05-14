@@ -7,6 +7,7 @@ from tensorflow import Session, Graph
 import CNQuery
 from flask import request
 
+import tools
 from deep_relationship_discovery import load_model_ours, normalize_outputs, relations
 from tools import find_in_dataset, find_closest_in_dataset
 from flask_cors import CORS
@@ -26,11 +27,13 @@ def get_neighbors():
     try:
         print("Checking neighbors")
         concept_to_explore = request.json["concept"]
-        amount = request.json["amount"]
+        amount = int(request.json["amount"])
         print("for",concept_to_explore)
         concept_to_explore_vec = find_in_dataset([concept_to_explore],retro_e)
         print(concept_to_explore_vec)
-        neighbors,_ = find_closest_in_dataset(concept_to_explore_vec,retro_e,n_top=amount,limit=100000)
+        print("Finding the neighbors")
+        neighbors,_ = find_closest_in_dataset(concept_to_explore_vec,retro_e,n_top=int(amount),limit=None)
+        print("Done")
         print(neighbors)
     except Exception as e:
         print(e)
@@ -60,8 +63,8 @@ def get_inferred_relations():
     end = request.json["end"]
     rel = request.json["rel"]
     start_vec,end_vec = find_in_dataset([start,end], retro_e)
-    start_vec = start_vec.reshape(1,300)
-    end_vec = end_vec.reshape(1,300)
+    start_vec = start_vec.reshape(1,tools.dimensionality)
+    end_vec = end_vec.reshape(1,tools.dimensionality)
     graph1 = Graph()
     with graph1.as_default():
         session1 = Session()
@@ -84,8 +87,10 @@ def get_available_models():
 
 
 if __name__ == '__main__':
-    retroembeddings_path = '../trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5'
+    tools.dimensionality=300
+    retroembeddings_path = '../trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5clean'
     retro_e = pd.read_hdf(retroembeddings_path,'mat')
+    print(retro_e)
     global drd_models_path
     drd_models_path = "../trained_models/deepreldis/2019-04-2314:43:00.000000"
     global normalizers

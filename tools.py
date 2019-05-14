@@ -1,17 +1,16 @@
-import gc
 import math
 import multiprocessing
 import operator
-
 import os
 import pickle
 from multiprocessing.pool import Pool
+
+import fastText
+import gc
+import numpy as np
 import pandas as pd
-from conceptnet5.api import standardize_uri
 from conceptnet5.nodes import standardized_concept_uri
 from keras import backend as K
-import numpy as np
-from scipy.spatial.distance import cosine
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.contrib.learn.python.learn.estimators._sklearn import train_test_split
@@ -23,7 +22,6 @@ directory = './retrogan/'
 original = 'crawl-300d-2M.h5'
 # retrofitted = 'fasttext-opensubtitles-retrofit.h5'
 retrofitted = 'crawl-300d-2M-retrofit.h5'
-
 
 
 def process_line(line):
@@ -131,6 +129,29 @@ def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
     # print("Size of common vocabulary:" + str(len(common_vocabulary)))
     return common_vectors_train, common_retro_vectors_train, common_vectors_test, common_retro_vectors_test
 
+def mult(tup):
+    return tup[0]*tup[1]
+thread_amount = 8
+pool = Pool(thread_amount)
+
+def dot_product2_mp(v1, v2):
+    it = [x for x in zip(list(v1.reshape(dimensionality)), list(v2.reshape(dimensionality)))]
+
+    res = pool.map(mult,it)
+    # pool.join()
+    res = sum(res)
+    # print(res)
+    return res
+
+def dot_product2(v1,v2):
+    return sum(map(operator.mul,v1.reshape(dimensionality),v2.reshape(dimensionality)))
+
+def vector_cos5(v1, v2):
+    prod = dot_product2(v1, v2)
+    len1 = math.sqrt(dot_product2(v1, v1))
+    len2 = math.sqrt(dot_product2(v2, v2))
+    return prod / (len1 * len2)
+
 def load_noisiest_words(seed=42, test_split=0.1, dataset="fasttext"):
     global original, retrofitted
     if os.path.exists("filtered_x") and os.path.exists("filtered_y") and \
@@ -157,15 +178,6 @@ def load_noisiest_words(seed=42, test_split=0.1, dataset="fasttext"):
     # Filter out words that have not changed too much.
     cns = []
 
-    def dot_product2(v1, v2):
-        return sum(map(operator.mul, v1, v2))
-
-    def vector_cos5(v1, v2):
-        prod = dot_product2(v1, v2)
-        len1 = math.sqrt(dot_product2(v1, v1))
-        len2 = math.sqrt(dot_product2(v2, v2))
-        return prod / (len1 * len2)
-
     print(len(o.values))
     testindexes = []
     for i in range(len(o.values)):
@@ -174,7 +186,7 @@ def load_noisiest_words(seed=42, test_split=0.1, dataset="fasttext"):
             print(i)
         x = o.iloc[i,:]
         y = r_sub.iloc[i,:]
-        cn = vector_cos5(x, y)
+        cn = cosine_similarity(x, y)
         if cn<0.95:
             cns.append(i)
         else:
@@ -191,16 +203,15 @@ def load_noisiest_words(seed=42, test_split=0.1, dataset="fasttext"):
 
 def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95):
     global original, retrofitted
-    if os.path.exists(os.path.join(save_folder,"filtered_x")) and os.path.exists(os.path.join(save_folder,"filtered_y")) and \
-            os.path.exists(os .path.join(save_folder,"filtered_x_test")) and os.path.exists(os.path.join(save_folder,"filtered_x_test"))\
+    if os.path.exists(os.path.join(save_folder,"filtered_x")) and os.path.exists(os.path.join(save_folder,"filtered_y"))\
             and cache:
         print("Reusing cache")
         X_train = pd.read_hdf(os.path.join(save_folder,"filtered_x"), 'mat', encoding='utf-8')
         Y_train = pd.read_hdf(os.path.join(save_folder,"filtered_y"),'mat',encoding='utf-8')
-        X_test = pd.read_hdf(os.path.join(save_folder,"filtered_x_test"), "mat",encoding='utf-8')
-        Y_test = pd.read_hdf(os.path.join(save_folder,"filtered_y_test"), "mat",encoding='utf-8')
+        # X_test = pd.read_hdf(os.path.join(save_folder,"filtered_x_test"), "mat",encoding='utf-8')
+        # Y_test = pd.read_hdf(os.path.join(save_folder,"filtered_y_test"), "mat",encoding='utf-8')
 
-        return np.array(X_train.values), np.array(Y_train.values), np.array(X_test.values), np.array(Y_test.values)
+        return np.array(X_train.values), np.array(Y_train.values)#, np.array(X_test.values), np.array(Y_test.values)
 
     original = dataset["original"]
     retrofitted = dataset["retrofitted"]
@@ -224,30 +235,40 @@ def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder=".
         prod = dot_product2(v1, v2)
         len1 = math.sqrt(dot_product2(v1, v1))
         len2 = math.sqrt(dot_product2(v2, v2))
+        if len1*len2==0:
+            return prod/((len1*len2)+1)
         return prod / (len1 * len2)
 
     print(len(o.values))
     testindexes = []
+    tot = 0
+    it = 0
     for i in range(len(o.values)):
-        if i%100000==0 and i!=0:
-            # break
+        if i%10000==0 and i!=0:
+            print(len(cns),len(testindexes))
             print(i)
         x = o.iloc[i,:]
         y = r_sub.iloc[i,:]
-        cn = vector_cos5(x, y)
+        cn = cosine_similarity(x, y)
+        tot+=cn
+        it+=1
         if cn<threshold:
             cns.append(i)
         else:
             testindexes.append(i)
+    print("avg",tot/it)
     X_train = o.iloc[cns, :]
     Y_train = r_sub.iloc[cns, :]
+    print("Dumping training")
     X_train.to_hdf(os.path.join(save_folder,"filtered_x"), "mat")
     Y_train.to_hdf(os.path.join(save_folder,"filtered_y"),"mat")
     X_test = o.iloc[testindexes,:]
     Y_test = r_sub.iloc[testindexes,:]
+    print("Dumping testing")
     X_test.to_hdf(os.path.join(save_folder,"filtered_x_test"), "mat")
     Y_test.to_hdf(os.path.join(save_folder,"filtered_y_test"), "mat")
-    return np.array(X_train.values),np.array(Y_train.values), np.array(X_test.values),np.array(Y_test.values)
+    print("Returning")
+    return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
 
 
 def load_training_input_2(limit=10000,normalize=True, seed = 42,test_split=0.1):
@@ -327,12 +348,12 @@ def find_cross_closest(vec1, vec2, n_top, closest=0,verbose=False):
         #explore the dot between vec1 and synonyms of vec2
         closest_words, closest_vecs = find_closest_2(vec2,n_top=n_top,dataset='numberbatch')
         results = [(idx, item) for idx, item in enumerate(
-            list(map(lambda x: cosine_similarity( np.array(x).reshape(1, 300), np.array(vec1).reshape(1, 300))[0][0], closest_vecs)))]
+            list(map(lambda x: cosine_similarity( np.array(x).reshape(1, dimensionality), np.array(vec1).reshape(1, dimensionality))[0][0], closest_vecs)))]
     else:
         #explore the dot between vec2 and synonyms of vec1
         closest_words, closest_vecs = find_closest_2(vec1,n_top=n_top,dataset='numberbatch')
         results = [(idx, item) for idx, item in enumerate(
-            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, 300), np.array(vec2).reshape(1, 300))[0][0], closest_vecs)))]
+            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality), np.array(vec2).reshape(1, dimensionality))[0][0], closest_vecs)))]
     sorted_results = sorted(results, key=lambda x: x[1], reverse=True)
     final_n_results = []
     final_n_results_words = []
@@ -406,7 +427,7 @@ def find_closest(pred_y,n_top=5,retro=True,skip=0,retrowords=None,retrovectors=N
     # t1 = retrovectors[0].reshape(1,300)
     # t2 = pred_y.reshape(1,300)
     # res = cosine_similarity(t1,t2)
-    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300), pred_y.reshape(1,300))[0][0],retrovectors)))]
+    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality), pred_y.reshape(1,dimensionality))[0][0],retrovectors)))]
     sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
     final_n_results = []
     final_n_results_words = []
@@ -421,6 +442,7 @@ def find_closest(pred_y,n_top=5,retro=True,skip=0,retrowords=None,retrovectors=N
     return final_n_results_words,final_n_results
 
 o = None
+dimensionality = 768
 def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
                    , dataset="fasttext", keep_o=False):
     original, retrofitted = datasets[dataset]
@@ -439,7 +461,7 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
         o = o.loc[[x for x in o.index if '/c/en/' in x and "." not in x], :]
         print("Done")
     # print(o)
-    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300), pred_y.reshape(1,300)),np.array(o.iloc[:,:]))))]
+    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality), pred_y.reshape(1,dimensionality)),np.array(o.iloc[:,:]))))]
     sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
     final_n_results = []
     final_n_results_words = []
@@ -461,6 +483,7 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
     return final_n_results_words,final_n_results
 
 def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True,limit=None):
+    print("Finding closest")
     if type(dataset) is str:
         o = pd.read_hdf(dataset, 'mat', encoding='utf-8')
     elif type(dataset) is pd.DataFrame:
@@ -468,13 +491,13 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True,limit=None):
     else:
         raise Exception("Neither string nor dataframe provided as dataset")
     if limit is None:
-        results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,300),
-                                                                                         pred_y.reshape(1,300)),
+        results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality),
+                                                                                         pred_y.reshape(1,dimensionality)),
                                                              np.array(o.iloc[:,:])
                                                              )))]
     else:
-        results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, 300),
-                                                                                               pred_y.reshape(1, 300)),
+        results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, dimensionality),
+                                                                                               pred_y.reshape(1, dimensionality)),
                                                                    np.array(o.iloc[0:limit, :])
                                                                    )))]
     sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
@@ -507,9 +530,33 @@ def find_in_retrofitted(testwords, return_words=False, dataset="fasttext"):
     asarray1 = np.array(r.loc[["/c/en/" + x for x in testwords], :])
     return asarray1
 
+def check_index_in_dataset(testwords, dataset):
+    results = [True if standardized_concept_uri("en",word) in dataset.index else False for word in testwords]
+    return results
+
+ft_model = None
+def generate_fastext_embedding(word,keep_model_in_memory=True):
+    global ft_model
+    standardized_form = standardized_concept_uri("en",word).replace("/c/en/","")
+    if ft_model is None:
+        ft_model = fastText.load_model("fasttext_model/cc.en.300.bin")
+    wv = ft_model.get_word_vector(standardized_form)
+    if not keep_model_in_memory:
+        del ft_model
+        ft_model=None
+        gc.collect()
+    return wv
+
+def get_retrofitted_embedding(plain_embedding,retrogan_to_rfe_generator,dimensionality=300):
+    re = np.array(retrogan_to_rfe_generator.predict(plain_embedding.reshape(1,dimensionality))).reshape((dimensionality,))
+    return re
+
+
 def find_in_dataset(testwords,dataset):
+    read = False
     if type(dataset) is str:
         r = pd.read_hdf(dataset, 'mat', encoding='utf-8')
+        read = True
     elif type(dataset) is pd.DataFrame:
         r = dataset
     else:
@@ -518,5 +565,8 @@ def find_in_dataset(testwords,dataset):
     # print(asarray1)
     asarray1 = np.array(asarray1)
     # print(asarray1)
+    if read:
+        del r
+    gc.collect()
     return asarray1
 
