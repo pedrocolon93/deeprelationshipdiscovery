@@ -1,5 +1,6 @@
 # Load library
 import re
+from random import shuffle
 
 import spacy
 from keras.engine.saving import load_model
@@ -49,9 +50,9 @@ def clean_file(file_contents):
 def generate_kg(clean_file_contents):
     print(len(clean_file_contents))
     clean_file_contents = list(set(clean_file_contents))
-    drd_models_path = "trained_models/deepreldis/2019-04-2314:43:00.000000"
-    target_file_loc = 'trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5clean'
-    trained_model_path = "trained_models/retrogans/2019-04-0721:33:44.223104/toretrogen.h5"
+    drd_models_path = "../trained_models/deepreldis/2019-04-2314:43:00.000000"
+    target_file_loc = '../trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5clean'
+    trained_model_path = "../trained_models/retrogans/2019-04-0721:33:44.223104/toretrogen.h5"
     # Load retrogan
     retrogan = load_model(trained_model_path,
                           custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer},
@@ -73,7 +74,7 @@ def generate_kg(clean_file_contents):
         if not val:
             missing_text = clean_file_contents[i]
             # print("Missing:",missing_text)
-            we = tools.generate_fastext_embedding(missing_text)
+            we = tools.generate_fastext_embedding(missing_text,ft_dir="../fasttext_model/cc.en.300.bin")
             # print("We:",we)
             index = tools.standardized_concept_uri("en",missing_text)
             # print(index)
@@ -113,9 +114,13 @@ def generate_kg(clean_file_contents):
             print("We now have",len(triples))
         except Exception as e:
             print(e)
-    print(triples)
+    list_triples = [list(x) for x in triples]
+    for i in range(len(list_triples)):
+        list_triples[i][2]=float(list_triples[i][2])
+
+    # print(triples)
     cutoff = 0.7
-    res = [x for x in filter(lambda x: 1>x[2]>cutoff ,triples)]
+    res = [x for x in filter(lambda x: 1>x[2]>cutoff,list_triples)]
     print(res)
 
     # G = nx.Graph()
@@ -123,16 +128,17 @@ def generate_kg(clean_file_contents):
     #     G.add_node(concept)
     # for edge in res:
     #     G.add_edge(edge[0],edge[1],weight=edge[2],label=edge[3])
-
+    #
     # import matplotlib.pyplot as plt
-    # plt.figure(figsize=(20, 10))
-    # pos = nx.spring_layout(G, k=0.25, iterations=200)
+    # plt.figure(figsize=(400, 200))
+    # pos = nx.spring_layout(G, k=0.40, iterations=200)
     # nx.draw(G,pos, with_labels=True)
     # nx.draw_networkx_edge_labels(G, pos)
     # plt.savefig('labels.png')
 
     # input("Hello")
-    return res
+    print(len(res))
+    return res[0:1000]
 
 if __name__ == '__main__':
     filename = "WebPages/travel_ny_bos.txt"

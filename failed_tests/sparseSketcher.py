@@ -14,7 +14,7 @@ from failed_tests.matrixSketcherBase import MatrixSketcherBase
 # inputs: matrix is input matrix, ell is number of desired right singular vectors
 # outputs: transpose of approximated top ell singular vectors, and first ell singular values
 from failed_tests.pmf import convert_to_coo_sparse_matrix
-from vectorcomparer import find_vectors
+from failed_tests.vectorcomparer import find_vectors
 
 
 def simIter(matrix, ell):

@@ -2,6 +2,8 @@ from urllib.parse import urlencode
 
 import requests
 
+import tools
+
 
 class CNQuery():
     def __init__(self):
@@ -26,7 +28,7 @@ class CNQuery():
         if "/c/en" in node:
             return node
         else:
-            return "/c/en/"+node
+            return tools.standardized_concept_uri("en",node)
     def query(self, node1, node2, relation='/r/Desires'):
         getvars_dict = {}
         getvars_dict['node'] = self.add_identifier(node1)
@@ -38,11 +40,14 @@ class CNQuery():
         getVars = getvars_dict
         url = self.base_url+"query?"
         res = url+urlencode(getVars)
-        while True:
+        i = 0
+        retry = 4
+        while True or i>retry:
             try:
                 urlres = requests.get(res)
                 break
             except:
+                i+=1
                 pass
         # print(urlres)
         urlres = urlres.json()

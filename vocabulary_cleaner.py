@@ -23,5 +23,5 @@ def cleanup_vocabulary_nb_based(numberbatch_file_loc,target_file_loc,replace=Fal
 
 if __name__ == '__main__':
     numberbatch_file_loc = 'retrogan/mini.h5'
-    target_file_loc = 'trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5'
+    target_file_loc = 'fasttext_model/unfitted.hd5'
     cleanup_vocabulary_nb_based(numberbatch_file_loc,target_file_loc)

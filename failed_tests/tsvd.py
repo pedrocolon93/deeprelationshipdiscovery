@@ -5,7 +5,7 @@ from sklearn.decomposition import TruncatedSVD
 
 from failed_tests.cnscraper import split_features, load_local_edgelist
 from failed_tests.pmf import convert_to_coo_sparse_matrix
-from vectorcomparer import find_vectors
+from failed_tests.vectorcomparer import find_vectors
 
 print("Loading edges")
 rss = load_local_edgelist(limit=100000)

@@ -20,10 +20,10 @@ from tqdm import tqdm
 from retrogan_trainer import attention, ConstMultiplierLayer
 
 relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires",
-             "/r/AtLocation",
+             "/r/AtLocation"]
              # , "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
              # "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
-             "/r/Causes", "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails"]
+             # "/r/Causes", "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails"]
              # "/r/MannerOf", "/r/RelatedTo",
              # "/r/LocatedNear", "/r/HasContext", "/r/FormOf", "/r/SimilarTo", "/r/EtymologicallyRelatedTo",
              # "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
@@ -126,8 +126,7 @@ def create_model():
     return model_dict#, prob_model_dict
 
 
-def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd"):
-    retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
+def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd",cutoff=1.0):
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
     training_data_dict = {}
     training_func_dict = {}
@@ -201,7 +200,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                     if 'the label' not in str(e):
                         tasks_completed[output] = True
             if False not in tasks_completed.values() or \
-                    len([x for x in tasks_completed.values() if x]) / len(tasks_completed.values()) > 0.6:
+                    len([x for x in tasks_completed.values() if x]) / len(tasks_completed.values()) > cutoff:
                 for output in exclude:
                     training_func_dict[output] = load_batch(output)
                 break
@@ -293,7 +292,6 @@ def normalize_outputs(model, save_folder="./drd", use_cache=True):
     y = []
 
     # Load our data
-    retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "iphone")]).reshape(1, 300)
     for i in range(len(retrofitted_embeddings.index)):
@@ -343,10 +341,11 @@ def load_model_ours(save_folder="./drd", model_name="all",probability_models=Fal
     #                                         custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
     return model_dict
 
+# retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
+retroembeddings = "trained_models/retroembeddings/2019-05-15 11:47:52.802481/retroembeddings.h5"
 
 if __name__ == '__main__':
     # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
-    retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     global w1, w2, w3
     w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "phone")]).reshape(1, 300)

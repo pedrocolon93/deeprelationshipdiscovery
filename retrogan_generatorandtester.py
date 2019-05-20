@@ -94,22 +94,25 @@ if __name__ == '__main__':
 
 
     # Software parameters
-    trained_model_path = "trained_models/retrogans/2019-05-12 06:18:32.952462bert/toretrogen.h5"
+    trained_model_path = "trained_models/retrogans/2019-05-14 22:55:42.280715ft/toretrogen.h5"
     retroembeddings_folder = "./trained_models/retroembeddings/"+str(datetime.datetime.now())
+    clean = False
+
     try:
         os.mkdir(retroembeddings_folder)
     except:
         pass
     retrogan_word_vector_output_path = retroembeddings_folder+"/"+"retroembeddings.h5"
     dataset = 'mine'
-    tools.directory = "bert_models/"
-    dimensionality = 768
-    tools.datasets["mine"] = ["bert_unfitted","bert_fitted.hd5"]
-
-    numberbatch_file_loc = 'retrogan/mini.h5'
-    target_file_loc = tools.directory+tools.datasets["mine"][0]
-    cleanup_vocabulary_nb_based(numberbatch_file_loc, target_file_loc)
-    tools.datasets["mine"][0]+="clean"
+    tools.directory = "fasttext_model/"
+    dimensionality = 300
+    tools.dimensionality = dimensionality
+    tools.datasets["mine"] = ["unfitted.hd5clean","fitted-debias.hd5clean"]
+    if clean:
+        numberbatch_file_loc = 'retrogan/mini.h5'
+        target_file_loc = tools.directory+tools.datasets["mine"][0]
+        cleanup_vocabulary_nb_based(numberbatch_file_loc, target_file_loc)
+        tools.datasets["mine"][0]+="clean"
 
     print("Dataset:",tools.datasets[dataset])
     plain_word_vector_path = plain_retrofit_vector_path = tools.directory
@@ -125,16 +128,16 @@ if __name__ == '__main__':
     to_retro_converter.load_weights(trained_model_path)
 
     # Generate retrogan embeddings
-    # print("Generating embeddings")
-    # retro_df = pandas.DataFrame()
+    print("Generating embeddings")
+    retro_df = pandas.DataFrame()
     #
-    # word_embeddings = pd.read_hdf(plain_word_vector_path, 'mat', encoding='utf-8')
+    word_embeddings = pd.read_hdf(plain_word_vector_path, 'mat', encoding='utf-8')
     # # word_embeddings = word_embeddings.loc[[x for x in word_embeddings.index if "." not in x]]
-    # vals = np.array(to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, dimensionality)),verbose=1))
-    # retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.index)
-    # retro_word_embeddings.to_hdf(retrogan_word_vector_output_path, "mat")
-    retrogan_word_vector_output_path = "trained_models/retroembeddings/2019-05-13 17:08:01.102596/retroembeddings.h5"
-    retro_word_embeddings = pd.read_hdf(retrogan_word_vector_output_path,"mat")
+    vals = np.array(to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, dimensionality)),verbose=1))
+    retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.index)
+    retro_word_embeddings.to_hdf(retrogan_word_vector_output_path, "mat")
+    # retrogan_word_vector_output_path = "trained_models/retroembeddings/2019-05-15 01:00:00.000000/retroembeddings.h5"
+    # retro_word_embeddings = pd.read_hdf(retrogan_word_vector_output_path,"mat")
     # Specific word tests
     print("The dataset is ",dataset)
     testwords = ["human","dog","cat","potato","fat"]

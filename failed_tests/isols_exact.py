@@ -15,7 +15,7 @@ from failed_tests.pmf import convert_to_coo_sparse_matrix
 
   
 # sparse frequent directions sketcher
-from vectorcomparer import find_vectors
+from failed_tests.vectorcomparer import find_vectors
 
 
 def Orthogonal(next_x, Q_j):

@@ -4,7 +4,7 @@ import operator
 import os
 import pickle
 from multiprocessing.pool import Pool
-
+import faiss
 import fastText
 import gc
 import numpy as np
@@ -249,7 +249,7 @@ def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder=".
             print(i)
         x = o.iloc[i,:]
         y = r_sub.iloc[i,:]
-        cn = cosine_similarity(x, y)
+        cn = vector_cos5(x, y)
         tot+=cn
         it+=1
         if cn<threshold:
@@ -372,6 +372,71 @@ def find_cross_closest(vec1, vec2, n_top, closest=0,verbose=False):
     # return final_n_results_words,final_n_results,final_n_results_weights
     return final_n_results_words,final_n_results
 
+def find_cross_closest_dataset(vec1, vec2, projection_count=10,projection_cloud_count=20,n_top=200 ,closest=0,verbose=False,dataset=None):
+    # TODO SKIP THE NEIGHBORS OF THE ONE WE DO NOT COMPARE AGAINST
+    results = []
+    # find the projection of one concept unto the other
+    if closest == 0:
+        # explore the dot between vec1 and synonyms of vec2
+        closest_words, closest_vecs = find_closest_in_dataset(vec2, n_top=n_top, dataset=dataset)
+
+        results = [(idx, item) for idx, item in enumerate(
+            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality),
+                                                 np.array(vec1).reshape(1, dimensionality))[0][0],
+                     closest_vecs)))]
+    else:
+        # explore the dot between vec2 and synonyms of vec1
+        closest_words, closest_vecs = find_closest_in_dataset(vec1, n_top=n_top, dataset=dataset)
+        results = [(idx, item) for idx, item in enumerate(
+            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality),
+                                                 np.array(vec2).reshape(1, dimensionality))[0][0],
+                     closest_vecs)))]
+    # list of ordered projections this result is the cosine distance ordering of the projection of one concept
+    # unto the cloud of concepts of the other
+    # c1 ->  #cloud c2#
+    # Has the amount of the cloud in c2
+    sorted_results = sorted(results, key=lambda x: x[1], reverse=True)
+
+    final_n_results = []
+    final_n_results_words = []
+
+    print("Finding the cloud of concepts around the cross closest")
+    for res_idx, res in enumerate(sorted_results):
+        if res_idx > projection_count:
+            break
+        if closest_words[sorted_results[res_idx][0]] in final_n_results_words:
+            projection_count += 1
+            continue
+
+        final_n_results_words.append(closest_words[sorted_results[res_idx][0]])
+        final_n_results.append(np.array(closest_vecs[sorted_results[res_idx][0]]))
+        # now add the ones around that
+        fin_aroud_vec = np.array(closest_vecs[sorted_results[res_idx][0]])
+        # the projection cloud
+        projection_cloud_words, projection_cloud_vecs = find_closest_in_dataset(fin_aroud_vec,
+                                                                                n_top=projection_cloud_count,
+                                                                                dataset=dataset,
+                                                                                )
+        ordered_projection_results = [(idx, item) for idx, item in enumerate(
+            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality),
+                                                 fin_aroud_vec.reshape(1, dimensionality))[0][0],
+                     projection_cloud_vecs)))]
+        for pcres_idx, pcres in enumerate(ordered_projection_results):
+            print(res_idx)
+            print(sorted_results[res_idx])
+            print("Working in", closest_words[sorted_results[res_idx][0]])
+            print(res, "Cloud concept")
+            print(ordered_projection_results[pcres_idx])
+            print(projection_cloud_words[ordered_projection_results[pcres_idx][0]])
+            print(pcres)
+            if projection_cloud_words[ordered_projection_results[pcres_idx][0]] not in final_n_results_words:
+                final_n_results_words.append(projection_cloud_words[ordered_projection_results[pcres_idx][0]])
+                final_n_results.append(np.array(projection_cloud_vecs[ordered_projection_results[pcres_idx][0]]))
+    if verbose: print("Finally", final_n_results_words)
+
+    # return final_n_results_words,final_n_results,final_n_results_weights
+    return final_n_results_words, final_n_results
+
 def find_cross_closest_2(vec1, vec2, projection_count=10,projection_cloud_count=20,n_top=200 ,closest=0,verbose=False):
     #TODO SKIP THE NEIGHBORS OF THE ONE WE DO NOT COMPARE AGAINST
     results = []
@@ -490,27 +555,41 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True,limit=None):
         o = dataset
     else:
         raise Exception("Neither string nor dataframe provided as dataset")
-    if limit is None:
-        results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality),
-                                                                                         pred_y.reshape(1,dimensionality)),
-                                                             np.array(o.iloc[:,:])
-                                                             )))]
-    else:
-        results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, dimensionality),
-                                                                                               pred_y.reshape(1, dimensionality)),
-                                                                   np.array(o.iloc[0:limit, :])
-                                                                   )))]
-    sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
-    final_n_results = []
-    final_n_results_words = []
-    for i in range(n_top):
-        if(verbose):
-            print(o.index[sorted_results[i][0]])
-        final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
-        final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
+    # if limit is None:
+    #     results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality),
+    #                                                                                      pred_y.reshape(1,dimensionality)),
+    #                                                          np.array(o.iloc[:,:])
+    #                                                          )))]
+    # else:
+    #     results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, dimensionality),
+    #                                                                                            pred_y.reshape(1, dimensionality)),
+    #                                                                np.array(o.iloc[0:limit, :])
+    #                                                                )))]
+    # sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
+    # final_n_results = []
+    # final_n_results_words = []
+    # for i in range(n_top):
+    #     if(verbose):
+    #         print(o.index[sorted_results[i][0]])
+    #     final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
+    #     final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
+    #
+    # del o,results,sorted_results
+    # gc.collect()
 
-    del o,results,sorted_results
-    gc.collect()
+    testvec = find_in_dataset(["cat"], o)
+    print(testvec)
+    index = faiss.IndexFlatIP(dimensionality)  # build the index
+    print(index.is_trained)
+    index.add(o.values.astype(np.float32))  # add vectors to the index
+    print(index.ntotal)
+    D, I = index.search(testvec.astype(np.float32), n_top)  # sanity check
+    print(I)
+    print(D)
+    print(o.iloc[I[0]])
+    final_n_results = o.iloc[I[0]].values
+    final_n_results_words = o.index[I[0]].values
+
     return final_n_results_words,final_n_results
 
 
@@ -535,11 +614,11 @@ def check_index_in_dataset(testwords, dataset):
     return results
 
 ft_model = None
-def generate_fastext_embedding(word,keep_model_in_memory=True):
+def generate_fastext_embedding(word,keep_model_in_memory=True,ft_dir="fasttext_model/cc.en.300.bin"):
     global ft_model
     standardized_form = standardized_concept_uri("en",word).replace("/c/en/","")
     if ft_model is None:
-        ft_model = fastText.load_model("fasttext_model/cc.en.300.bin")
+        ft_model = fastText.load_model(ft_dir)
     wv = ft_model.get_word_vector(standardized_form)
     if not keep_model_in_memory:
         del ft_model
@@ -561,7 +640,11 @@ def find_in_dataset(testwords,dataset):
         r = dataset
     else:
         raise Exception("Neither string nor dataframe provided as dataset")
-    asarray1 = r.loc[[standardized_concept_uri('en',x) for x in testwords], :]
+    def get_uri(name):
+        if "/c/en/" in name:
+            return name
+        else: return standardized_concept_uri('en', name)
+    asarray1 = r.loc[[get_uri(x) for x in testwords], :]
     # print(asarray1)
     asarray1 = np.array(asarray1)
     # print(asarray1)

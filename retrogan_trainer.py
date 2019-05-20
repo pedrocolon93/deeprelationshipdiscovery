@@ -245,8 +245,8 @@ class RetroCycleGAN():
 
     def train(self, epochs, dataset, batch_size=1, sample_interval=50,noisy_entries_num=5,batches=900,add_noise=False):
         testwords = ["human", "dog", "cat", "potato", "fat"]
-        fastext_version = find_in_dataset(testwords, dataset="bert_models/bert_unfitted")
-        retro_version = find_in_dataset(testwords, dataset="bert_models/bert_fitted.hd5")
+        fastext_version = find_in_dataset(testwords, dataset=dataset["directory"]+dataset["original"])
+        retro_version = find_in_dataset(testwords, dataset=dataset["directory"]+dataset["retrofitted"])
 
         start_time = datetime.datetime.now()
         # self.load_weights(extension="0")
@@ -263,9 +263,9 @@ class RetroCycleGAN():
 
         seed = 32
         X_train, Y_train= load_noisiest_words_dataset(dataset,
-                                                                       save_folder="bert_models/",
-                                                                       threshold=0.735,
-                                                                       cache=True)
+                                                                       save_folder="fasttext_model/",
+                                                                       threshold=0.90,
+                                                                       cache=False)
         print("Done")
         # X_train, Y_train, X_test, Y_test = load_training_input_3(seed=seed,test_split=0.001,dataset=dataset)
 
@@ -374,46 +374,39 @@ class RetroCycleGAN():
 if __name__ == '__main__':
     config = tf.ConfigProto()
     global dimensionality
-    dimensionality = 768
+    dimensionality = 300
+    tools.dimensionality=dimensionality
     config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
     # config.log_device_placement = True  # to log device placement (on which device the operation ran)
     # (nothing gets printed in Jupyter, only if you run it standalone)
     sess = tf.Session(config=config)
     set_session(sess)  # set this TensorFlow session as the default session for Keras
-    postfix = "bert"
-    save_folder = "bert_models/trained_retrogan/"+str(datetime.datetime.now())+postfix
+    postfix = "ft"
+    save_folder = "fasttext_model/trained_retrogan/"+str(datetime.datetime.now())+postfix
     if not os.path.exists(save_folder):
         os.makedirs(save_folder,exist_ok=True)
-
     rcgan = RetroCycleGAN(save_folder=save_folder)
+    ds = {"original":"unfitted.hd5clean",
+                                                                        "retrofitted":"fitted-debias.hd5clean",
+                                                            "directory":"./fasttext_model/"}
     # X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=32, sample_interval=100,
-    #                                                dataset={"original":"unfitted.hd5",
-    #                                                                     "retrofitted":"fitted.hd5",
-    #                                                         "directory":"./fasttext_model/"})
-    ds = {"original":"bert_unfitted",
-                                                                        "retrofitted":"bert_fitted.hd5",
-                                                            "directory":"./bert_models/"}
-    # load_noisiest_words_dataset(ds,
-    #                             save_folder="bert_models/",
-    #                             threshold=0.735,
-    #                             cache=False)
-    X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=32, sample_interval=100,
-                                                   dataset=ds)
-    # rcgan.combined.load_weights("combined_model")
-    # exit()
-    rcgan.load_weights()
-    # data = pickle.load(open('training_testing.data', 'rb'))
+    #                                                dataset=ds)
+
+    # rcgan.g_AB.load_weights(save_folder+"/toretrogen.h5")
+    # X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=32, sample_interval=100,
+    #                                                dataset=ds)
+    rcgan.g_AB.load_weights("fasttext_model/trained_retrogan/2019-05-14 22:55:42.280715ft/toretrogen.h5")
+
     testwords = ["human","dog","cat","potato","fat"]
 
-    fastext_version = find_in_dataset(testwords,dataset="bert_models/bert_unfitted")
+    fastext_version = find_in_dataset(testwords,dataset=ds["directory"]+ds["original"])
     print(fastext_version)
-    retro_version = find_in_dataset(testwords,dataset="bert_models/bert_fitted.hd5")
+    retro_version = find_in_dataset(testwords,dataset=ds["directory"]+ds["retrofitted"])
     print(retro_version)
-    # exit()
-    tools.datasets = {'bert':["bert_unfitted","bert_fitted.hd5"]}
-    tools.directory = ds["directory"]
+
     for idx,word in enumerate(testwords):
         print(word)
         retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, dimensionality))
-        tools.find_closest_in_dataset(retro_representation, dataset="bert_models/bert_fitted.hd5",limit=400000)
+
+        tools.find_closest_in_dataset(retro_representation,n_top=20,dataset=ds["directory"]+ds["retrofitted"])
         print(sklearn.metrics.mean_absolute_error(retro_version[idx], retro_representation.reshape((dimensionality,))))
