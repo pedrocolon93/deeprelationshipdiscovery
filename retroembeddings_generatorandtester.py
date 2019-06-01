@@ -18,6 +18,7 @@ import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
 import tools
+from retrogan_trainer import ConstMultiplierLayer
 from tools import find_in_fasttext, find_in_retrofitted, \
     find_closest_2
 
@@ -30,38 +31,6 @@ from tensorflow import set_random_seed
 set_random_seed(2)
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-
-
-class ConstMultiplierLayer(Layer):
-    def __init__(self, **kwargs):
-        super(ConstMultiplierLayer, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        self.k = self.add_weight(
-            name='k',
-            shape=(),
-            initializer='zeros',
-            dtype='float32',
-            trainable=True,
-        )
-        super(ConstMultiplierLayer, self).build(input_shape)
-
-    def call(self, x, **kwargs):
-        return K.tf.multiply(self.k, x)
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-
-def attention(layer_input):
-    # ATTENTION PART STARTS HERE
-    attention_probs = Dense(layer_input._keras_shape[1], activation='softmax')(layer_input)
-    attention_mul = multiply([layer_input, attention_probs]
-                             )
-    attention_scale = ConstMultiplierLayer()(attention_mul)
-    attention = add([layer_input, attention_scale])
-    # ATTENTION PART FINISHES HERE
-    return attention
 
 if __name__ == '__main__':
     # Hardware config options

@@ -9,7 +9,7 @@ from keras.engine.saving import load_model
 from keras.optimizers import Adam
 from scipy.stats import spearmanr, pearsonr
 
-from retrogan_generatorandtester import ConstMultiplierLayer
+from retroembeddings_generatorandtester import ConstMultiplierLayer
 
 if __name__ == '__main__':
     word_tuples = []

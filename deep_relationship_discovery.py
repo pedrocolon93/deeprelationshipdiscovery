@@ -20,12 +20,13 @@ from tqdm import tqdm
 from retrogan_trainer import attention, ConstMultiplierLayer
 
 relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires",
-             "/r/AtLocation"]
-             # , "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
-             # "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
-             # "/r/Causes", "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs", "/r/Entails"]
+             "/r/AtLocation"
+             , "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
+             "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
+             "/r/Causes", "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs",
+             "/r/SimilarTo", "/r/Entails"]
              # "/r/MannerOf", "/r/RelatedTo",
-             # "/r/LocatedNear", "/r/HasContext", "/r/FormOf", "/r/SimilarTo", "/r/EtymologicallyRelatedTo",
+             # "/r/LocatedNear", "/r/HasContext", "/r/FormOf",  "/r/EtymologicallyRelatedTo",
              # "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
              # "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
 
@@ -126,7 +127,7 @@ def create_model():
     return model_dict#, prob_model_dict
 
 
-def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd",cutoff=1.0):
+def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd",cutoff=0.6):
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
     training_data_dict = {}
     training_func_dict = {}
@@ -270,9 +271,11 @@ def test_model(model_dict, model_name="all", normalizers=None):
                                             "retro_word_2": w3})
     print(res1,res2)
 
-    # if normalizers is not None:
-    #     norm_res = normalizers[model_name].transform(res1)
-    #     print(norm_res)
+    if normalizers is not None:
+        norm_res = normalizers[model_name].transform(res1)
+        print(norm_res)
+        norm_res = normalizers[model_name].transform(res2)
+        print(norm_res)
 
 
 def normalize_outputs(model, save_folder="./drd", use_cache=True):
@@ -293,9 +296,11 @@ def normalize_outputs(model, save_folder="./drd", use_cache=True):
 
     # Load our data
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
-    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "iphone")]).reshape(1, 300)
+    rand_range = [x for x in range(len(retrofitted_embeddings.index))]
+    shuffle(rand_range)
+
     for i in range(len(retrofitted_embeddings.index)):
-        x1.append(w1)
+        x1.append(np.array(retrofitted_embeddings.iloc[rand_range[i]]).reshape(1,300))
         x2.append(np.array(retrofitted_embeddings.iloc[i]).reshape(1, 300))
     for rel in relations:
         rel_normer = sklearn.preprocessing.MinMaxScaler().fit(
@@ -345,27 +350,27 @@ def load_model_ours(save_folder="./drd", model_name="all",probability_models=Fal
 retroembeddings = "trained_models/retroembeddings/2019-05-15 11:47:52.802481/retroembeddings.h5"
 
 if __name__ == '__main__':
-    # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
+    # # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     global w1, w2, w3
-    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "phone")]).reshape(1, 300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "picture")]).reshape(1, 300)
-    w3 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "potato")]).reshape(1, 300)
+    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "building")]).reshape(1, 300)
+    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "photography")]).reshape(1, 300)
+    w3 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "surfing")]).reshape(1, 300)
     model_name = "UsedFor"
-    del retrofitted_embeddings
-    gc.collect()
-    print("Creating model...")
-    model = create_model()
-    print("Done\nLoading data")
-    # model = load_model_ours()
-    data = create_data(use_cache=False)
-    # data = load_data("valid_rels.hd5")
-    print("Done\nTraining")
-    train_on_assertions(model, data)
-    print("Done\n")
-    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-24_1_sigmoid",model_name=model_name)
+    # del retrofitted_embeddings
+    # gc.collect()
+    # print("Creating model...")
+    # model = create_model()
+    # print("Done\nLoading data")
+    # # model = load_model_ours()
+    # data = create_data(use_cache=False)
+    # # data = load_data("valid_rels.hd5")
+    # print("Done\nTraining")
+    # train_on_assertions(model, data)
+    # print("Done\n")
+    model = load_model_ours(save_folder="trained_models/deepreldis/2019-05-28",model_name=model_name)
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_2_sigmoid",model_name=model_name,probability_models=True)
-    # normalizers = normalize_outputs(model,save_folder="trained_models/deepreldis/2019-04-1614:43:00.000000")
+    normalizers = normalize_outputs(model,save_folder="trained_models/deepreldis/2019-05-28")
     # normalizers = normalize_outputs(model,use_cache=False)
-    test_model(model, normalizers=None, model_name=model_name)
+    test_model(model, normalizers=normalizers, model_name=model_name)
     # Output needs to be the relationship weights

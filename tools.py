@@ -400,7 +400,7 @@ def find_cross_closest_dataset(vec1, vec2, projection_count=10,projection_cloud_
     final_n_results = []
     final_n_results_words = []
 
-    print("Finding the cloud of concepts around the cross closest")
+    # print("Finding the cloud of concepts around the cross closest")
     for res_idx, res in enumerate(sorted_results):
         if res_idx > projection_count:
             break
@@ -422,17 +422,17 @@ def find_cross_closest_dataset(vec1, vec2, projection_count=10,projection_cloud_
                                                  fin_aroud_vec.reshape(1, dimensionality))[0][0],
                      projection_cloud_vecs)))]
         for pcres_idx, pcres in enumerate(ordered_projection_results):
-            print(res_idx)
-            print(sorted_results[res_idx])
-            print("Working in", closest_words[sorted_results[res_idx][0]])
-            print(res, "Cloud concept")
-            print(ordered_projection_results[pcres_idx])
-            print(projection_cloud_words[ordered_projection_results[pcres_idx][0]])
-            print(pcres)
+            # print(res_idx)
+            # print(sorted_results[res_idx])
+            # print("Working in", closest_words[sorted_results[res_idx][0]])
+            # print(res, "Cloud concept")
+            # print(ordered_projection_results[pcres_idx])
+            # print(projection_cloud_words[ordered_projection_results[pcres_idx][0]])
+            # print(pcres)
             if projection_cloud_words[ordered_projection_results[pcres_idx][0]] not in final_n_results_words:
                 final_n_results_words.append(projection_cloud_words[ordered_projection_results[pcres_idx][0]])
                 final_n_results.append(np.array(projection_cloud_vecs[ordered_projection_results[pcres_idx][0]]))
-    if verbose: print("Finally", final_n_results_words)
+    # if verbose: print("Finally", final_n_results_words)
 
     # return final_n_results_words,final_n_results,final_n_results_weights
     return final_n_results_words, final_n_results
@@ -503,7 +503,7 @@ def find_closest(pred_y,n_top=5,retro=True,skip=0,retrowords=None,retrovectors=N
         final_n_results.append(retrovectors[sorted_results[i][0]])
 
     del retrowords,retrovectors,results,sorted_results
-    gc.collect()
+    # gc.collect()
     return final_n_results_words,final_n_results
 
 o = None
@@ -548,7 +548,7 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
     return final_n_results_words,final_n_results
 
 def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True,limit=None):
-    print("Finding closest")
+    # print("Finding closest")
     if type(dataset) is str:
         o = pd.read_hdf(dataset, 'mat', encoding='utf-8')
     elif type(dataset) is pd.DataFrame:
@@ -577,16 +577,17 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True,limit=None):
     # del o,results,sorted_results
     # gc.collect()
 
-    testvec = find_in_dataset(["cat"], o)
-    print(testvec)
+    # testvec = find_in_dataset(["cat"], o)
+    testvec = pred_y
+    # print(testvec)
     index = faiss.IndexFlatIP(dimensionality)  # build the index
-    print(index.is_trained)
+    # print(index.is_trained)
     index.add(o.values.astype(np.float32))  # add vectors to the index
-    print(index.ntotal)
-    D, I = index.search(testvec.astype(np.float32), n_top)  # sanity check
-    print(I)
-    print(D)
-    print(o.iloc[I[0]])
+    # print(index.ntotal)
+    D, I = index.search(np.array([testvec.astype(np.float32)]), n_top)  # sanity check
+    # print(I)
+    # print(D)
+    # print(o.iloc[I[0]])
     final_n_results = o.iloc[I[0]].values
     final_n_results_words = o.index[I[0]].values
 
@@ -650,6 +651,6 @@ def find_in_dataset(testwords,dataset):
     # print(asarray1)
     if read:
         del r
-    gc.collect()
+    # gc.collect()
     return asarray1
 
