@@ -4,6 +4,8 @@ import operator
 import os
 import pickle
 from multiprocessing.pool import Pool
+from tokenize import String
+
 import faiss
 import fastText
 import gc
@@ -631,6 +633,21 @@ def get_retrofitted_embedding(plain_embedding,retrogan_to_rfe_generator,dimensio
     re = np.array(retrogan_to_rfe_generator.predict(plain_embedding.reshape(1,dimensionality))).reshape((dimensionality,))
     return re
 
+def hd5_to_txt(input_hd5,output_txt="out.txt",remove_qualifier=True):
+    with open(output_txt,"w") as file:
+        for item in input_hd5.index:
+            word = item
+            text = ""
+            output_array = []
+            if remove_qualifier:
+                word = word.replace("/c/en/","")
+            output_array.append(word)
+            for num in input_hd5.loc[item]:
+                output_array.append(float(num))
+            for field in output_array:
+                text+=str(field)+'\t'
+            text+='\n'
+            file.write(text)
 
 def find_in_dataset(testwords,dataset):
     read = False
