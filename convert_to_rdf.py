@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 
 from CNQuery import CNQuery
 
-api_address = "api.conceptnet.io/query?"
+api_address = "8kboxx/query?"
 filename = "retrogan/conceptnet-assertions-5.6.0.csv"
 def xml_entry(start,end,relationship,index):
     '''

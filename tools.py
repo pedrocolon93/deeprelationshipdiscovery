@@ -203,18 +203,19 @@ def load_noisiest_words(seed=42, test_split=0.1, dataset="fasttext"):
     Y_test.to_hdf("filtered_y_test", "mat")
     return np.array(X_train.values),np.array(Y_train.values), np.array(X_test.values),np.array(Y_test.values)
 
-def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95):
+def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95,return_idx=False):
     global original, retrofitted
-    if os.path.exists(os.path.join(save_folder,"filtered_x")) and os.path.exists(os.path.join(save_folder,"filtered_y"))\
-            and cache:
-        print("Reusing cache")
-        X_train = pd.read_hdf(os.path.join(save_folder,"filtered_x"), 'mat', encoding='utf-8')
-        Y_train = pd.read_hdf(os.path.join(save_folder,"filtered_y"),'mat',encoding='utf-8')
-        # X_test = pd.read_hdf(os.path.join(save_folder,"filtered_x_test"), "mat",encoding='utf-8')
-        # Y_test = pd.read_hdf(os.path.join(save_folder,"filtered_y_test"), "mat",encoding='utf-8')
-
-        return np.array(X_train.values), np.array(Y_train.values)#, np.array(X_test.values), np.array(Y_test.values)
-
+    # if os.path.exists(os.path.join(save_folder,"filtered_x")) and os.path.exists(os.path.join(save_folder,"filtered_y"))\
+    #         and cache:
+    #     print("Reusing cache")
+    #     X_train = pd.read_hdf(os.path.join(save_folder,"filtered_x"), 'mat', encoding='utf-8')
+    #     Y_train = pd.read_hdf(os.path.join(save_folder,"filtered_y"),'mat',encoding='utf-8')
+    #     # X_test = pd.read_hdf(os.path.join(save_folder,"filtered_x_test"), "mat",encoding='utf-8')
+    #     # Y_test = pd.read_hdf(os.path.join(save_folder,"filtered_y_test"), "mat",encoding='utf-8')
+    #     if not return_idx:
+    #         return np.array(X_train.values), np.array(Y_train.values)#, np.array(X_test.values), np.array(Y_test.values)
+    #     else:
+    #         return np.array(X_train.values), np.array(Y_train.values), np.array(X_train.index)
     original = dataset["original"]
     retrofitted = dataset["retrofitted"]
     directory = dataset["directory"]
@@ -258,19 +259,23 @@ def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder=".
             cns.append(i)
         else:
             testindexes.append(i)
-    print("avg",tot/it)
+    print("avg threshold",tot/it)
     X_train = o.iloc[cns, :]
     Y_train = r_sub.iloc[cns, :]
     print("Dumping training")
     X_train.to_hdf(os.path.join(save_folder,"filtered_x"), "mat")
     Y_train.to_hdf(os.path.join(save_folder,"filtered_y"),"mat")
+
     X_test = o.iloc[testindexes,:]
     Y_test = r_sub.iloc[testindexes,:]
     print("Dumping testing")
     X_test.to_hdf(os.path.join(save_folder,"filtered_x_test"), "mat")
     Y_test.to_hdf(os.path.join(save_folder,"filtered_y_test"), "mat")
     print("Returning")
-    return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
+    if not return_idx:
+        return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
+    else:
+        return np.array(X_train.values),np.array(Y_train.values),np.array(X_train.index)#, np.array(X_test.values),np.array(Y_test.values)
 
 
 def load_training_input_2(limit=10000,normalize=True, seed = 42,test_split=0.1):
@@ -549,7 +554,7 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
     # return final_n_results_words,final_n_results,final_n_results_weights
     return final_n_results_words,final_n_results
 
-def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True,limit=None):
+def find_closest_in_dataset(pred_y,dataset, n_top=5):
     # print("Finding closest")
     if type(dataset) is str:
         o = pd.read_hdf(dataset, 'mat', encoding='utf-8')
@@ -586,7 +591,10 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5,verbose=True,limit=None):
     # print(index.is_trained)
     index.add(o.values.astype(np.float32))  # add vectors to the index
     # print(index.ntotal)
-    D, I = index.search(np.array([testvec.astype(np.float32)]), n_top)  # sanity check
+    tst = np.array([testvec.astype(np.float32)])
+    tst = tst.reshape((tst.shape[0],tst.shape[-1]))
+    # print(tst.shape)
+    D, I = index.search(tst, n_top)  # sanity check
     # print(I)
     # print(D)
     # print(o.iloc[I[0]])

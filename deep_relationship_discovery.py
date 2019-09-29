@@ -40,7 +40,7 @@ def create_model():
     # Input needs to be 2 word vectors
     wv1 = Input(shape=(300,), name="retro_word_1")
     wv2 = Input(shape=(300,), name="retro_word_2")
-    expansion_size = 512
+    expansion_size = 128
     filters = 8
     # Expand and contract the 2 word vectors
     wv1_expansion_1 = Dense(expansion_size * 2)(wv1)
@@ -131,6 +131,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
     training_data_dict = {}
     training_func_dict = {}
+    print("Amount of data:",len(data))
     for i in tqdm(range(len(data))):
         stuff = data.iloc[i]
         if stuff[0] not in training_data_dict.keys():
@@ -164,7 +165,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                 # print(np.array(x_1),np.array(x_2),np.array(y))
                 yield np.array(x_1), np.array(x_2), np.array(y)
             except Exception as e:
-                print(e)
+                # print(e)
                 return False
         return True
 
@@ -197,7 +198,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                     if iter%100:
                         print(loss)
                 except Exception as e:
-                    print("Error in", output, str(e))
+                    # print("Error in", output, str(e))
                     if 'the label' not in str(e):
                         tasks_completed[output] = True
             if False not in tasks_completed.values() or \
@@ -253,6 +254,8 @@ def create_data(use_cache=True):
             if len(valid_relations) % 10000 == 0:
                 print(len(valid_relations))
     af = pd.DataFrame(data=valid_relations, index=range(len(valid_relations)))
+    print("Training data:")
+    print(af)
     af.to_hdf("tmp/valid_rels.hd5", "mat")
     return af
 
@@ -359,16 +362,16 @@ if __name__ == '__main__':
     model_name = "UsedFor"
     # del retrofitted_embeddings
     # gc.collect()
-    # print("Creating model...")
-    # model = create_model()
-    # print("Done\nLoading data")
-    # # model = load_model_ours()
-    # data = create_data(use_cache=False)
+    print("Creating model...")
+    model = create_model()
+    print("Done\nLoading data")
+    # model = load_model_ours()
+    data = create_data(use_cache=False)
     # # data = load_data("valid_rels.hd5")
-    # print("Done\nTraining")
-    # train_on_assertions(model, data)
-    # print("Done\n")
-    model = load_model_ours(save_folder="trained_models/deepreldis/2019-05-28",model_name=model_name)
+    print("Done\nTraining")
+    train_on_assertions(model, data)
+    print("Done\n")
+    # model = load_model_ours(save_folder="trained_models/deepreldis/2019-05-28",model_name=model_name)
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_2_sigmoid",model_name=model_name,probability_models=True)
     normalizers = normalize_outputs(model,save_folder="trained_models/deepreldis/2019-05-28")
     # normalizers = normalize_outputs(model,use_cache=False)

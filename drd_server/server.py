@@ -34,7 +34,8 @@ def get_neighbors():
         concept_to_explore_vec = find_in_dataset([concept_to_explore], retro_e)
         print(concept_to_explore_vec)
         print("Finding the neighbors")
-        neighbors, _ = find_closest_in_dataset(concept_to_explore_vec, retro_e, n_top=int(amount), limit=None)
+        neighbors, _ = find_closest_in_dataset(concept_to_explore_vec, retro_e, n_top=int(amount))
+        neighbors = list(neighbors)
         print("Done")
         print(neighbors)
     except Exception as e:
@@ -57,6 +58,7 @@ def get_relations():
         pass
     query = CNQuery.CNQuery()
     queryres = query.query(start, end, None)
+    print(queryres)
     return json.dumps(queryres)
 
 

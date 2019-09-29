@@ -7,7 +7,7 @@ import tools
 
 class CNQuery():
     def __init__(self):
-        self.base_url = "http://18.85.39.186/"
+        self.base_url = "http://8kboxx/"
         # self.base_url = "http://conceptnet.io/"
         # node = / c / en / dog & other = / c / en / pizza
 

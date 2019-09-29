@@ -12,7 +12,6 @@ import nltk
 
 import deep_relationship_discovery
 import tools
-import networkx as nx
 import pandas as pd
 import numpy as np
 

@@ -26,7 +26,7 @@ if __name__ == '__main__':
     retrogan.load_weights(trained_model_path)
     missed_words = set()
 
-    with open('SimLex-999.txt') as csv_file:
+    with open('SimVerb-3500.txt') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')
         line_count = 0
         for row in csv_reader:
@@ -76,8 +76,8 @@ if __name__ == '__main__':
     print(missed_words)
     print(pearsonr([float(x[2]) for x in word_tuples],[float(x[2]) for x in my_word_tuples]))
     print(spearmanr([x[2] for x in word_tuples],[x[2] for x in my_word_tuples]))
-    # print(pearsonr([float(x[2]) for x in word_tuples],[float(x[2]) for x in nb_word_tuples]))
-    # print(spearmanr([x[2] for x in word_tuples],[x[2] for x in nb_word_tuples]))
+    # # print(pearsonr([float(x[2]) for x in word_tuples],[float(x[2]) for x in nb_word_tuples]))
+    # # print(spearmanr([x[2] for x in word_tuples],[x[2] for x in nb_word_tuples]))
     # word_tuples = sorted(word_tuples,key=lambda x:(x[0],x[2]))
     # my_word_tuples = sorted(my_word_tuples,key=lambda x:(x[0],x[2]))
     # # nb_word_tuples = sorted(nb_word_tuples,key=lambda x:(x[0],x[2]))
