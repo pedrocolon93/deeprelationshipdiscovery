@@ -16,9 +16,10 @@ if __name__ == '__main__':
     my_word_tuples = []
     # nb_word_tuples = []
     # numberbatch = pd.read_hdf("../retrogan/numberbatch.h5","mat",encoding="utf-8")
-    retrowords = pd.read_hdf("../trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5", 'mat', encoding='utf-8')
+    # retrowords = pd.read_hdf("../trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5", 'mat', encoding='utf-8')
+    retrowords = pd.read_hdf("../trained_models/retroembeddings/2019-10-01 15:27:07.864606/retroembeddings.h5", 'mat', encoding='utf-8')
     ft_model = fastText.load_model("../fasttext_model/cc.en.300.bin")
-    trained_model_path = "../trained_models/retrogans/2019-04-0721:33:44.223104/toretrogen.h5"
+    trained_model_path = "../fasttext_model/trained_retrogan/2019-10-01 14:48:20.604924ft/toretrogen.h5"
     retrogan = load_model(trained_model_path,
                           custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer},
                           compile=False)

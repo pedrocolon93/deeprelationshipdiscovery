@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#python3 convert_vec_to_hdf.py
+#python3 convert_vec_to_formatted_text.py
 if ! [ -f cc.en.300.vec.gz ]
 then
  wget https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/cc.en.300.vec.gz

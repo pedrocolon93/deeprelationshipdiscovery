@@ -54,7 +54,7 @@ if __name__ == '__main__':
     set_session(sess)  # set this TensorFlow session as the default session for Keras
 
     # Software parameters
-    trained_model_path = "fasttext_model/trained_retrogan/2019-07-21 23:12:49.367429ft/toretrogen.h5"
+    trained_model_path = "fasttext_model/trained_retrogan/2019-10-03 11:41:57.136812ftar/toretrogen.h5"
     retroembeddings_folder = "./trained_models/retroembeddings/" + str(datetime.datetime.now())
     clean = False
 
@@ -67,7 +67,9 @@ if __name__ == '__main__':
     tools.directory = "fasttext_model/"
     dimensionality = 300
     tools.dimensionality = dimensionality
-    tools.datasets["mine"] = ["unfitted.hd5clean", "fitted-debias.hd5clean"]
+    # tools.datasets["mine"] = ["unfitted.hd5clean", "fitted-debias.hd5clean"]
+    tools.datasets["mine"] = ["unfitted.hd5clean", "attract_repel.hd5clean"]
+
     if clean:
         numberbatch_file_loc = 'retrogan/mini.h5'
         target_file_loc = tools.directory + tools.datasets["mine"][0]
@@ -78,7 +80,7 @@ if __name__ == '__main__':
     plain_word_vector_path = plain_retrofit_vector_path = tools.directory
     plain_word_vector_path += tools.datasets[dataset][0]
     plain_retrofit_vector_path += tools.datasets[dataset][1]
-
+    print("Loading the model!")
     # Load the model and init the weights
     to_retro_converter = load_model(trained_model_path,
                                     custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer},
@@ -93,14 +95,14 @@ if __name__ == '__main__':
     word_embeddings = pd.read_hdf(plain_word_vector_path, 'mat', encoding='utf-8')
     # # word_embeddings = word_embeddings.loc[[x for x in word_embeddings.index if "." not in x]]
     vals = np.array(
-        to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, dimensionality)), verbose=1))
+        to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, dimensionality)), verbose=1)
+    )
     retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.index)
+    print("Writing the vectors...")
     retro_word_embeddings.to_hdf(retrogan_word_vector_output_path, "mat")
-    # retrogan_word_vector_output_path = "trained_models/retroembeddings/2019-05-15 01:00:00.000000/retroembeddings.h5"
-    # retro_word_embeddings = pd.read_hdf(retrogan_word_vector_output_path,"mat")
-    # Specific word tests
-    print("The dataset is ", dataset)
-    testwords = ["human", "dog", "cat", "potato", "fat"]
+
+
+    testwords = ["human", "dog", "cat", "potato", "fat","bus","train","happy","sad","car"]
     print("The test word vectors are:", testwords)
     # ft version
     fastext_version = find_in_fasttext(testwords, dataset=dataset)
@@ -126,6 +128,6 @@ if __name__ == '__main__':
 
     # print("Evaluating in the entire test dataset for the error.")
     # Load the testing data
-    # X_train,Y_train,X_test,Y_test = load_noisiest_words(dataset=dataset)
-    # print("Train error",to_retro_converter.evaluate(X_train, Y_train))
-    # print("Test error",to_retro_converter.evaluate(X_test,Y_test))
+    X_train,Y_train,X_test,Y_test = tools.load_noisiest_words(dataset=dataset)
+    print("Train error",to_retro_converter.evaluate(X_train, Y_train))
+    print("Test error",to_retro_converter.evaluate(X_test,Y_test))

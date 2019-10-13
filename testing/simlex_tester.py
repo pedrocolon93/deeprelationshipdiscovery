@@ -14,11 +14,14 @@ from retroembeddings_generatorandtester import ConstMultiplierLayer
 if __name__ == '__main__':
     word_tuples = []
     my_word_tuples = []
-    # nb_word_tuples = []
-    # numberbatch = pd.read_hdf("../retrogan/numberbatch.h5","mat",encoding="utf-8")
-    retrowords = pd.read_hdf("../trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5", 'mat', encoding='utf-8')
+    nb_word_tuples = []
+    numberbatch = pd.read_hdf("../fasttext_model/attract_repel.hd5clean","mat",encoding="utf-8")
+    # retrowords = pd.read_hdf("../trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5", 'mat', encoding='utf-8')
+    # ft_model = fastText.load_model("../fasttext_model/cc.en.300.bin")
+    # trained_model_path = "../trained_models/retrogans/2019-04-0721:33:44.223104/toretrogen.h5"
+    retrowords = pd.read_hdf("../trained_models/retroembeddings/2019-10-03 15:06:06.747188/retroembeddings.h5", 'mat', encoding='utf-8')
     ft_model = fastText.load_model("../fasttext_model/cc.en.300.bin")
-    trained_model_path = "../trained_models/retrogans/2019-04-0721:33:44.223104/toretrogen.h5"
+    trained_model_path = "../fasttext_model/trained_retrogan/2019-10-03 11:41:57.136812ftar/toretrogen.h5"
     retrogan = load_model(trained_model_path,
                           custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer},
                           compile=False)
@@ -43,41 +46,35 @@ if __name__ == '__main__':
             # conceptnet5.uri.concept_uri("en",row[0].lower())
             idx1 = conceptnet5.uri.concept_uri("en",row[0].lower())
             idx2 = conceptnet5.uri.concept_uri("en",row[1].lower())
-            try:
-                mw1 = retrowords.loc[idx1]
-            except Exception as e:
-                missed_words.add(row[0].lower())
-                mw1 = ft_model.get_word_vector(row[0].lower())
-                mw1 = np.array(retrogan.predict(mw1.reshape(1,300))).reshape((300,))
-            try:
-                mw2 = retrowords.loc[idx2]
-            except:
-                missed_words.add(row[1].lower())
-                mw2 = ft_model.get_word_vector(row[1].lower())
-                mw2 = np.array(retrogan.predict(mw2.reshape(1,300))).reshape((300,))
+            mw1 = ft_model.get_word_vector(row[0].lower())
+            mw1 = np.array(retrogan.predict(mw1.reshape(1,300))).reshape((300,))
+            mw2 = ft_model.get_word_vector(row[1].lower())
+            mw2 = np.array(retrogan.predict(mw2.reshape(1, 300))).reshape((300,))
+
             score = cosine_similarity(mw1,mw2)
 
             my_word_tuples.append((row[0],row[1],score))
-            # try:
-            # #     idx1 = "/c/en/" + row[0].lower()
+            try:
+            #     idx1 = "/c/en/" + row[0].lower()
             # #     idx2 = "/c/en/" + row[1].lower()
-            #     nw1 = numberbatch.loc[idx1]
-            #     nw2 = numberbatch.loc[idx2]
-            #     score = cosine_similarity(nw1,nw2)
-            # except Exception as e:
-            #     print("Not found for")
-            #     print(e)
-            #     # print(row[0])
-            #     # print(row[1])
-            #     score = 0
-            # nb_word_tuples.append((row[0], row[1], score))
+                nw1 = numberbatch.loc[idx1]
+                nw2 = numberbatch.loc[idx2]
+                score = cosine_similarity(nw1,nw2)
+            except Exception as e:
+                print("Not found for")
+                print(e)
+                # print(row[0])
+                # print(row[1])
+                score = 0
+            nb_word_tuples.append((row[0], row[1], score))
         print(f'Processed {line_count} lines.')
     print(len(missed_words))
     print(missed_words)
     print(pearsonr([float(x[2]) for x in word_tuples],[float(x[2]) for x in my_word_tuples]))
     print(spearmanr([x[2] for x in word_tuples],[x[2] for x in my_word_tuples]))
-    # print(pearsonr([float(x[2]) for x in word_tuples],[float(x[2]) for x in nb_word_tuples]))
-    # print(spearmanr([x[2] for x in word_tuples],[x[2] for x in nb_word_tuples]))
+    print("For the attract-repelDS")
+    print(pearsonr([float(x[2]) for x in word_tuples],[float(x[2]) for x in nb_word_tuples]))
+    print(spearmanr([x[2] for x in word_tuples],[x[2] for x in nb_word_tuples]))
     # word_tuples = sorted(word_tuples,key=lambda x:(x[0],x[2]))
     # my_word_tuples = sorted(my_word_tuples,key=lambda x:(x[0],x[2]))
     # # nb_word_tuples = sorted(nb_word_tuples,key=lambda x:(x[0],x[2]))

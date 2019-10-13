@@ -246,6 +246,18 @@ def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder=".
     testindexes = []
     tot = 0
     it = 0
+    cns = []
+    for i in range(len(o.values)):
+        if i%10000==0 and i!=0:
+            print(i)
+        x = o.iloc[i,:]
+        y = r_sub.iloc[i,:]
+        cn = vector_cos5(x, y)
+        cns.append(cn)
+    threshold = np.average(np.array(cns))-np.std(np.array(cns))/2.0
+    tot = 0
+    it = 0
+    cns = []
     for i in range(len(o.values)):
         if i%10000==0 and i!=0:
             print(len(cns),len(testindexes))
