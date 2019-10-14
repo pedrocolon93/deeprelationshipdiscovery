@@ -16,7 +16,6 @@ import numpy as np
 import pandas as pd
 from conceptnet5.nodes import standardized_concept_uri
 from conceptnet5.vectors import cosine_similarity
-from fasttext_pybind import fasttext
 from keras import backend as K
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics.pairwise import cosine_similarity
@@ -701,7 +700,7 @@ def find_in_dataset(testwords,dataset):
 def test_sem(model, dataset_location='SimLex-999.txt',fast_text_location="../fasttext_model/cc.en.300.bin"):
     word_tuples = []
     my_word_tuples = []
-    ft_model = fasttext.load_model(fast_text_location)
+    ft_model = fastText.load_model(fast_text_location)
     retrogan = model
     with open(dataset_location) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')
