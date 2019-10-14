@@ -1,3 +1,4 @@
+import csv
 import math
 import multiprocessing
 import operator
@@ -9,10 +10,15 @@ from tokenize import String
 import faiss
 import fastText
 import gc
+
+import numpy
 import numpy as np
 import pandas as pd
 from conceptnet5.nodes import standardized_concept_uri
+from conceptnet5.vectors import cosine_similarity
+from fasttext_pybind import fasttext
 from keras import backend as K
+from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.contrib.learn.python.learn.estimators._sklearn import train_test_split
@@ -691,3 +697,36 @@ def find_in_dataset(testwords,dataset):
     # gc.collect()
     return asarray1
 
+
+def test_sem(model, dataset_location='SimLex-999.txt',fast_text_location="../fasttext_model/cc.en.300.bin"):
+    word_tuples = []
+    my_word_tuples = []
+    ft_model = fasttext.load_model(fast_text_location)
+    retrogan = model
+    with open(dataset_location) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter='\t')
+        line_count = 0
+        for row in csv_reader:
+
+            # print(f'Word1:\t{row[0]}\tWord2:\t{row[1]}\tSimscore:\t{row[2]}.')
+            line_count += 1
+            wtrow = []
+            wtrow.append(row[0])
+            wtrow.append(row[1])
+            wtrow.append(row[3])
+            word_tuples.append(wtrow)
+            score = 0
+
+            # conceptnet5.uri.concept_uri("en",row[0].lower())
+            mw1 = ft_model.get_word_vector(row[0].lower())
+            mw1 = np.array(retrogan.predict(mw1.reshape(1, 300))).reshape((300,))
+            mw2 = ft_model.get_word_vector(row[1].lower())
+            mw2 = np.array(retrogan.predict(mw2.reshape(1, 300))).reshape((300,))
+
+            score = cosine_similarity(mw1, mw2)
+
+            my_word_tuples.append((row[0], row[1], score))
+        print(f'Processed {line_count} lines.')
+    print(pearsonr([float(x[2]) for x in word_tuples], [float(x[2]) for x in my_word_tuples]))
+    print(spearmanr([x[2] for x in word_tuples], [x[2] for x in my_word_tuples]))
+    # word_tuples = sorted(word_tuples,key=lambda x:(x[0],x[2]))

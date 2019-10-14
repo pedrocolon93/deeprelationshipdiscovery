@@ -346,6 +346,7 @@ class RetroCycleGAN():
                     self.save_model()
             try:
                 # Check at end of epoch!
+                tools.test_sem(rcgan.g_AB,dataset_location="testing/SimLex-999.txt",fast_text_location="fasttext_model/cc.en.300.bin")
                 for idx, word in enumerate(testwords):
                     print(word)
                     retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, dimensionality))
