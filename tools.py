@@ -697,10 +697,13 @@ def find_in_dataset(testwords,dataset):
     return asarray1
 
 
+ft_model = None
 def test_sem(model, dataset_location='SimLex-999.txt',fast_text_location="../fasttext_model/cc.en.300.bin"):
     word_tuples = []
     my_word_tuples = []
-    ft_model = fastText.load_model(fast_text_location)
+    global ft_model
+    if ft_model is None:
+        ft_model = fastText.load_model(fast_text_location)
     retrogan = model
     with open(dataset_location) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')
