@@ -1,3 +1,4 @@
+import time
 from urllib.parse import urlencode
 
 import requests
@@ -6,9 +7,9 @@ import tools
 
 
 class CNQuery():
-    def __init__(self):
-        self.base_url = "http://8kboxx/"
-        # self.base_url = "http://conceptnet.io/"
+    def __init__(self,base_url="http://8kboxx/"):
+        # self.base_url = "http://8kboxx/"
+        self.base_url = "http://api.conceptnet.io/"
         # node = / c / en / dog & other = / c / en / pizza
 
     def parse(self, result):
@@ -24,12 +25,15 @@ class CNQuery():
             pass
         return (amount,weight)
 
+    def query_custom_parse(self,node1,node2,relation, parse_fun):
+        results = parse_fun(self.query(node1, node2, relation))
+        return results
     def add_identifier(self,node):
         if "/c/en" in node:
             return node
         else:
             return tools.standardized_concept_uri("en",node)
-    def query(self, node1, node2, relation='/r/Desires'):
+    def query(self, node1, node2, relation=None):
         getvars_dict = {}
         getvars_dict['node'] = self.add_identifier(node1)
         if node2 is not None:
@@ -45,12 +49,14 @@ class CNQuery():
         while True or i>retry:
             try:
                 urlres = requests.get(res)
+                urlres = urlres.json()
+
                 break
             except:
                 i+=1
+                time.sleep(2)
                 pass
         # print(urlres)
-        urlres = urlres.json()
         # print(urlres)
         return urlres
 

@@ -3,10 +3,11 @@ from __future__ import print_function, division
 import datetime
 import os
 from random import shuffle
-
+import math
 import numpy as np
 import sklearn
 import tensorflow as tf
+from conceptnet5.nodes import standardized_concept_uri
 from keras import backend as K
 from keras.backend.tensorflow_backend import set_session
 from keras.engine import Layer
@@ -15,6 +16,7 @@ from keras.layers import Input, Dense
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils import plot_model
+
 from numpy.random import seed
 from tqdm import tqdm
 
@@ -81,7 +83,9 @@ class RetroCycleGAN():
         self.lambda_id = lambda_id_weight * self.lambda_cycle  # Identity loss
 
         d_lr = discriminator_lr
+        self.d_lr = d_lr
         g_lr = generator_lr
+        self.g_lr = g_lr
         cv = clip_value
         cn = cn
         self.d_A = self.build_discriminator(name="word_vector_discriminator")
@@ -247,28 +251,28 @@ class RetroCycleGAN():
 
     def train(self, epochs, dataset, batch_size=1, sample_interval=50, noisy_entries_num=5, batches=900,
               add_noise=False):
-        testwords = ["human", "dog", "cat", "potato", "fat"]
-        fastext_version = find_in_dataset(testwords, dataset=dataset["directory"] + dataset["original"])
-        retro_version = find_in_dataset(testwords, dataset=dataset["directory"] + dataset["retrofitted"])
+        # testwords = ["human", "dog", "cat", "potato", "fat"]
+        # fastext_version = find_in_dataset(testwords, dataset=dataset["directory"] + dataset["original"])
+        # retro_version = find_in_dataset(testwords, dataset=dataset["directory"] + dataset["retrofitted"])
 
         start_time = datetime.datetime.now()
         # self.load_weights(extension="0")
         # self.load_weights()
-        for idx, word in enumerate(testwords):
-            print(word)
-            retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, dimensionality))
-            print(sklearn.metrics.mean_absolute_error(retro_version[idx],
-                                                      retro_representation.reshape((dimensionality,))))
+        # for idx, word in enumerate(testwords):
+        #   print(word)
+        #  retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, dimensionality))
+        # print(sklearn.metrics.mean_absolute_error(retro_version[idx],
+        # retro_representation.reshape((dimensionality,))))
         # Adversarial loss ground truths
         # fake = np.random.uniform(0.0,0.1,size=(batch_size,))
 
         X_train = Y_train = X_test = Y_test = None
 
         seed = 32
-        X_train, Y_train = load_noisiest_words_dataset(dataset,
-                                                       save_folder="fasttext_model/",
-                                                       threshold=0.90,
-                                                       cache=False)
+        X_train, Y_train = tools.load_noisiest_words_dataset_2(dataset,
+                                                               save_folder="fasttext_model/",
+                                                               threshold=0.90,
+                                                               cache=True)
         print("Done")
 
         # X_train, Y_train, X_test, Y_test = load_training_input_3(seed=seed,test_split=0.001,dataset=dataset)
@@ -282,6 +286,12 @@ class RetroCycleGAN():
                 imgs_A = X_train[ixs]
                 imgs_B = Y_train[ixs]
                 yield imgs_A, imgs_B
+
+        def step_decay(initial_lrate, epoch):
+            drop = 0.5
+            epochs_drop = 10.0
+            lrate = initial_lrate * math.pow(drop, math.floor((1 + epoch) / epochs_drop))
+            return lrate
 
         for epoch in range(epochs + 1):
             noise = np.random.normal(size=(batch_size, dimensionality), scale=0.01)
@@ -304,6 +314,18 @@ class RetroCycleGAN():
                 # Translate images to opposite domain
                 if epoch % 2 == 0:
                     imgs_A = np.add(noise[0:imgs_A.shape[0], :], imgs_A)
+
+                # calculate learning rate:
+                g_current_learning_rate = step_decay(self.g_lr, epoch)
+                d_current_learning_rate = step_decay(self.d_lr, epoch)
+                # print(g_current_learning_rate,d_current_learning_rate)
+                # print(self.g_AB.optimizer)
+                # train model:
+                # K.set_value(self.g_AB.optimizer.lr, g_current_learning_rate)  # set new lr
+                # K.set_value(self.g_BA.optimizer.lr, g_current_learning_rate)  # set new lr
+                K.set_value(self.d_A.optimizer.lr, d_current_learning_rate)  # set new lr
+                K.set_value(self.d_B.optimizer.lr, d_current_learning_rate)  # set new lr
+                K.set_value(self.combined.optimizer.lr, g_current_learning_rate)  # set new lr
 
                 fake_B = self.g_AB.predict(imgs_A)
                 fake_A = self.g_BA.predict(imgs_B)
@@ -341,8 +363,10 @@ class RetroCycleGAN():
                           np.isnan(dB_loss_real).any(), np.isnan(g_loss).any())
                     print("Problem")
                     raise ArithmeticError("Problem with loss calculation")
+                if batch_i % 500 == 0:
+                    tools.test_sem(rcgan.g_AB, dataset_location="testing/SimLex-999.txt",
+                                   fast_text_location="fasttext_model/cc.en.300.bin")
 
-                # Plot the progress
                 if batch_i % 100 == 0:
                     print(
                         "\n[Epoch %d/%d] [Batch %d] [D loss: %f, acc: %3d%%] [G loss: %05f, adv: %05f, recon: %05f, id: %05f] time: %s " \
@@ -354,15 +378,11 @@ class RetroCycleGAN():
                            np.mean(g_loss[3:5]),
                            np.mean(g_loss[5:6]),
                            elapsed_time))
-                    self.save_model()
             try:
-                # Check at end of epoch!
-                for idx, word in enumerate(testwords):
-                    print(word)
-                    retro_representation = rcgan.g_AB.predict(fastext_version[idx].reshape(1, dimensionality))
-                    print(sklearn.metrics.mean_absolute_error(retro_version[idx],
-                                                              retro_representation.reshape((dimensionality,))))
                 self.save_model()
+                tools.test_sem(rcgan.g_AB, dataset_location="testing/SimLex-999.txt",
+                               fast_text_location="fasttext_model/cc.en.300.bin")
+
             except Exception as e:
                 print(e)
 
@@ -401,16 +421,11 @@ if __name__ == '__main__':
     #                                                dataset=ds)
 
     # rcgan.g_AB.load_weights(save_folder+"/toretrogen.h5")
-    X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=16, sample_interval=100,
+    X_train, Y_train, X_test, Y_test = rcgan.train(epochs=50, batch_size=32, sample_interval=100,
                                                    dataset=ds)
     # rcgan.g_AB.load_weights("fasttext_model/trained_retrogan/2019-05-14 22:55:42.280715ft/toretrogen.h5")
 
-    testwords = ["human", "dog", "cat", "potato", "fat"]
 
-    fastext_version = find_in_dataset(testwords, dataset=ds["directory"] + ds["original"])
-    print(fastext_version)
-    retro_version = find_in_dataset(testwords, dataset=ds["directory"] + ds["retrofitted"])
-    print(retro_version)
     #
     # for idx,word in enumerate(testwords):
     #     print(word)

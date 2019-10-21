@@ -1,4 +1,7 @@
 import xml.etree.ElementTree as ET
+from multiprocessing.pool import Pool
+
+import pandas as pd
 
 from CNQuery import CNQuery
 
@@ -85,5 +88,81 @@ def create_conceptnet_xml():
     myfile = open("items2.xml", "w")
     myfile.write(mydata)
 
+def concept_xml(tup):
+    conceptname, id = tup
+    dir_write = "cn_rdf/"
+    def parse_fun(dict_res):
+        items = None
+        # with open(dir_write+conceptname.replace("/","__")+".xml","wb") as myfile:
+        data = ET.Element('benchmark')
+        items = ET.SubElement(data, 'entries')
+
+        i = 1
+        #Check connections
+        for edge in dict_res["edges"]:
+            start = edge["start"]["term"]
+            end = edge["end"]["term"]
+            rel = edge["rel"]["@id"]
+            text = edge["surfaceText"]
+            if text is None:
+                continue
+            #Build xml
+            entry = ET.Element('entry', attrib={
+                'category': 'Conceptnet',
+                'eid': str(id),
+                'size': "1"
+            })
+            tripleset_text = start + " | " + rel + " | " + end
+            # Original tripleset
+            original_tripleset = ET.SubElement(entry, 'originaltripleset')
+            otriple = ET.SubElement(original_tripleset, 'otriple')
+            otriple.text = tripleset_text
+            # Modified tripleset
+            modified_tripleset = ET.SubElement(entry, 'modifiedtripleset')
+            mtriple = ET.SubElement(modified_tripleset, 'mtriple')
+            mtriple.text = tripleset_text
+
+
+            # TODO clean the text up.
+            lex = ET.SubElement(entry, 'lex', attrib={
+                'comment': 'good',
+                'lid': str(i),
+            })
+            text = text.replace("[", "").replace("]", "")
+            lex.text = text
+            items.append(entry)
+            i+=1
+            # myfile.write(ET.tostring(data))
+        return items
+    query = CNQuery().query_custom_parse(conceptname,None,None,parse_fun)
+    print("Done",id,conceptname)
+    return query
+
+
+def multithread_build(vocabulary_loc, thread_amount=8):
+    p = Pool(8)
+    concept_list = []
+    vocab = pd.read_hdf(vocabulary_loc)
+    max = 100
+    i = 0
+    for line in vocab.index:
+        # if i == max:
+        #     break
+        concept_list.append(line)
+        i+=1
+    results = p.map(concept_xml,zip(concept_list,range(len(concept_list))))
+    with open("cn_rdf/cn.xml","wb") as cnfile:
+        data = ET.Element('benchmark')
+        items = ET.SubElement(data, 'entries')
+
+        for item in results:
+            if len(item.getchildren())==0:
+                continue
+            else:
+                for child in item.getchildren():
+                    items.append(child)
+        cnfile.write(ET.tostring(data))
 if __name__ == '__main__':
-    create_conceptnet_xml()
+    # create_conceptnet_xml()
+    vocabulary_loc = "fasttext_model/attract_repel.hd5clean"
+    multithread_build(vocabulary_loc,4)

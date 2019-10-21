@@ -8,7 +8,7 @@ from multiprocessing.pool import Pool
 from tokenize import String
 
 import faiss
-import fastText
+import fasttext
 import gc
 
 import numpy
@@ -16,11 +16,10 @@ import numpy as np
 import pandas as pd
 from conceptnet5.nodes import standardized_concept_uri
 from conceptnet5.vectors import cosine_similarity
-from keras import backend as K
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.contrib.learn.python.learn.estimators._sklearn import train_test_split
 
 directory = './retrogan/'
 # directory = '/home/pedro/Documents/mltests/retrogan/'
@@ -42,8 +41,8 @@ def process_line(line):
     tup = (linesplit[0],x)
     return tup
 
-def root_mean_squared_error(y_true, y_pred):
-    return K.sqrt(K.mean(K.square(y_pred - y_true)))
+# def root_mean_squared_error(y_true, y_pred):
+#     return K.sqrt(K.mean(K.square(y_pred - y_true)))
 
 def load_embedding(path,limit=100000000,cache=None):
     if cache is not None:
@@ -288,6 +287,74 @@ def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder=".
     print("Dumping testing")
     X_test.to_hdf(os.path.join(save_folder,"filtered_x_test"), "mat")
     Y_test.to_hdf(os.path.join(save_folder,"filtered_y_test"), "mat")
+    print("Returning")
+    if not return_idx:
+        return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
+    else:
+        return np.array(X_train.values),np.array(Y_train.values),np.array(X_train.index)#, np.array(X_test.values),np.array(Y_test.values)
+def load_noisiest_words_dataset_2(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95,return_idx=False):
+    global original, retrofitted
+    # if os.path.exists(os.path.join(save_folder,"filtered_x")) and os.path.exists(os.path.join(save_folder,"filtered_y"))\
+    #         and cache:
+    #     print("Reusing cache")
+    #     X_train = pd.read_hdf(os.path.join(save_folder,"filtered_x"), 'mat', encoding='utf-8')
+    #     Y_train = pd.read_hdf(os.path.join(save_folder,"filtered_y"),'mat',encoding='utf-8')
+    #     # X_test = pd.read_hdf(os.path.join(save_folder,"filtered_x_test"), "mat",encoding='utf-8')
+    #     # Y_test = pd.read_hdf(os.path.join(save_folder,"filtered_y_test"), "mat",encoding='utf-8')
+    #     if not return_idx:
+    #         return np.array(X_train.values), np.array(Y_train.values)#, np.array(X_test.values), np.array(Y_test.values)
+    #     else:
+    #         return np.array(X_train.values), np.array(Y_train.values), np.array(X_train.index)
+    original = dataset["original"]
+    retrofitted = dataset["retrofitted"]
+    directory = dataset["directory"]
+    print("Searching")
+    print("for:", original, retrofitted)
+
+    o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
+    r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
+    r_sub = r.loc[o.index.intersection(r.index), :]
+    del r
+    gc.collect()
+
+    # Filter out words that have not changed too much.
+    cns = []
+
+    def dot_product2(v1, v2):
+        return sum(map(operator.mul, v1, v2))
+
+    print(len(o.values))
+    testindexes = []
+
+    cns = []
+
+    def load_words(fn):
+        syns = set()
+        with open(fn) as f:
+            for line in f:
+                for x in line.split("\t"):
+                    s = standardized_concept_uri(x[0:x.index("_")], x[x.index("_"):])
+                    # print(s)
+                    syns.add(s)
+        return syns
+    result = load_words("synonyms.txt").union(load_words("antonyms.txt"))
+    for i in range(len(o.values)):
+        print(o.index[i])
+        if o.index[i] in result:
+            cns.append(i)
+        else:
+            testindexes.append(i)
+    X_train = o.iloc[cns, :]
+    Y_train = r_sub.iloc[cns, :]
+    print("Dumping training")
+    X_train.to_hdf(os.path.join(save_folder,"filtered_x"), "mat")
+    Y_train.to_hdf(os.path.join(save_folder,"filtered_y"),"mat")
+
+    # X_test = o.iloc[testindexes,:]
+    # Y_test = r_sub.iloc[testindexes,:]
+    # print("Dumping testing")
+    # X_test.to_hdf(os.path.join(save_folder,"filtered_x_test"), "mat")
+    # Y_test.to_hdf(os.path.join(save_folder,"filtered_y_test"), "mat")
     print("Returning")
     if not return_idx:
         return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
@@ -646,7 +713,7 @@ def generate_fastext_embedding(word,keep_model_in_memory=True,ft_dir="fasttext_m
     global ft_model
     standardized_form = standardized_concept_uri("en",word).replace("/c/en/","")
     if ft_model is None:
-        ft_model = fastText.load_model(ft_dir)
+        ft_model = fasttext.load_model(ft_dir)
     wv = ft_model.get_word_vector(standardized_form)
     if not keep_model_in_memory:
         del ft_model
@@ -703,7 +770,7 @@ def test_sem(model, dataset_location='SimLex-999.txt',fast_text_location="../fas
     my_word_tuples = []
     global ft_model
     if ft_model is None:
-        ft_model = fastText.load_model(fast_text_location)
+        ft_model = fasttext.load_model(fast_text_location)
     retrogan = model
     with open(dataset_location) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')
@@ -725,9 +792,9 @@ def test_sem(model, dataset_location='SimLex-999.txt',fast_text_location="../fas
             mw2 = ft_model.get_word_vector(row[1].lower())
             mw2 = np.array(retrogan.predict(mw2.reshape(1, 300))).reshape((300,))
 
-            score = cosine_similarity(mw1, mw2)
+            score = cosine_similarity([mw1], [mw2])
 
-            my_word_tuples.append((row[0], row[1], score))
+            my_word_tuples.append((row[0], row[1], score[0]))
         print(f'Processed {line_count} lines.')
     print(pearsonr([float(x[2]) for x in word_tuples], [float(x[2]) for x in my_word_tuples]))
     print(spearmanr([x[2] for x in word_tuples], [x[2] for x in my_word_tuples]))

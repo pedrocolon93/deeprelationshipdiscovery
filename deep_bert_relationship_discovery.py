@@ -9,16 +9,12 @@ import numpy as np
 import pandas as pd
 import sklearn
 from conceptnet5.vectors import standardized_concept_uri
+from keras import Input, Model
+from keras.engine.saving import load_model
+from keras.layers import Dense, Concatenate, BatchNormalization, Conv1D, multiply, Dropout
+from keras.optimizers import Adam
 # from keras.utils import plot_model
-from tensorflow_core.python.keras.engine.input_layer import Input
-from tensorflow_core.python.keras.engine.training import Model
-from tensorflow_core.python.keras.layers.convolutional import Conv1D
-from tensorflow_core.python.keras.layers.core import Dense
-from tensorflow_core.python.keras.layers.merge import Concatenate
-from tensorflow_core.python.keras.layers.normalization_v2 import BatchNormalization
-from tensorflow_core.python.keras.optimizer_v2.adam import Adam
-from tensorflow_core.python.keras.saving.save import load_model
-from tensorflow_core.python.keras.utils.vis_utils import plot_model
+from keras.utils import plot_model
 from tqdm import tqdm
 
 from retrogan_trainer import attention, ConstMultiplierLayer
@@ -72,7 +68,7 @@ def create_model():
     wv2_expansion_3 = BatchNormalization()(wv2_expansion_3)
 
     # Concatenate both expansions
-    merge1 = Concatenate()([wv1_expansion_3, wv2_expansion_3])
+    merge1 = Concatenate()([wv1_expansion_2, wv1_expansion_3, wv2_expansion_2,wv2_expansion_3])
     merge_expand = Dense(expansion_size, activation='relu')(merge1)
     merge_expand = BatchNormalization()(merge_expand)
     # Add atention layer
@@ -144,6 +140,8 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
 
     def load_batch(output_name):
         print("Loading batch for", output_name)
+        # TODO LOAD BATCH OF A CERTAIN TYPE
+        print("\nDone\n")
         l = len(training_data_dict[output_name])
         iterable = list(range(0, l))
         shuffle(iterable)
@@ -210,7 +208,13 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                 break
         print("Avg loss", total_loss / iter)
         print(str(epoch) + "/" + str(epoch_amount))
-
+        print("Saving...")
+        try:
+            os.mkdir(save_folder)
+        except Exception as e:
+            print(e)
+        for key in model.keys():
+            model[key].save(save_folder + "/" + key + ".model")
         # for key in prob_model.keys():
         #     prob_model[key].save(save_folder + "/" + key + "probability.model")
             # exit()
@@ -218,13 +222,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         model_name = "PartOf"
         test_model(model, model_name=model_name)
         # test_model(prob_model, model_name=model_name)
-    print("Saving...")
-    try:
-        os.mkdir(save_folder)
-    except Exception as e:
-        print(e)
-    for key in model.keys():
-        model[key].save(save_folder + "/" + key + ".model")
+
 def create_data(use_cache=True):
     if os.path.exists("tmp/valid_rels.hd5") and use_cache:
         print("Using cache")

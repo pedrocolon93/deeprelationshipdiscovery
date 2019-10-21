@@ -3,12 +3,12 @@ import re
 from random import shuffle
 
 import spacy
-from keras.engine.saving import load_model
-from keras.optimizers import Adam
 from nltk.corpus import stopwords
 
 # You will have to download the set of stop words the first time
 import nltk
+from tensorflow_core.python.keras.optimizers import Adam
+from tensorflow_core.python.keras.saving.save import load_model
 
 import deep_relationship_discovery
 import tools
@@ -46,12 +46,14 @@ def clean_file(file_contents):
     clean_file_contents = [word for word in file_contents if word not in stop_words]
     return clean_file_contents
 
-def generate_kg(clean_file_contents):
+def generate_kg(clean_file_contents,limit=1000,
+                drd_models_path = "../trained_models/deepreldis/2019-04-2314:43:00.000000",
+                target_file_loc = '../trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5clean',
+                trained_model_path = "../trained_models/retrogans/2019-04-0721:33:44.223104/toretrogen.h5",
+                ft_dir="../fasttext_model/cc.en.300.bin"):
     print(len(clean_file_contents))
     clean_file_contents = list(set(clean_file_contents))
-    drd_models_path = "../trained_models/deepreldis/2019-04-2314:43:00.000000"
-    target_file_loc = '../trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5clean'
-    trained_model_path = "../trained_models/retrogans/2019-04-0721:33:44.223104/toretrogen.h5"
+
     # Load retrogan
     retrogan = load_model(trained_model_path,
                           custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer},
@@ -73,7 +75,7 @@ def generate_kg(clean_file_contents):
         if not val:
             missing_text = clean_file_contents[i]
             # print("Missing:",missing_text)
-            we = tools.generate_fastext_embedding(missing_text,ft_dir="../fasttext_model/cc.en.300.bin")
+            we = tools.generate_fastext_embedding(missing_text,ft_dir=ft_dir)
             # print("We:",we)
             index = tools.standardized_concept_uri("en",missing_text)
             # print(index)
@@ -137,7 +139,10 @@ def generate_kg(clean_file_contents):
 
     # input("Hello")
     print(len(res))
-    return res[0:1000]
+    if limit is not None:
+        return res[0:limit]
+    else:
+        return res
 
 if __name__ == '__main__':
     filename = "WebPages/travel_ny_bos.txt"
