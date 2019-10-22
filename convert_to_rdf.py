@@ -88,52 +88,54 @@ def create_conceptnet_xml():
     myfile = open("items2.xml", "w")
     myfile.write(mydata)
 
+def parse_fun(dict_res):
+    items = None
+    # with open(dir_write+conceptname.replace("/","__")+".xml","wb") as myfile:
+    data = ET.Element('benchmark')
+    items = ET.SubElement(data, 'entries')
+
+    i = 1
+    #Check connections
+    for edge in dict_res["edges"]:
+        start = edge["start"]["term"]
+        end = edge["end"]["term"]
+        rel = edge["rel"]["@id"]
+        text = edge["surfaceText"]
+        if text is None:
+            continue
+        #Build xml
+        entry = ET.Element('entry', attrib={
+            'category': 'Conceptnet',
+            'eid': str(id),
+            'size': "1"
+        })
+        tripleset_text = start + " | " + rel + " | " + end
+        # Original tripleset
+        original_tripleset = ET.SubElement(entry, 'originaltripleset')
+        otriple = ET.SubElement(original_tripleset, 'otriple')
+        otriple.text = tripleset_text
+        # Modified tripleset
+        modified_tripleset = ET.SubElement(entry, 'modifiedtripleset')
+        mtriple = ET.SubElement(modified_tripleset, 'mtriple')
+        mtriple.text = tripleset_text
+
+
+        # TODO clean the text up.
+        lex = ET.SubElement(entry, 'lex', attrib={
+            'comment': 'good',
+            'lid': str(i),
+        })
+        text = text.replace("[", "").replace("]", "")
+        lex.text = text
+        items.append(entry)
+        i+=1
+        # myfile.write(ET.tostring(data))
+    return items
+
 def concept_xml(tup):
     conceptname, id = tup
     dir_write = "cn_rdf/"
-    def parse_fun(dict_res):
-        items = None
-        # with open(dir_write+conceptname.replace("/","__")+".xml","wb") as myfile:
-        data = ET.Element('benchmark')
-        items = ET.SubElement(data, 'entries')
 
-        i = 1
-        #Check connections
-        for edge in dict_res["edges"]:
-            start = edge["start"]["term"]
-            end = edge["end"]["term"]
-            rel = edge["rel"]["@id"]
-            text = edge["surfaceText"]
-            if text is None:
-                continue
-            #Build xml
-            entry = ET.Element('entry', attrib={
-                'category': 'Conceptnet',
-                'eid': str(id),
-                'size': "1"
-            })
-            tripleset_text = start + " | " + rel + " | " + end
-            # Original tripleset
-            original_tripleset = ET.SubElement(entry, 'originaltripleset')
-            otriple = ET.SubElement(original_tripleset, 'otriple')
-            otriple.text = tripleset_text
-            # Modified tripleset
-            modified_tripleset = ET.SubElement(entry, 'modifiedtripleset')
-            mtriple = ET.SubElement(modified_tripleset, 'mtriple')
-            mtriple.text = tripleset_text
-
-
-            # TODO clean the text up.
-            lex = ET.SubElement(entry, 'lex', attrib={
-                'comment': 'good',
-                'lid': str(i),
-            })
-            text = text.replace("[", "").replace("]", "")
-            lex.text = text
-            items.append(entry)
-            i+=1
-            # myfile.write(ET.tostring(data))
-        return items
     query = CNQuery().query_custom_parse(conceptname,None,None,parse_fun)
     print("Done",id,conceptname)
     return query

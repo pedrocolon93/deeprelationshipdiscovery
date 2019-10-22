@@ -4,24 +4,25 @@ import os
 import pickle
 from random import shuffle
 
+from tensorflow_core.python.keras.saving.save import load_model
+
+from retrogan_trainer_attractrepel import *
+
+
 import gc
 import numpy as np
 import pandas as pd
 import sklearn
 from conceptnet5.vectors import standardized_concept_uri
 # from keras.utils import plot_model
-from tensorflow_core.python.keras.engine.input_layer import Input
-from tensorflow_core.python.keras.engine.training import Model
-from tensorflow_core.python.keras.layers.convolutional import Conv1D
-from tensorflow_core.python.keras.layers.core import Dense
-from tensorflow_core.python.keras.layers.merge import Concatenate
-from tensorflow_core.python.keras.layers.normalization_v2 import BatchNormalization
+from tensorflow.python.keras.layers import Input, Layer, Conv1D, Dense, multiply, add, BatchNormalization, \
+    MaxPooling1D, Flatten, Concatenate
+from tensorflow.python.keras import Model
+from tensorflow_core.python.framework.random_seed import set_random_seed
 from tensorflow_core.python.keras.optimizer_v2.adam import Adam
-from tensorflow_core.python.keras.saving.save import load_model
 from tensorflow_core.python.keras.utils.vis_utils import plot_model
 from tqdm import tqdm
 
-from retrogan_trainer import attention, ConstMultiplierLayer
 
 relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires",
              "/r/AtLocation"
@@ -351,7 +352,8 @@ def load_model_ours(save_folder="./drd", model_name="all",probability_models=Fal
     #                                         custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
     return model_dict
 
-retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
+# retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
+retroembeddings = "trained_models/retroembeddings/2019-10-22 11:57:48.878874/retroembeddings.h5"
 # retroembeddings = "trained_models/retroembeddings/2019-05-15 11:47:52.802481/retroembeddings.h5"
 
 if __name__ == '__main__':

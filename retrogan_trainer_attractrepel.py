@@ -41,7 +41,7 @@ class ConstMultiplierLayer(Layer):
         super(ConstMultiplierLayer, self).build(input_shape)
 
     def call(self, x, **kwargs):
-        return tf.multiply(self.k, x)
+        return tf.math.multiply(self.k, x)
 
     def compute_output_shape(self, input_shape):
         return input_shape

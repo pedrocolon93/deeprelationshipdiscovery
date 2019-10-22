@@ -7,20 +7,19 @@ import numpy as np
 import pandas
 import pandas as pd
 import sklearn
-import tensorflow as tf
-from keras.backend.tensorflow_backend import set_session
-from keras.engine.saving import load_model
-from keras.optimizers import Adam
 from numpy.random import seed
+from retrogan_trainer_attractrepel import *
+from tensorflow_core.python.framework.random_seed import set_random_seed
+from tensorflow_core.python.keras.optimizer_v2.adam import Adam
+from tensorflow_core.python.keras.saving.save import load_model
+import tensorflow as tf
 
 import tools
-from retrogan_trainer import ConstMultiplierLayer
 from tools import find_in_fasttext, find_in_retrofitted, \
     find_closest_2
 from vocabulary_cleaner import cleanup_vocabulary_nb_based
 
 seed(1)
-from tensorflow import set_random_seed
 
 set_random_seed(2)
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -40,21 +39,21 @@ if __name__ == '__main__':
         num_CPU = 1
         num_GPU = 0
 
-    # TF config options
-    config = tf.ConfigProto(intra_op_parallelism_threads=num_cores,
-                            inter_op_parallelism_threads=num_cores,
-                            allow_soft_placement=True,
-                            device_count={'CPU': num_CPU,
-                                          'GPU': num_GPU})
-    config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
-
-    # config.log_device_placement = True  # to log device placement (on which device the operation ran)
-
-    sess = tf.Session(config=config)
-    set_session(sess)  # set this TensorFlow session as the default session for Keras
+    # # TF config options
+    # config = tf.ConfigProto(intra_op_parallelism_threads=num_cores,
+    #                         inter_op_parallelism_threads=num_cores,
+    #                         allow_soft_placement=True,
+    #                         device_count={'CPU': num_CPU,
+    #                                       'GPU': num_GPU})
+    # config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+    #
+    # # config.log_device_placement = True  # to log device placement (on which device the operation ran)
+    #
+    # sess = tf.Session(config=config)
+    # set_session(sess)  # set this TensorFlow session as the default session for Keras
 
     # Software parameters
-    trained_model_path = "fasttext_model/trained_retrogan/2019-10-03 11:41:57.136812ftar/toretrogen.h5"
+    trained_model_path = "fasttext_model/trained_retrogan/2019-10-22 11:22:41.253615ftar/toretrogen.h5"
     retroembeddings_folder = "./trained_models/retroembeddings/" + str(datetime.datetime.now())
     clean = False
 
