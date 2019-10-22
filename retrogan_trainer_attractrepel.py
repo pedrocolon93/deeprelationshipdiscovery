@@ -178,20 +178,21 @@ class RetroCycleGAN():
         d0 = dense(d0, self.gf * 8, normalization=True)
         d0 = dense(d0, self.gf * 8, normalization=True)
 
-        # r = tf.compat.v2.keras.layers.Reshape((-1, 1))(d0)
+        r = tf.compat.v2.keras.layers.Reshape((d0.get_shape()[-1], 1))(d0)
         # # Downscaling
-        # # t1 = conv1d(r,self.gf*8,f_size=6)
-        # t2 = conv1d(r, self.gf * 4, f_size=8)
+        # t1 = conv1d(r,self.gf*8,f_size=6)
+        t2 = conv1d(r, self.gf * 4, f_size=8)
         # # t3 = conv1d(t2, self.gf, f_size=4)
-        # f = MaxPooling1D(pool_size=4)(t2)
+        f = MaxPooling1D(pool_size=4)(t2)
+        f = Flatten()(f)
         # f = tf.compat.v1.keras.layers.Reshape((-1))(f)
         # # att
         # # if tf.keras.backend.int_shape(f)[1] is None:
         # #
         # #     shape_flatten = np.prod(shape_before_flatten)  # value of shape in the non-batch dimension
-        # #     attn = attention(f,amount=shape_flatten)
+        attn = attention(f)
         # # else:
-        attn = attention(d0)
+        # attn = attention(d0)
 
         # VAE Like layer
         # latent_dim = 128
