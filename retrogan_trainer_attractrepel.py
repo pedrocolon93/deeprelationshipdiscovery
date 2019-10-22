@@ -1,30 +1,26 @@
 from __future__ import print_function, division
 
 import datetime
+import math
 import os
 from random import shuffle
-import math
+
 import numpy as np
-import sklearn
-import tensorflow as tf
-from conceptnet5.nodes import standardized_concept_uri
-from keras import backend as K
-from keras.backend.tensorflow_backend import set_session
-from keras.engine import Layer
-from keras.layers import BatchNormalization, add, multiply, Conv1D, Reshape, Flatten, UpSampling1D, MaxPooling1D
-from keras.layers import Input, Dense
-from keras.models import Model
-from keras.optimizers import Adam
-from keras.utils import plot_model
-
+# from tensorflow_core.python.keras import backend as K
 from numpy.random import seed
-from tqdm import tqdm
+from tensorflow.keras import backend as K
 
+from tensorflow.python.keras.layers import Input, Layer, Conv1D, Dense, multiply, add, BatchNormalization, \
+    MaxPooling1D, Flatten
+from tensorflow.python.keras import Model
+from tensorflow_core.python.framework.random_seed import set_random_seed
+from tensorflow_core.python.keras.optimizer_v2.adam import Adam
+from tensorflow_core.python.keras.utils.vis_utils import plot_model
+from tqdm import tqdm
+import tensorflow as tf
 import tools
-from tools import load_noisiest_words_dataset, find_in_dataset
 
 seed(1)
-from tensorflow import set_random_seed
 
 set_random_seed(2)
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -45,15 +41,19 @@ class ConstMultiplierLayer(Layer):
         super(ConstMultiplierLayer, self).build(input_shape)
 
     def call(self, x, **kwargs):
-        return K.tf.multiply(self.k, x)
+        return tf.multiply(self.k, x)
 
     def compute_output_shape(self, input_shape):
         return input_shape
 
 
-def attention(layer_input):
+def attention(layer_input,amount=None):
     # ATTENTION PART STARTS HERE
-    attention_probs = Dense(layer_input._keras_shape[1], activation='softmax')(layer_input)
+    if amount is not None:
+        attention_probs = Dense(amount[1], activation='softmax')(layer_input)
+    else:
+        sh = tf.keras.backend.int_shape(layer_input)
+        attention_probs = Dense(sh[1], activation='softmax')(layer_input)
     attention_mul = multiply([layer_input, attention_probs]
                              )
     attention_scale = ConstMultiplierLayer()(attention_mul)
@@ -167,9 +167,9 @@ class RetroCycleGAN():
 
             return d
 
-        def deconv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
-            d = UpSampling1D(filters, f_size, strides=strides, activation="relu")(layer_input)
-            return d
+        # def deconv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
+        #     d = UpSampling1D(filters, f_size, strides=strides, activation="relu")(layer_input)
+        #     return d
 
         # Image input
         inpt = Input(shape=self.img_shape)
@@ -178,14 +178,20 @@ class RetroCycleGAN():
         d0 = dense(d0, self.gf * 8, normalization=True)
         d0 = dense(d0, self.gf * 8, normalization=True)
 
-        r = Reshape((-1, 1))(d0)
-        # Downscaling
-        # t1 = conv1d(r,self.gf*8,f_size=6)
-        t2 = conv1d(r, self.gf * 4, f_size=8)
-        # t3 = conv1d(t2, self.gf, f_size=4)
-        f = MaxPooling1D(pool_size=4)(t2)
-        f = Flatten()(f)
-        attn = attention(f)
+        # r = tf.compat.v2.keras.layers.Reshape((-1, 1))(d0)
+        # # Downscaling
+        # # t1 = conv1d(r,self.gf*8,f_size=6)
+        # t2 = conv1d(r, self.gf * 4, f_size=8)
+        # # t3 = conv1d(t2, self.gf, f_size=4)
+        # f = MaxPooling1D(pool_size=4)(t2)
+        # f = tf.compat.v1.keras.layers.Reshape((-1))(f)
+        # # att
+        # # if tf.keras.backend.int_shape(f)[1] is None:
+        # #
+        # #     shape_flatten = np.prod(shape_before_flatten)  # value of shape in the non-batch dimension
+        # #     attn = attention(f,amount=shape_flatten)
+        # # else:
+        attn = attention(d0)
 
         # VAE Like layer
         # latent_dim = 128
@@ -399,16 +405,15 @@ class RetroCycleGAN():
 
 
 if __name__ == '__main__':
-    config = tf.ConfigProto()
     global dimensionality
     dimensionality = 300
     tools.dimensionality = dimensionality
     # config.log_device_placement = True
-    config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+    # config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
     # config.log_device_placement = True  # to log device placement (on which device the operation ran)
     # (nothing gets printed in Jupyter, only if you run it standalone)
-    sess = tf.Session(config=config)
-    set_session(sess)  # set this TensorFlow session as the default session for Keras
+    # sess = tf.Session(config=config)
+    # set_session(sess)  # set this TensorFlow session as the default session for Keras
     postfix = "ftar"
     save_folder = "fasttext_model/trained_retrogan/" + str(datetime.datetime.now()) + postfix
     if not os.path.exists(save_folder):
