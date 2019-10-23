@@ -101,8 +101,9 @@ def parse_fun(dict_res):
         end = edge["end"]["term"]
         rel = edge["rel"]["@id"]
         text = edge["surfaceText"]
-        if text is None:
-            continue
+        if not text == "":
+            if text is None:
+                continue
         #Build xml
         entry = ET.Element('entry', attrib={
             'category': 'Conceptnet',
@@ -137,22 +138,26 @@ def concept_xml(tup):
     dir_write = "cn_rdf/"
 
     query = CNQuery().query_custom_parse(conceptname,None,None,parse_fun)
-    print("Done",id,conceptname)
+    # print("Done",id,conceptname)
     return query
 
 
 def multithread_build(vocabulary_loc, thread_amount=8):
-    p = Pool(8)
+    p = Pool(14)
     concept_list = []
     vocab = pd.read_hdf(vocabulary_loc)
     max = 100
     i = 0
+    print("Loading vocab")
     for line in vocab.index:
         # if i == max:
         #     break
         concept_list.append(line)
         i+=1
+    print("Mapping")
     results = p.map(concept_xml,zip(concept_list,range(len(concept_list))))
+    print(results)
+
     with open("cn_rdf/cn.xml","wb") as cnfile:
         data = ET.Element('benchmark')
         items = ET.SubElement(data, 'entries')

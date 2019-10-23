@@ -9,7 +9,7 @@ import tools
 class CNQuery():
     def __init__(self,base_url="http://8kboxx/"):
         # self.base_url = "http://8kboxx/"
-        self.base_url = "http://api.conceptnet.io/"
+        self.base_url = base_url
         # node = / c / en / dog & other = / c / en / pizza
 
     def parse(self, result):
@@ -48,7 +48,7 @@ class CNQuery():
         retry = 4
         while True or i>retry:
             try:
-                urlres = requests.get(res)
+                urlres = requests.get(res, timeout=5)
                 urlres = urlres.json()
 
                 break

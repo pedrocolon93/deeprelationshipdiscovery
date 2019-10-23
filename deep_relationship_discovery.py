@@ -1,28 +1,21 @@
 import csv
 import json
-import os
 import pickle
-from random import shuffle
 
-from tensorflow_core.python.keras.saving.save import load_model
-
-from retrogan_trainer_attractrepel import *
-
-
-import gc
 import numpy as np
 import pandas as pd
 import sklearn
 from conceptnet5.vectors import standardized_concept_uri
-# from keras.utils import plot_model
-from tensorflow.python.keras.layers import Input, Layer, Conv1D, Dense, multiply, add, BatchNormalization, \
-    MaxPooling1D, Flatten, Concatenate
 from tensorflow.python.keras import Model
-from tensorflow_core.python.framework.random_seed import set_random_seed
+# from keras.utils import plot_model
+from tensorflow.python.keras.layers import Input, Conv1D, Dense, BatchNormalization, \
+    Concatenate
 from tensorflow_core.python.keras.optimizer_v2.adam import Adam
+from tensorflow_core.python.keras.saving.save import load_model
 from tensorflow_core.python.keras.utils.vis_utils import plot_model
 from tqdm import tqdm
 
+from retrogan_trainer_attractrepel import *
 
 relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires",
              "/r/AtLocation"
@@ -373,11 +366,11 @@ if __name__ == '__main__':
     data = create_data(use_cache=True)
     # # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
-    train_on_assertions(model, data)
+    train_on_assertions(model, data,save_folder="trained_models/deepreldis/"+str(datetime.datetime.now())+"/",epoch_amount=20,batch_size=16)
     print("Done\n")
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-05-28",model_name=model_name)
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_2_sigmoid",model_name=model_name,probability_models=True)
-    normalizers = normalize_outputs(model,save_folder="trained_models/deepreldis/2019-05-28")
+    normalizers = normalize_outputs(model,use_cache=False)
     # normalizers = normalize_outputs(model,use_cache=False)
     test_model(model, normalizers=normalizers, model_name=model_name)
     # Output needs to be the relationship weights

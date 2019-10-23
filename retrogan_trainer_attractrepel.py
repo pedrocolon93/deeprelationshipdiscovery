@@ -364,15 +364,17 @@ class RetroCycleGAN():
                                                        imgs_A, imgs_B])
                 elapsed_time = datetime.datetime.now() - start_time
 
-                if np.isnan(dA_loss_fake).any() or np.isnan(dA_loss_real).any() or np.isnan(
-                        dB_loss_fake).any() or np.isnan(dB_loss_real).any() or np.isnan(g_loss).any():
-                    print(np.isnan(dA_loss_fake).any(), np.isnan(dA_loss_real).any(), np.isnan(dB_loss_fake).any(),
-                          np.isnan(dB_loss_real).any(), np.isnan(g_loss).any())
-                    print("Problem")
-                    raise ArithmeticError("Problem with loss calculation")
-                if batch_i % 500 == 0:
+                # if np.isnan(dA_loss_fake).any() or np.isnan(dA_loss_real).any() or np.isnan(
+                #         dB_loss_fake).any() or np.isnan(dB_loss_real).any() or np.isnan(g_loss).any():
+                #     print(np.isnan(dA_loss_fake).any(), np.isnan(dA_loss_real).any(), np.isnan(dB_loss_fake).any(),
+                #           np.isnan(dB_loss_real).any(), np.isnan(g_loss).any())
+                #     print("Problem")
+                #     raise ArithmeticError("Problem with loss calculation")
+                if batch_i % 500 == 0 and batch_i!=0:
+                    print("\n")
                     tools.test_sem(rcgan.g_AB, dataset_location="testing/SimLex-999.txt",
                                    fast_text_location="fasttext_model/cc.en.300.bin")
+                    print("\n")
 
                 if batch_i % 100 == 0:
                     print(
