@@ -50,10 +50,10 @@ class CNQuery():
             try:
                 urlres = requests.get(res, timeout=5)
                 urlres = urlres.json()
-
                 break
-            except:
+            except Exception as e:
                 i+=1
+                print(e)
                 time.sleep(2)
                 pass
         # print(urlres)

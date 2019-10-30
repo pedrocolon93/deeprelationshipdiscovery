@@ -22,11 +22,11 @@ relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r
              , "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite",
              "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym",
              "/r/Causes", "/r/Antonym", "/r/DistinctFrom", "/r/DerivedFrom", "/r/SymbolOf", "/r/DefinedAs",
-             "/r/SimilarTo", "/r/Entails"]
-             # "/r/MannerOf", "/r/RelatedTo",
-             # "/r/LocatedNear", "/r/HasContext", "/r/FormOf",  "/r/EtymologicallyRelatedTo",
-             # "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
-             # "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
+             "/r/SimilarTo", "/r/Entails",
+             "/r/MannerOf", "/r/RelatedTo",
+             "/r/LocatedNear", "/r/HasContext", "/r/FormOf",  "/r/EtymologicallyRelatedTo",
+             "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf",
+             "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
 
 
 def conv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
@@ -40,40 +40,33 @@ def create_model():
     wv2 = Input(shape=(300,), name="retro_word_2")
     expansion_size = 128
     filters = 8
-    # Expand and contract the 2 word vectors
-    wv1_expansion_1 = Dense(expansion_size * 2)(wv1)
-    wv1_expansion_1 = BatchNormalization()(wv1_expansion_1)
-    # r_1 = Reshape((-1, 1))(wv1_expansion_1)
-    # t1 = conv1d(r_1, filters, f_size=4)
-    # f1 = MaxPooling1D(pool_size=4)(t1)
-    # f1 = Flatten()(f1)
-    # wv1_expansion_2 = attention(f1)
-    wv1_expansion_2 = attention(wv1_expansion_1)
-    wv1_expansion_3 = Dense(int(expansion_size / 4), activation='relu')(wv1_expansion_2)
-    wv1_expansion_3 = BatchNormalization()(wv1_expansion_3)
 
-    wv2_expansion_1 = Dense(expansion_size * 2)(wv2)
-    wv2_expansion_1 = BatchNormalization()(wv2_expansion_1)
-    # r_2 = Reshape((-1, 1))(wv2_expansion_1)
-    # t2 = conv1d(r_2, filters, f_size=4)
-    # f2 = MaxPooling1D(pool_size=4)(t2)
-    # f2 = Flatten()(f2)
-    # wv2_expansion_2 = attention(f2)
-    # wv2_expansion_2 = Dense(int(expansion_size / 2),activation='relu')(wv2_expansion_1)
-    # wv2_expansion_2 = BatchNormalization()(wv2_expansion_1)
-    wv2_expansion_2 = attention(wv2_expansion_1)
-    wv2_expansion_3 = Dense(int(expansion_size / 4), activation='relu')(wv2_expansion_2)
-    wv2_expansion_3 = BatchNormalization()(wv2_expansion_3)
+    def create_word_input_abstraction(wv1):
+        # Expand and contract the 2 word vectors
+        wv1_expansion_1 = Dense(512)(wv1)
+        wv1_expansion_1 = BatchNormalization()(wv1_expansion_1)
+        # r_1 = Reshape((-1, 1))(wv1_expansion_1)
+        # t1 = conv1d(r_1, filters, f_size=4)
+        # f1 = MaxPooling1D(pool_size=4)(t1)
+        # f1 = Flatten()(f1)
+        # wv1_expansion_2 = attention(f1)
+        wv1_expansion_2 = attention(wv1_expansion_1)
+        wv1_expansion_3 = Dense(int(expansion_size / 4), activation='relu')(wv1_expansion_2)
+        wv1_expansion_3 = BatchNormalization()(wv1_expansion_3)
+        return wv1_expansion_3
+
+    wv1_expansion_3 = create_word_input_abstraction(wv1)
+    wv2_expansion_3 = create_word_input_abstraction(wv2)
 
     # Concatenate both expansions
     merge1 = Concatenate()([wv1_expansion_3, wv2_expansion_3])
-    merge_expand = Dense(expansion_size, activation='relu')(merge1)
+    merge_expand = Dense(1024, activation='relu')(merge1)
     merge_expand = BatchNormalization()(merge_expand)
     # Add atention layer
     merge_attention = attention(merge_expand)
-    attention_expand = Dense(expansion_size, activation='relu')(merge_attention)
+    attention_expand = Dense(1024, activation='relu')(merge_attention)
     attention_expand = BatchNormalization()(attention_expand)
-    semi_final_layer = Dense(expansion_size, activation='relu')(attention_expand)
+    semi_final_layer = Dense(1024, activation='relu')(attention_expand)
     semi_final_layer = BatchNormalization()(semi_final_layer)
     common_layers_model = Model([wv1, wv2], semi_final_layer, name="Common layers")
     # common_optimizer = Adam(lr=0.000002)
@@ -83,7 +76,7 @@ def create_model():
     # One big layer
     # final = Dense(amount_of_relations)(semi_final_layer)
     # Many tasks
-    task_layer_neurons = 256
+    task_layer_neurons = 512
     losses = []
     model_dict = {}
     # prob_model_dict = {}
@@ -125,16 +118,17 @@ def create_model():
     return model_dict#, prob_model_dict
 
 
-def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd",cutoff=0.6):
+def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd",cutoff=0.75):
     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
     training_data_dict = {}
     training_func_dict = {}
     print("Amount of data:",len(data))
     for i in tqdm(range(len(data))):
         stuff = data.iloc[i]
-        if stuff[0] not in training_data_dict.keys():
-            training_data_dict[stuff[0]] = []
-        training_data_dict[stuff[0]].append(i)
+        rel = stuff[0]
+        if rel not in training_data_dict.keys():
+            training_data_dict[rel] = []
+        training_data_dict[rel].append(i)
 
     def load_batch(output_name):
         print("Loading batch for", output_name)
@@ -176,6 +170,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         tasks_completed = {}
         for task in exclude:
             tasks_completed[task] = False
+        iter = 0
         while True:
             for output in exclude:
                 try:
@@ -197,11 +192,12 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                     # print("Error in", output, str(e))
                     if 'the label' not in str(e):
                         tasks_completed[output] = True
-            if False not in tasks_completed.values() or \
-                    len([x for x in tasks_completed.values() if x]) / len(tasks_completed.values()) > cutoff:
-                for output in exclude:
-                    training_func_dict[output] = load_batch(output)
+                    else:
+                        print(e)
+            # print(len([x for x in tasks_completed.values() if x]),"/", len(tasks_completed.values()))
+            if len([x for x in tasks_completed.values() if x]) / len(tasks_completed.values()) > cutoff:
                 break
+            iter+=1
         print("Avg loss", total_loss / iter)
         print(str(epoch) + "/" + str(epoch_amount))
 
@@ -346,8 +342,9 @@ def load_model_ours(save_folder="./drd", model_name="all",probability_models=Fal
     return model_dict
 
 # retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
-retroembeddings = "trained_models/retroembeddings/2019-10-22 11:57:48.878874/retroembeddings.h5"
+# retroembeddings = "trained_models/retroembeddings/2019-10-22 11:57:48.878874/retroembeddings.h5"
 # retroembeddings = "trained_models/retroembeddings/2019-05-15 11:47:52.802481/retroembeddings.h5"
+retroembeddings = "fasttext_model/attract_repel.hd5clean"
 
 if __name__ == '__main__':
     # # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
@@ -366,7 +363,7 @@ if __name__ == '__main__':
     data = create_data(use_cache=True)
     # # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
-    train_on_assertions(model, data,save_folder="trained_models/deepreldis/"+str(datetime.datetime.now())+"/",epoch_amount=20,batch_size=16)
+    train_on_assertions(model, data,save_folder="trained_models/deepreldis/"+str(datetime.datetime.now())+"/",epoch_amount=10000,batch_size=32)
     print("Done\n")
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-05-28",model_name=model_name)
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_2_sigmoid",model_name=model_name,probability_models=True)

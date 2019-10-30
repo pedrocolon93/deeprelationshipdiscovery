@@ -1,7 +1,9 @@
 import xml.etree.ElementTree as ET
 from multiprocessing.pool import Pool
+from random import shuffle
 
 import pandas as pd
+from tqdm import tqdm
 
 from CNQuery import CNQuery
 
@@ -88,7 +90,7 @@ def create_conceptnet_xml():
     myfile = open("items2.xml", "w")
     myfile.write(mydata)
 
-def parse_fun(dict_res):
+def parse_fun(dict_res, check_english=False):
     items = None
     # with open(dir_write+conceptname.replace("/","__")+".xml","wb") as myfile:
     data = ET.Element('benchmark')
@@ -96,9 +98,16 @@ def parse_fun(dict_res):
 
     i = 1
     #Check connections
-    for edge in dict_res["edges"]:
+    for edge in tqdm(dict_res["edges"]):
+
         start = edge["start"]["term"]
+        if check_english:
+            if "/c/en/" not in start:
+                continue
         end = edge["end"]["term"]
+        if check_english:
+            if "/c/en/" not in end:
+                continue
         rel = edge["rel"]["@id"]
         text = edge["surfaceText"]
         if not text == "":
@@ -120,7 +129,6 @@ def parse_fun(dict_res):
         mtriple = ET.SubElement(modified_tripleset, 'mtriple')
         mtriple.text = tripleset_text
 
-
         # TODO clean the text up.
         lex = ET.SubElement(entry, 'lex', attrib={
             'comment': 'good',
@@ -138,12 +146,11 @@ def concept_xml(tup):
     dir_write = "cn_rdf/"
 
     query = CNQuery().query_custom_parse(conceptname,None,None,parse_fun)
-    # print("Done",id,conceptname)
     return query
 
 
 def multithread_build(vocabulary_loc, thread_amount=8):
-    p = Pool(14)
+    p = Pool(8)
     concept_list = []
     vocab = pd.read_hdf(vocabulary_loc)
     max = 100
@@ -155,20 +162,27 @@ def multithread_build(vocabulary_loc, thread_amount=8):
         concept_list.append(line)
         i+=1
     print("Mapping")
-    results = p.map(concept_xml,zip(concept_list,range(len(concept_list))))
+    results =tqdm(p.imap(concept_xml,zip(concept_list,range(len(concept_list)))))
     print(results)
-
-    with open("cn_rdf/cn.xml","wb") as cnfile:
-        data = ET.Element('benchmark')
-        items = ET.SubElement(data, 'entries')
-
-        for item in results:
-            if len(item.getchildren())==0:
-                continue
-            else:
-                for child in item.getchildren():
-                    items.append(child)
-        cnfile.write(ET.tostring(data))
+    limit = 10000
+    data = ET.Element('benchmark')
+    items = ET.SubElement(data, 'entries')
+    counter=0
+    filenum = 0
+    for item in results:
+        if counter!=0 and counter%limit==0:
+            with open("cn_rdf/cn"+str(filenum)+".xml", "wb") as cnfile:
+                cnfile.write(ET.tostring(data))
+            data = ET.Element('benchmark')
+            items = ET.SubElement(data, 'entries')
+            filenum+=1
+            counter=0
+        if len(item.getchildren())==0:
+            continue
+        else:
+            for child in item.getchildren():
+                items.append(child)
+        counter+=1
 if __name__ == '__main__':
     # create_conceptnet_xml()
     vocabulary_loc = "fasttext_model/attract_repel.hd5clean"

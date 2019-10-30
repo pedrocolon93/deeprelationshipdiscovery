@@ -229,10 +229,9 @@ class RetroCycleGAN():
             return d
 
         inpt = Input(shape=self.img_shape)
-        d1 = d_layer(inpt, self.df * 16, normalization=False)
+        d1 = d_layer(inpt, self.df * 8, normalization=False)
         d1 = d_layer(d1, self.df * 8)
         d1 = d_layer(d1, self.df * 8)
-
         d2 = d_layer(d1, self.df * 4)
         d2 = attention(d2)
         d3 = d_layer(d2, self.df * 2)
@@ -302,6 +301,13 @@ class RetroCycleGAN():
 
         for epoch in range(epochs + 1):
             noise = np.random.normal(size=(batch_size, dimensionality), scale=0.01)
+            # calculate learning rate:
+            g_current_learning_rate = step_decay(self.g_lr, epoch)
+            d_current_learning_rate = step_decay(self.d_lr, epoch)
+            K.set_value(self.d_A.optimizer.lr, d_current_learning_rate)  # set new lr
+            K.set_value(self.d_B.optimizer.lr, d_current_learning_rate)  # set new lr
+            K.set_value(self.combined.optimizer.lr, g_current_learning_rate)  # set new lr
+
             for batch_i, (imgs_A, imgs_B) in enumerate(load_batch(batch_size)):
                 # ----------------------
                 #  Train Discriminators
@@ -322,17 +328,6 @@ class RetroCycleGAN():
                 if epoch % 2 == 0:
                     imgs_A = np.add(noise[0:imgs_A.shape[0], :], imgs_A)
 
-                # calculate learning rate:
-                g_current_learning_rate = step_decay(self.g_lr, epoch)
-                d_current_learning_rate = step_decay(self.d_lr, epoch)
-                # print(g_current_learning_rate,d_current_learning_rate)
-                # print(self.g_AB.optimizer)
-                # train model:
-                # K.set_value(self.g_AB.optimizer.lr, g_current_learning_rate)  # set new lr
-                # K.set_value(self.g_BA.optimizer.lr, g_current_learning_rate)  # set new lr
-                K.set_value(self.d_A.optimizer.lr, d_current_learning_rate)  # set new lr
-                K.set_value(self.d_B.optimizer.lr, d_current_learning_rate)  # set new lr
-                K.set_value(self.combined.optimizer.lr, g_current_learning_rate)  # set new lr
 
                 fake_B = self.g_AB.predict(imgs_A)
                 fake_A = self.g_BA.predict(imgs_B)
@@ -342,14 +337,17 @@ class RetroCycleGAN():
                 fake = np.zeros((imgs_A.shape[0],))  # *noisy_entries_num,) )
 
                 # Train the discriminators (original images = real / translated = Fake)
-                dA_loss_real = self.d_A.train_on_batch(imgs_A, valid)
-                dA_loss_fake = self.d_A.train_on_batch(fake_A, fake)
-                dA_loss = 0.5 * np.add(dA_loss_real, dA_loss_fake)
+                if epoch % 2 == 0:
+                    dA_loss_real = self.d_A.train_on_batch(imgs_A, valid)
+                    dA_loss_fake = self.d_A.train_on_batch(fake_A, fake)
+                    dA_loss = 0.5 * np.add(dA_loss_real, dA_loss_fake)
 
-                dB_loss_real = self.d_B.train_on_batch(imgs_B, valid)
-                dB_loss_fake = self.d_B.train_on_batch(fake_B, fake)
-                dB_loss = 0.5 * np.add(dB_loss_real, dB_loss_fake)
-
+                    dB_loss_real = self.d_B.train_on_batch(imgs_B, valid)
+                    dB_loss_fake = self.d_B.train_on_batch(fake_B, fake)
+                    dB_loss = 0.5 * np.add(dB_loss_real, dB_loss_fake)
+                else:
+                    dA_loss = [1.0,1]
+                    dB_loss = [1.0,1]
                 # Total disciminator loss
                 d_loss = 0.5 * np.add(dA_loss, dB_loss)
 
