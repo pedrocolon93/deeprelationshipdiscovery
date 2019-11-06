@@ -131,16 +131,16 @@ if __name__ == '__main__':
     # Entities
     e_list = extract_entities(filename)
     # Discovery
-    # triples_list = generate_kg(e_list,
-    #                            limit=None,
-    #                            drd_models_path="trained_models/deepreldis/2019-10-22 21:43:59.788678",
-    #                            target_file_loc='trained_models/retroembeddings/2019-10-22 11:57:48.878874/retroembeddings.h5',
-    #                            trained_model_path="fasttext_model/trained_retrogan/2019-10-22 11:22:41.253615ftar/toretrogen.h5",
-    #                            ft_dir="./fasttext_model/cc.en.300.bin"
-    #                            )
-    # cleaned_triples = clean_trips(triples_list)
+    triples_list = generate_kg(e_list,
+                               limit=None,
+                               drd_models_path="trained_models/deepreldis/2019-10-22 21:43:59.788678",
+                               target_file_loc='trained_models/retroembeddings/2019-10-22 11:57:48.878874/retroembeddings.h5',
+                               trained_model_path="fasttext_model/trained_retrogan/2019-10-22 11:22:41.253615ftar/toretrogen.h5",
+                               ft_dir="./fasttext_model/cc.en.300.bin"
+                               )
+    cleaned_triples = clean_trips(triples_list)
     # pd.DataFrame(data=cleaned_triples,index=[x for x in range(len(cleaned_triples))]).to_hdf("checkpoint","mat")
-    triples_list = pd.read_hdf("checkpoint","mat")
+    # triples_list = pd.read_hdf("checkpoint","mat")
     to_xml_rdf(triples_list.values, dest_folder="/Users/pedro/Documents/git/chimera/data/ConceptNet/raw/test/1/",
                          filename="myfile")
     gen_text()

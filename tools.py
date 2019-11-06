@@ -294,8 +294,9 @@ def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder=".
         return np.array(X_train.values),np.array(Y_train.values),np.array(X_train.index)#, np.array(X_test.values),np.array(Y_test.values)
 def load_noisiest_words_dataset_2(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95,return_idx=False):
     global original, retrofitted
-    if os.path.exists(os.path.join(save_folder,"filtered_x")) and os.path.exists(os.path.join(save_folder,"filtered_y"))\
-            and cache:
+    xpath = os.path.join(save_folder,"filtered_x")
+    ypath = os.path.join(save_folder,"filtered_y")
+    if cache:
         print("Reusing cache")
         X_train = pd.read_hdf(os.path.join(save_folder,"filtered_x"), 'mat', encoding='utf-8')
         Y_train = pd.read_hdf(os.path.join(save_folder,"filtered_y"),'mat',encoding='utf-8')
