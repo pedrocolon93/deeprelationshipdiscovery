@@ -20,6 +20,7 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+from tqdm import tqdm
 
 directory = './retrogan/'
 # directory = '/home/pedro/Documents/mltests/retrogan/'
@@ -338,13 +339,14 @@ def load_noisiest_words_dataset_2(dataset, seed=42, test_split=0.1, save_folder=
                     # print(s)
                     syns.add(s)
         return syns
-    result = load_words("synonyms.txt").union(load_words("antonyms.txt"))
-    for i in range(len(o.values)):
+    # result = load_words("synonyms.txt").union(load_words("antonyms.txt"))
+    print("Loading concepts")
+    for i in tqdm(range(len(o.values))):
         print(o.index[i])
-        if o.index[i] in result:
-            cns.append(i)
-        else:
-            testindexes.append(i)
+        # if o.index[i] in result:
+        cns.append(i)
+        # else:
+        #     testindexes.append(i)
     X_train = o.iloc[cns, :]
     Y_train = r_sub.iloc[cns, :]
     print("Dumping training")
