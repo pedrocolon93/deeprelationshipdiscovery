@@ -293,7 +293,7 @@ def load_noisiest_words_dataset(dataset, seed=42, test_split=0.1, save_folder=".
         return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
     else:
         return np.array(X_train.values),np.array(Y_train.values),np.array(X_train.index)#, np.array(X_test.values),np.array(Y_test.values)
-def load_noisiest_words_dataset_2(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95,return_idx=False):
+def load_all_words_dataset(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95, return_idx=False):
     global original, retrofitted
     xpath = os.path.join(save_folder,"filtered_x")
     ypath = os.path.join(save_folder,"filtered_y")
@@ -325,7 +325,7 @@ def load_noisiest_words_dataset_2(dataset, seed=42, test_split=0.1, save_folder=
     def dot_product2(v1, v2):
         return sum(map(operator.mul, v1, v2))
 
-    print(len(o.values))
+    # print(len(o.values))
     testindexes = []
 
     cns = []
@@ -342,7 +342,7 @@ def load_noisiest_words_dataset_2(dataset, seed=42, test_split=0.1, save_folder=
     # result = load_words("synonyms.txt").union(load_words("antonyms.txt"))
     print("Loading concepts")
     for i in tqdm(range(len(o.values))):
-        print(o.index[i])
+        # print(o.index[i])
         # if o.index[i] in result:
         cns.append(i)
         # else:
@@ -363,6 +363,53 @@ def load_noisiest_words_dataset_2(dataset, seed=42, test_split=0.1, save_folder=
         return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
     else:
         return np.array(X_train.values),np.array(Y_train.values),np.array(X_train.index)#, np.array(X_test.values),np.array(Y_test.values)
+def load_all_words_dataset_3(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95, return_idx=False):
+    global original, retrofitted
+    xpath = os.path.join(save_folder,"filtered_x")
+    ypath = os.path.join(save_folder,"filtered_y")
+    if cache:
+        print("Reusing cache")
+        X_train = pd.read_hdf(os.path.join(save_folder,"filtered_x"), 'mat', encoding='utf-8')
+        Y_train = pd.read_hdf(os.path.join(save_folder,"filtered_y"),'mat',encoding='utf-8')
+        # X_test = pd.read_hdf(os.path.join(save_folder,"filtered_x_test"), "mat",encoding='utf-8')
+        # Y_test = pd.read_hdf(os.path.join(save_folder,"filtered_y_test"), "mat",encoding='utf-8')
+        if not return_idx:
+            return np.array(X_train.values), np.array(Y_train.values)#, np.array(X_test.values), np.array(Y_test.values)
+        else:
+            return np.array(X_train.values), np.array(Y_train.values), np.array(X_train.index)
+    original = dataset["original"]
+    retrofitted = dataset["retrofitted"]
+    directory = dataset["directory"]
+    print("Searching")
+    print("for:", original, retrofitted)
+
+    o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
+    r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
+    cns = []
+
+
+    print("Loading concepts")
+    o = o.swapaxes(0,1)
+    r = r.swapaxes(0,1)
+    for i in tqdm(o.index):
+        cns.append(i)
+    X_train = o.loc[cns, :]
+    Y_train = r.loc[cns, :]
+    print("Dumping training")
+    X_train.to_hdf(os.path.join(save_folder,"filtered_x"), "mat")
+    Y_train.to_hdf(os.path.join(save_folder,"filtered_y"),"mat")
+
+    # X_test = o.iloc[testindexes,:]
+    # Y_test = r_sub.iloc[testindexes,:]
+    # print("Dumping testing")
+    # X_test.to_hdf(os.path.join(save_folder,"filtered_x_test"), "mat")
+    # Y_test.to_hdf(os.path.join(save_folder,"filtered_y_test"), "mat")
+    print("Returning")
+    return X_train,Y_train
+    # if not return_idx:
+    #     return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
+    # else:
+    #     return np.array(X_train.values),np.array(Y_train.values),np.array(X_train.index)#, np.array(X_test.values),np.array(Y_test.values)
 
 
 def load_training_input_2(limit=10000,normalize=True, seed = 42,test_split=0.1):
@@ -766,20 +813,22 @@ def find_in_dataset(testwords,dataset):
     # gc.collect()
     return asarray1
 
-
 ft_model = None
-def test_sem(model, dataset_location='SimLex-999.txt',fast_text_location="../fasttext_model/cc.en.300.bin"):
+def test_sem(model, dataset, dataset_location='SimLex-999.txt',fast_text_location="../fasttext_model/cc.en.300.bin"):
     word_tuples = []
     my_word_tuples = []
     global ft_model
+    ds_model = None
     if ft_model is None:
-        ft_model = fasttext.load_model(fast_text_location)
+        ft_model= fasttext.load_model(fast_text_location)
+    if dataset is not None:
+        ds_model = pd.read_hdf(dataset["directory"]+dataset["original"],"mat")
+        ds_model=ds_model.swapaxes(0,1)
     retrogan = model
     with open(dataset_location) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')
         line_count = 0
         for row in csv_reader:
-
             # print(f'Word1:\t{row[0]}\tWord2:\t{row[1]}\tSimscore:\t{row[2]}.')
             line_count += 1
             wtrow = []
@@ -790,15 +839,28 @@ def test_sem(model, dataset_location='SimLex-999.txt',fast_text_location="../fas
             score = 0
 
             # conceptnet5.uri.concept_uri("en",row[0].lower())
-            mw1 = ft_model.get_word_vector(row[0].lower())
-            mw1 = np.array(retrogan.predict(mw1.reshape(1, 300))).reshape((300,))
-            mw2 = ft_model.get_word_vector(row[1].lower())
-            mw2 = np.array(retrogan.predict(mw2.reshape(1, 300))).reshape((300,))
+            # mw1 = ft_model.get_word_vector(row[0].lower())
+            try:
+                mw1 = ds_model.loc["en_"+row[0].lower(),:]
+                mw1 = np.array(retrogan.predict(np.array(mw1).reshape(1, 300))).reshape((300,))
+                # mw2 = ft_model.get_word_vector(row[1].lower())
+                mw2 = ds_model.loc["en_" + row[1].lower(),:]
+                mw2 = np.array(retrogan.predict(np.array(mw2).reshape(1, 300))).reshape((300,))
 
-            score = cosine_similarity([mw1], [mw2])
-
+                score = cosine_similarity([mw1], [mw2])
+                del mw1, mw2
+            except Exception as e:
+                print(e)
+                score = [0]
             my_word_tuples.append((row[0], row[1], score[0]))
+        del csv_reader
+
         print(f'Processed {line_count} lines.')
-    print(pearsonr([float(x[2]) for x in word_tuples], [float(x[2]) for x in my_word_tuples]))
+    pr = pearsonr([float(x[2]) for x in word_tuples], [float(x[2]) for x in my_word_tuples])
+    print(pr)
     print(spearmanr([x[2] for x in word_tuples], [x[2] for x in my_word_tuples]))
+    del my_word_tuples
+    del word_tuples
+    gc.collect()
     # word_tuples = sorted(word_tuples,key=lambda x:(x[0],x[2]))
+    return pr
