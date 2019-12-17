@@ -363,16 +363,35 @@ def load_all_words_dataset(dataset, seed=42, test_split=0.1, save_folder="./", c
         return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
     else:
         return np.array(X_train.values),np.array(Y_train.values),np.array(X_train.index)#, np.array(X_test.values),np.array(Y_test.values)
-def load_all_words_dataset_3(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95, return_idx=False):
+def load_all_words_dataset_3(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95, return_idx=False,remove_constraint=None):
     global original, retrofitted
     xpath = os.path.join(save_folder,"filtered_x")
     ypath = os.path.join(save_folder,"filtered_y")
+
+    def remove_constraint_fun(X_train, Y_train):
+        print("Removing words in constraints!")
+        print(X_train)
+        print(Y_train)
+        with open(remove_constraint) as constraints:
+            for line in constraints:
+                try:
+                    X_train.drop(line.strip(),inplace=True)
+                    Y_train.drop(line.strip(),inplace=True)
+                except:
+                    print(line,"not found")
+        print(X_train)
+        print(Y_train)
+        return X_train, Y_train
+
     if cache:
         print("Reusing cache")
         X_train = pd.read_hdf(os.path.join(save_folder,"filtered_x"), 'mat', encoding='utf-8')
         Y_train = pd.read_hdf(os.path.join(save_folder,"filtered_y"),'mat',encoding='utf-8')
         # X_test = pd.read_hdf(os.path.join(save_folder,"filtered_x_test"), "mat",encoding='utf-8')
         # Y_test = pd.read_hdf(os.path.join(save_folder,"filtered_y_test"), "mat",encoding='utf-8')
+
+        if remove_constraint is not None:
+            X_train,Y_train = remove_constraint_fun(X_train,Y_train)
         if not return_idx:
             return np.array(X_train.values), np.array(Y_train.values)#, np.array(X_test.values), np.array(Y_test.values)
         else:
@@ -396,6 +415,9 @@ def load_all_words_dataset_3(dataset, seed=42, test_split=0.1, save_folder="./",
     X_train = o.loc[cns, :]
     Y_train = r.loc[cns, :]
     print("Dumping training")
+    if remove_constraint is not None:
+        X_train,Y_train = remove_constraint_fun(X_train,Y_train)
+
     X_train.to_hdf(os.path.join(save_folder,"filtered_x"), "mat")
     Y_train.to_hdf(os.path.join(save_folder,"filtered_y"),"mat")
 
@@ -819,8 +841,8 @@ def test_sem(model, dataset, dataset_location='SimLex-999.txt',fast_text_locatio
     my_word_tuples = []
     global ft_model
     ds_model = None
-    if ft_model is None:
-        ft_model= fasttext.load_model(fast_text_location)
+    # if ft_model is None:
+    #     ft_model= fasttext.load_model(fast_text_location)
     if dataset is not None:
         ds_model = pd.read_hdf(dataset["directory"]+dataset["original"],"mat")
         ds_model=ds_model.swapaxes(0,1)
@@ -858,9 +880,10 @@ def test_sem(model, dataset, dataset_location='SimLex-999.txt',fast_text_locatio
         print(f'Processed {line_count} lines.')
     pr = pearsonr([float(x[2]) for x in word_tuples], [float(x[2]) for x in my_word_tuples])
     print(pr)
-    print(spearmanr([x[2] for x in word_tuples], [x[2] for x in my_word_tuples]))
+    sr = spearmanr([x[2] for x in word_tuples], [x[2] for x in my_word_tuples])
+    print(sr)
     del my_word_tuples
     del word_tuples
     gc.collect()
     # word_tuples = sorted(word_tuples,key=lambda x:(x[0],x[2]))
-    return pr
+    return sr

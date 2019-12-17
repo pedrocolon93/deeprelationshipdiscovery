@@ -3,7 +3,8 @@ import json
 from flask import Flask
 from flask import request
 from flask_cors import CORS
-from tensorflow import Session, Graph
+from tensorflow import Graph
+from tensorflow_core.python import Session
 
 import CNQuery
 from deep_relationship_discovery import load_model_ours, normalize_outputs, relations

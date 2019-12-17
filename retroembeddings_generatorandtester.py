@@ -53,7 +53,7 @@ if __name__ == '__main__':
     # set_session(sess)  # set this TensorFlow session as the default session for Keras
 
     # Software parameters
-    trained_model_path = "fasttext_model/trained_retrogan/2019-10-22 11:22:41.253615ftar/toretrogen.h5"
+    trained_model_path = "models/trained_retrogan/2019-12-07 12:33:05.232136ftar/147toretrogen.h5"
     retroembeddings_folder = "./trained_models/retroembeddings/" + str(datetime.datetime.now())
     clean = False
 
@@ -63,11 +63,11 @@ if __name__ == '__main__':
         pass
     retrogan_word_vector_output_path = retroembeddings_folder + "/" + "retroembeddings.h5"
     dataset = 'mine'
-    tools.directory = "fasttext_model/"
+    tools.directory = "adversarial_paper_data/"
     dimensionality = 300
     tools.dimensionality = dimensionality
     # tools.datasets["mine"] = ["unfitted.hd5clean", "fitted-debias.hd5clean"]
-    tools.datasets["mine"] = ["unfitted.hd5clean", "attract_repel.hd5clean"]
+    tools.datasets["mine"] = ["glove.hd5", "glove_ar.hd5"]
 
     if clean:
         numberbatch_file_loc = 'retrogan/mini.h5'
@@ -91,15 +91,28 @@ if __name__ == '__main__':
     print("Generating embeddings")
     retro_df = pandas.DataFrame()
     #
-    word_embeddings = pd.read_hdf(plain_word_vector_path, 'mat', encoding='utf-8')
+    word_embeddings = pd.read_hdf(plain_word_vector_path, 'mat', encoding='utf-8').swapaxes(0,1)
     # # word_embeddings = word_embeddings.loc[[x for x in word_embeddings.index if "." not in x]]
     vals = np.array(
         to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, dimensionality)), verbose=1)
     )
+    to_txt = True
+    if to_txt:
+        with open("vectors.txt","w") as f:
+            for idx, index in enumerate(word_embeddings.index):
+                v = vals[idx,:]
+                f.write(index+" ")
+                for value in v:
+                    f.write(str(value)+" ")
+                f.write("\n")
+
+
     retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.index)
     print("Writing the vectors...")
     retro_word_embeddings.to_hdf(retrogan_word_vector_output_path, "mat")
-
+    print(word_embeddings)
+    print(retro_word_embeddings)
+    exit()
 
     testwords = ["human", "dog", "cat", "potato", "fat","bus","train","happy","sad","car"]
     print("The test word vectors are:", testwords)
