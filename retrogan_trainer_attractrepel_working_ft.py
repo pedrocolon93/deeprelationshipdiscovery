@@ -207,11 +207,11 @@ class RetroCycleGAN():
                 # cost += tf.clip_by_value(mg, min=0)
             return cost / (sim_neg * 1.0)
 
-        def create_opt(lr=0.1):
+        def create_opt(lr=0.001):
             if optimizer == "sgd":
                 return tf.optimizers.SGD(lr=lr, momentum=0.9, decay=1 / (500 * 500))
             elif optimizer == "adam":
-                return tf.optimizers.Adam(decay=1 / (500 * 500))
+                return tf.optimizers.Adam(lr=lr)
             elif optimizer == "adabound":
                 return AdaBound(lr=1e-04,
                                 final_learning_rate=0.05,
@@ -229,19 +229,19 @@ class RetroCycleGAN():
                 raise KeyError("coULD NOT FIND THE OPTIMIZER")
 
         self.g_AB_fml.compile(loss='mse',
-                              loss_weights=[.25],
+                              loss_weights=[0.01],
                               optimizer=create_opt(self.g_lr),
                               )
         self.g_BA_fml.compile(loss='mse',
                               optimizer=create_opt(self.g_lr),
-                              loss_weights=[.25])
+                              loss_weights=[0.01])
 
         self.g_AB_output_feats_cross.compile(loss='mse',
-                                      loss_weights=[0.75],
+                                      loss_weights=[0.1],
                                       optimizer=create_opt(self.g_lr),
                                       )
         self.g_BA_output_feats_cross.compile(loss='mse',
-                                      loss_weights=[0.75],
+                                      loss_weights=[0.1],
                                       optimizer=create_opt(self.g_lr),
                                       )
         self.d_A.compile(loss='binary_crossentropy',
@@ -262,8 +262,8 @@ class RetroCycleGAN():
                                     'mae', 'mae',
                                     # 'mae', 'mae'
                                     ],
-                              loss_weights=[2, 2,
-                                            5, 5,
+                              loss_weights=[1, 1,
+                                            0.5, 0.5,
                                             ],
                               # TODO ADD A CUSTOM LOSS THAT SIMPLY ADDS A
                               # GENERALIZATION CONSTRAINT ON THE MAE
@@ -382,16 +382,19 @@ class RetroCycleGAN():
         d1 = d_layer(inpt, 2048, normalization=False, dropout=True)
         d1 = d_layer(d1, 1024, normalization=False, dropout=True)
         fml = d1
-        r = tf.compat.v2.keras.layers.Reshape((d1.get_shape()[-1], 1))(d1)
-        # # # Downscaling
-        t1 = conv1d(r, 512, f_size=6, dl=2)
-        t1 = MaxPooling1D()(t1)
-        t2 = conv1d(t1, 512, f_size=6, dl=4)
-        t2 = MaxPooling1D()(t2)
-        t3 = conv1d(t2, 512, f_size=6, dl=8)
-        t3 = MaxPooling1D()(t3)
-        f = Flatten()(t3)
+        # r = tf.compat.v2.keras.layers.Reshape((d1.get_shape()[-1], 1))(d1)
+        # # # # Downscaling
+        # t1 = conv1d(r, 512, f_size=6, dl=2)
+        # t1 = MaxPooling1D()(t1)
+        # t2 = conv1d(t1, 512, f_size=6, dl=4)
+        # t2 = MaxPooling1D()(t2)
+        # t3 = conv1d(t2, 512, f_size=6, dl=8)
+        # t3 = MaxPooling1D()(t3)
+        # f = Flatten()(t3)
         # f = Dropout(0.2)(f)
+        f = d_layer(d1, 1024, normalization=False, dropout=True)
+        f = d_layer(f, 1024, normalization=False, dropout=True)
+
         d1 = d_layer(f, 512, normalization=False, dropout=True)
         validity = Dense(1, activation="sigmoid")(d1)
         return Model(inpt, validity, name=name), Model(inpt, fml, name="FeatureMatchingDisLoss" + name)
@@ -536,16 +539,16 @@ class RetroCycleGAN():
                     rand_a, rand_b = load_random_batch(batch_size=imgs_A.shape[0])
                     mm_a_loss = self.g_AB.train_on_batch(rand_a, rand_b)
                     mm_b_loss = self.g_BA.train_on_batch(rand_b, rand_a)
-                    fml_a = self.g_AB_fml.train_on_batch(imgs_A, self.d_a_fml.predict(imgs_B))
-                    fml_b = self.g_BA_fml.train_on_batch(imgs_B, self.d_b_fml.predict(imgs_A))
                     cross_fml_a=self.g_AB_output_feats_cross.train_on_batch(imgs_A,self.g_BA_input_feats_cross.predict(imgs_B))
+                    # cross_fml_b = 0
                     cross_fml_b=self.g_BA_output_feats_cross.train_on_batch(imgs_B,self.g_AB_input_feats_cross.predict(imgs_A))
-
                     g_loss = self.combined.train_on_batch([imgs_A, imgs_B],
                                                           [valid, valid,
                                                            imgs_A, imgs_B,
                                                            # imgs_A, imgs_B
                                                            ])
+                    fml_a = self.g_AB_fml.train_on_batch(imgs_A, self.d_a_fml.predict(imgs_B))
+                    fml_b = self.g_BA_fml.train_on_batch(imgs_B, self.d_b_fml.predict(imgs_A))
 
                     def named_logs(model, logs):
                         result = {}
@@ -561,7 +564,6 @@ class RetroCycleGAN():
                         'xfmla':cross_fml_a,
                         'xfmlb':cross_fml_b
                     })
-                    self.combined_callback.on_epoch_end(batch_i,r)
                     # profiler_result = profiler.stop()
                     # profiler.save("./logs", profiler_result)
                     elapsed_time = datetime.datetime.now() - start_time
@@ -588,6 +590,7 @@ class RetroCycleGAN():
                                cross_fml_a,
                                cross_fml_b,
                                elapsed_time))
+                        self.combined_callback.on_epoch_end(batch_i, r)
                 try:
                     # if epoch % 5 == 0:
                     #     self.save_model(name=str(epoch))
@@ -598,6 +601,7 @@ class RetroCycleGAN():
                     sv = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimVerb-3500.txt",
                                         fast_text_location="fasttext_model/cc.en.300.bin")[0]
                     res.append((sl, sv))
+                    self.combined_callback.on_epoch_end(epoch,{"simlex":sl,"simverb":sv})
                     print(res)
                     print("\n")
                 except Exception as e:
@@ -661,10 +665,10 @@ if __name__ == '__main__':
     if not os.path.exists(save_folder):
         os.makedirs(save_folder, exist_ok=True)
     test_ds = [
-        {"original": "glove.hd5",
-         "retrofitted": "glove_ar.hd5",
-         "directory": "./adversarial_paper_data/",
-         "rc": None},
+        # {"original": "glove.hd5",
+        #  "retrofitted": "glove_ar.hd5",
+        #  "directory": "./adversarial_paper_data/",
+        #  "rc": None},
         # {"original": "glove.hd5",
         #  "retrofitted": "glove_fdj_ar.hd5",
         #  "directory": "./adversarial_paper_data/",
@@ -696,9 +700,13 @@ if __name__ == '__main__':
     for idx, ds in enumerate(test_ds):
         print("Training")
         print(ds)
-        rcgan = RetroCycleGAN(save_folder=save_folder, batch_size=64)
+        rcgan = RetroCycleGAN(save_folder=save_folder, batch_size=64,discriminator_lr=0.001,generator_lr=0.001)
         models.append(rcgan)
-        ds_res = rcgan.train(pretraining_epochs=200, epochs=0, batch_size=32, dataset=ds, rc=ds["rc"])
+        # rcgan.load_weights("final","retrogan_glove_stable")
+        sl = tools.test_sem(rcgan.g_AB, ds, dataset_location="testing/SimLex-999.txt",
+                            fast_text_location="fasttext_model/cc.en.300.bin")[0]
+
+        ds_res = rcgan.train(pretraining_epochs=500, epochs=0, batch_size=32, dataset=ds, rc=ds["rc"])
         results.append(ds_res)
         print("*" * 100)
         print(ds, results[-1])

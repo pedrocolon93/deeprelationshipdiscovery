@@ -28,6 +28,7 @@ class CNQuery():
     def query_custom_parse(self,node1,node2,relation, parse_fun):
         results = parse_fun(self.query(node1, node2, relation))
         return results
+
     def add_identifier(self,node):
         if "/c/en" in node:
             return node
@@ -61,6 +62,5 @@ class CNQuery():
         return urlres
 
     def query_and_parse(self, node1, node2, relation='/r/Desires'):
-
         results = self.parse(self.query(node1,node2,relation))
         return results

@@ -408,8 +408,8 @@ def load_all_words_dataset_3(dataset, seed=42, test_split=0.1, save_folder="./",
 
 
     print("Loading concepts")
-    o = o.swapaxes(0,1)
-    r = r.swapaxes(0,1)
+    # o = o.swapaxes(0,1)
+    # r = r.swapaxes(0,1)
     for i in tqdm(o.index):
         cns.append(i)
     X_train = o.loc[cns, :]
@@ -845,7 +845,7 @@ def test_sem(model, dataset, dataset_location='SimLex-999.txt',fast_text_locatio
     #     ft_model= fasttext.load_model(fast_text_location)
     if dataset is not None:
         ds_model = pd.read_hdf(dataset["directory"]+dataset["original"],"mat")
-        ds_model=ds_model.swapaxes(0,1)
+        # ds_model=ds_model.swapaxes(0,1)
     retrogan = model
     with open(dataset_location) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')

@@ -10,7 +10,7 @@ if __name__ == '__main__':
     vectors = []
 
 
-    with open(input_filename, "w", encoding="utf-8") as vec_file:
+    with open(input_filename, encoding="utf-8") as vec_file:
         line = 0
         for vec in vec_file:
             if line == 0:

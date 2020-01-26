@@ -4,6 +4,7 @@ import datetime
 import math
 import os
 import random
+import shutil
 from random import shuffle
 
 import numpy as np
@@ -191,7 +192,7 @@ class RetroCycleGAN():
             if optimizer == "sgd":
                 return tf.optimizers.SGD(lr=lr, momentum=0.9,decay=1/(1000*750))
             elif optimizer == "adam":
-                return tf.optimizers.Adam()
+                return tf.optimizers.Adam(lr=0.0001,epsilon=1e-9)
             elif optimizer == "adabound":
                 return AdaBound(lr=1e-04,
                                 final_learning_rate=0.05,
@@ -471,14 +472,30 @@ class RetroCycleGAN():
                                                           [valid, valid,
                                                            imgs_A, imgs_B,
                                                            imgs_A, imgs_B])
-
                     def named_logs(model, logs):
                         result = {}
                         for l in zip(model.metrics_names, logs):
                             result[l[0]] = l[1]
                         return result
 
-                    self.combined_callback.on_epoch_end(batch_i, named_logs(self.combined, g_loss))
+                    r=named_logs(self.combined, g_loss)
+                    r.update({
+                        'mma': mm_a_loss,
+                        'mmb': mm_b_loss,
+                    })
+                    if r["loss"] >10:
+                        self.combined.compile(loss=['binary_crossentropy', 'binary_crossentropy',
+                                                    'mae', 'mae',
+                                                    'mae', 'mae'],
+                                              loss_weights=[1, 1,
+                                                            0,0,
+                                                            0,0],
+                                              # TODO ADD A CUSTOM LOSS THAT SIMPLY ADDS A
+                                              # GENERALIZATION CONSTRAINT ON THE MAE
+                                              optimizer=tf.optimizers.Adam(lr=0.0001,epsilon=1e-9))
+                        self.combined_callback.on_epoch_end(epoch,{"nerfed_losses":1})
+
+                    self.combined_callback.on_epoch_end(batch_i,r )
                     # profiler_result = profiler.stop()
                     # profiler.save("./logs", profiler_result)
                     elapsed_time = datetime.datetime.now() - start_time
@@ -496,8 +513,8 @@ class RetroCycleGAN():
                                mm_b_loss,
                                elapsed_time))
                 try:
-                    if epoch % 5 == 0:
-                        self.save_model(name=str(epoch))
+                    # if epoch % 5 == 0:
+                    #     self.save_model(name=str(epoch))
                         # self.save_model()
                     print("\n")
                     sl = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimLex-999.txt",
@@ -505,6 +522,8 @@ class RetroCycleGAN():
                     sv = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimVerb-3500.txt",
                                         fast_text_location="fasttext_model/cc.en.300.bin")[0]
                     res.append((sl, sv))
+                    self.combined_callback.on_epoch_end(epoch,{"simlex":sl,"simverb":sv})
+
                     print(res)
                     print("\n")
                 except Exception as e:
@@ -558,6 +577,11 @@ class RetroCycleGAN():
 
 if __name__ == '__main__':
     profiler.start_profiler_server(6009)
+    print("Removing!!!")
+    print("*" * 100)
+    shutil.rmtree("logs/", ignore_errors=True)
+    print("Done!")
+    print("*" * 100)
     disable_eager_execution()
     # with tf.device('/GPU:0'):
     global dimensionality
@@ -568,10 +592,28 @@ if __name__ == '__main__':
     if not os.path.exists(save_folder):
         os.makedirs(save_folder, exist_ok=True)
     test_ds = [
-        {"original": "glove.hd5",
-         "retrofitted": "glove_ar.hd5",
-         "directory": "./adversarial_paper_data/",
-         "rc":None},
+        # {
+        #     "original":"original_ft.hd5clean",
+        #     "retrofitted":"arfdj_ft.hd5clean",
+        #     "directory":"./fasttext_model/",
+        #     "rc":"adversarial_paper_data/simlexsimverb.words"
+        # },
+        {
+            "original":"original_glove.hd5",
+            "retrofitted":"fdj_glove.hd5",
+            "directory":"./glove/",
+            "rc":"adversarial_paper_data/simlexsimverb.words"
+        }
+        # {
+        #     "original": "original_ft.hd5clean",
+        #     "retrofitted": "ar_ft.hd5clean",
+        #     "directory": "./fasttext_model/",
+        #     "rc": None
+        # }
+        # {"original": "glove.hd5",
+        #  "retrofitted": "glove_ar.hd5",
+        #  "directory": "./adversarial_paper_data/",
+        #  "rc":None},
         # {"original": "glove.hd5",
         #  "retrofitted": "glove_ar.hd5",
         #  "directory": "./adversarial_paper_data/",
@@ -580,10 +622,10 @@ if __name__ == '__main__':
         #  "retrofitted": "glove_fdj_ar.hd5",
         #  "directory": "./adversarial_paper_data/",
         #  "rc": "./adversarial_paper_data/simlexsimverb.words"},
-        {"original": "ft.hd5",
-         "retrofitted": "ft_ar.hd5",
-         "directory": "./adversarial_paper_data/",
-         "rc":None},
+        # {"original": "ft.hd5",
+        #  "retrofitted": "ft_ar.hd5",
+        #  "directory": "./adversarial_paper_data/",
+        #  "rc":None},
         # {"original": "ft.hd5",
         #  "retrofitted": "ft_ar.hd5",
         #  "directory": "./adversarial_paper_data/",
@@ -612,8 +654,11 @@ if __name__ == '__main__':
         print("Training")
         print(ds)
         rcgan = RetroCycleGAN(save_folder=save_folder, batch_size=32)
+        sl = tools.test_sem(rcgan.g_AB, ds, dataset_location="testing/SimLex-999.txt",
+                            fast_text_location="fasttext_model/cc.en.300.bin")[0]
+
         models.append(rcgan)
-        ds_res = rcgan.train(pretraining_epochs=10, epochs=1000, batch_size=32, dataset=ds, rc=ds["rc"])
+        ds_res = rcgan.train(pretraining_epochs=300, epochs=0, batch_size=32, dataset=ds, rc=ds["rc"])
         results.append(ds_res)
         print("*" * 100)
         print(ds, results[-1])
