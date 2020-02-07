@@ -29,29 +29,29 @@ relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r
              "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty"]
 
 
-def conv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
-    d = Conv1D(filters, f_size, strides=strides, activation="relu")(layer_input)
-    return d
+# def conv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
+#     d = Conv1D(filters, f_size, strides=strides, activation="relu")(layer_input)
+#     return d
 
 
 def create_model():
     # Input needs to be 2 word vectors
     wv1 = Input(shape=(300,), name="retro_word_1")
     wv2 = Input(shape=(300,), name="retro_word_2")
-    expansion_size = 128
+    expansion_size = 2048
     filters = 8
 
     def create_word_input_abstraction(wv1):
         # Expand and contract the 2 word vectors
-        wv1_expansion_1 = Dense(512)(wv1)
+        wv1_expansion_1 = Dense(2048)(wv1)
         wv1_expansion_1 = BatchNormalization()(wv1_expansion_1)
         # r_1 = Reshape((-1, 1))(wv1_expansion_1)
         # t1 = conv1d(r_1, filters, f_size=4)
         # f1 = MaxPooling1D(pool_size=4)(t1)
         # f1 = Flatten()(f1)
         # wv1_expansion_2 = attention(f1)
-        wv1_expansion_2 = attention(wv1_expansion_1)
-        wv1_expansion_3 = Dense(int(expansion_size / 4), activation='relu')(wv1_expansion_2)
+        # wv1_expansion_2 = attention(wv1_expansion_1)
+        wv1_expansion_3 = Dense(int(expansion_size / 4), activation='relu')(wv1_expansion_1)
         wv1_expansion_3 = BatchNormalization()(wv1_expansion_3)
         return wv1_expansion_3
 
@@ -63,8 +63,8 @@ def create_model():
     merge_expand = Dense(1024, activation='relu')(merge1)
     merge_expand = BatchNormalization()(merge_expand)
     # Add atention layer
-    merge_attention = attention(merge_expand)
-    attention_expand = Dense(1024, activation='relu')(merge_attention)
+    # merge_attention = attention(merge_expand)
+    attention_expand = Dense(1024, activation='relu')(merge_expand)
     attention_expand = BatchNormalization()(attention_expand)
     semi_final_layer = Dense(1024, activation='relu')(attention_expand)
     semi_final_layer = BatchNormalization()(semi_final_layer)
@@ -85,7 +85,7 @@ def create_model():
     for rel in relations:
         task_layer = Dense(task_layer_neurons, activation='relu')(semi_final_layer)
         task_layer = BatchNormalization()(task_layer)
-        task_layer = attention(task_layer)
+        # task_layer = attention(task_layer)
         task_layer = Dense(task_layer_neurons, activation='relu')(task_layer)
         task_layer = BatchNormalization()(task_layer)
 
@@ -245,6 +245,39 @@ def create_data(use_cache=True):
                 # print(e)
             if len(valid_relations) % 10000 == 0:
                 print(len(valid_relations))
+
+def create_data2(use_cache=True):
+    if os.path.exists("tmp/valid_rels.hd5") and use_cache:
+        print("Using cache")
+        return pd.read_hdf("tmp/valid_rels.hd5", "mat")
+    assertionspath = "train600k.txt"
+    valid_relations = []
+    with open(assertionspath) as assertionsfile:
+        assertions = csv.reader(assertionsfile, delimiter="\t")
+        row_num = 0
+        skipped = 0
+        for assertion_row in assertions:
+            row_num += 1
+            if row_num % 100000 == 0: print(row_num)
+            try:
+                rel = assertion_row[0]
+                if "/r/" not in rel: rel = "/r/"+rel
+                weight = float(assertion_row[3])
+                # print(c1_split)
+                c1 = standardized_concept_uri("en",assertion_row[1])
+                c2 = standardized_concept_uri("en",assertion_row[2])
+                if c1 not in retrofitted_embeddings.index or c2 not in retrofitted_embeddings.index or rel not in relations:
+                    skipped+=1
+                    continue
+
+                valid_relations.append([assertion_row[1], c1, c2, weight])
+            except Exception as e:
+                # print(e)
+                pass
+                # print(e)
+            if len(valid_relations) % 10000 == 0:
+                print(len(valid_relations), skipped)
+        print(skipped)
     af = pd.DataFrame(data=valid_relations, index=range(len(valid_relations)))
     print("Training data:")
     print(af)
@@ -344,11 +377,11 @@ def load_model_ours(save_folder="./drd", model_name="all",probability_models=Fal
 # retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
 # retroembeddings = "trained_models/retroembeddings/2019-10-22 11:57:48.878874/retroembeddings.h5"
 # retroembeddings = "trained_models/retroembeddings/2019-05-15 11:47:52.802481/retroembeddings.h5"
-retroembeddings = "fasttext_model/attract_repel.hd5clean"
+retroembeddings = "retrogan/mini.h5"
+retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
 
 if __name__ == '__main__':
     # # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
-    retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
     global w1, w2, w3
     w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "building")]).reshape(1, 300)
     w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "photography")]).reshape(1, 300)
@@ -360,7 +393,7 @@ if __name__ == '__main__':
     model = create_model()
     print("Done\nLoading data")
     # model = load_model_ours()
-    data = create_data(use_cache=True)
+    data = create_data2(use_cache=False)
     # # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
     train_on_assertions(model, data,save_folder="trained_models/deepreldis/"+str(datetime.datetime.now())+"/",epoch_amount=10000,batch_size=32)
