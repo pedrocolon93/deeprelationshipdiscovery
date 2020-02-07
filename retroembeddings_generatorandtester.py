@@ -25,49 +25,22 @@ set_random_seed(2)
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 if __name__ == '__main__':
-    # Hardware config options
-    num_cores = 8
-    GPU = False
-    CPU = True
-    num_CPU = 1
-    num_GPU = 0
-
-    if GPU:
-        num_GPU = 1
-        num_CPU = 1
-    if CPU:
-        num_CPU = 1
-        num_GPU = 0
-
-    # # TF config options
-    # config = tf.ConfigProto(intra_op_parallelism_threads=num_cores,
-    #                         inter_op_parallelism_threads=num_cores,
-    #                         allow_soft_placement=True,
-    #                         device_count={'CPU': num_CPU,
-    #                                       'GPU': num_GPU})
-    # config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
-    #
-    # # config.log_device_placement = True  # to log device placement (on which device the operation ran)
-    #
-    # sess = tf.Session(config=config)
-    # set_session(sess)  # set this TensorFlow session as the default session for Keras
-
     # Software parameters
-    trained_model_path = "models/trained_retrogan/2019-12-07 12:33:05.232136ftar/147toretrogen.h5"
-    retroembeddings_folder = "./trained_models/retroembeddings/" + str(datetime.datetime.now())
+    trained_model_path = "final_retrogan/0/finaltoretrogen.h5"
+    experiment_name = "ft_full_paperdata"
+    retroembeddings_folder = "./trained_models/retroembeddings/" + experiment_name
     clean = False
-
     try:
         os.mkdir(retroembeddings_folder)
     except:
         pass
     retrogan_word_vector_output_path = retroembeddings_folder + "/" + "retroembeddings.h5"
     dataset = 'mine'
-    tools.directory = "adversarial_paper_data/"
+    tools.directory = "ft_full_paperdata/"
     dimensionality = 300
     tools.dimensionality = dimensionality
     # tools.datasets["mine"] = ["unfitted.hd5clean", "fitted-debias.hd5clean"]
-    tools.datasets["mine"] = ["glove.hd5", "glove_ar.hd5"]
+    tools.datasets["mine"] = ["completefastext.txt.hdf", "fullfasttext.hdf"]
 
     if clean:
         numberbatch_file_loc = 'retrogan/mini.h5'
@@ -92,44 +65,47 @@ if __name__ == '__main__':
     retro_df = pandas.DataFrame()
     #
     word_embeddings = pd.read_hdf(plain_word_vector_path, 'mat', encoding='utf-8').swapaxes(0,1)
+    word_embeddings = word_embeddings.dropna(axis=1)
     # # word_embeddings = word_embeddings.loc[[x for x in word_embeddings.index if "." not in x]]
     vals = np.array(
-        to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, dimensionality)), verbose=1)
+        to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, dimensionality)),batch_size=64)
     )
     to_txt = True
+
     if to_txt:
+        print("Writing text vectors to ./vectors.txt")
         with open("vectors.txt","w") as f:
-            for idx, index in enumerate(word_embeddings.index):
+            for idx, index in enumerate(word_embeddings.swapaxes(0,1).index):
                 v = vals[idx,:]
-                f.write(index+" ")
+                f.write(str(index)+" ")
                 for value in v:
                     f.write(str(value)+" ")
                 f.write("\n")
 
 
-    retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.index)
+    retro_word_embeddings = pd.DataFrame(data=vals, index=word_embeddings.swapaxes(0,1).index)
     print("Writing the vectors...")
     retro_word_embeddings.to_hdf(retrogan_word_vector_output_path, "mat")
+    retro_word_embeddings = retro_word_embeddings.swapaxes(0,1)
     print(word_embeddings)
     print(retro_word_embeddings)
-    exit()
 
-    testwords = ["human", "dog", "cat", "potato", "fat","bus","train","happy","sad","car"]
+    testwords = ["human", "cat"]
     print("The test word vectors are:", testwords)
     # ft version
-    fastext_version = find_in_fasttext(testwords, dataset=dataset)
+    fastext_version = find_in_fasttext(testwords, dataset=dataset,prefix="en_")
     print("The original vectors are", fastext_version)
     # original retrofitted version
-    retro_version = find_in_retrofitted(testwords, dataset=dataset)
+    retro_version = tools.find_in_dataset(testwords, dataset=retro_word_embeddings.swapaxes(0,1), prefix="en_")
     print("The original retrofitted vectors are", retro_version)
 
     # Check the closest by cosine dist
-    print("Finding the words that are closest in the default numberbatch mappings")
-    for idx, word in enumerate(testwords):
-        print(word)
-        retro_representation = retro_version[idx].reshape(1, dimensionality)
-        find_closest_2(retro_representation, dataset=dataset)
-        print(sklearn.metrics.mean_absolute_error(retro_version[idx], retro_representation.reshape((dimensionality,))))
+    # print("Finding the words that are closest in the default numberbatch mappings")
+    # for idx, word in enumerate(testwords):
+    #     print(word)
+    #     retro_representation = retro_version[idx].reshape(1, dimensionality)
+    #     find_closest_2(retro_representation, dataset=dataset)
+    #     print(sklearn.metrics.mean_absolute_error(retro_version[idx], retro_representation.reshape((dimensionality,))))
 
     print("Finding the words that are closest to the predictions/mappings that we make")
     for idx, word in enumerate(testwords):
@@ -140,6 +116,6 @@ if __name__ == '__main__':
 
     # print("Evaluating in the entire test dataset for the error.")
     # Load the testing data
-    X_train,Y_train,X_test,Y_test = tools.load_noisiest_words(dataset=dataset)
-    print("Train error",to_retro_converter.evaluate(X_train, Y_train))
-    print("Test error",to_retro_converter.evaluate(X_test,Y_test))
+    # X_train,Y_train,X_test,Y_test = tools.load_noisiest_words(dataset=dataset)
+    # print("Train error",to_retro_converter.evaluate(X_train, Y_train))
+    # print("Test error",to_retro_converter.evaluate(X_test,Y_test))

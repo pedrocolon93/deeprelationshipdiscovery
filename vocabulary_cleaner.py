@@ -8,6 +8,9 @@ def cleanup_vocabulary_nb_based(numberbatch_file_loc,target_file_loc,replace=Fal
     del numberbatch_voc
     gc.collect()
     print('Done\nLoading target vocabulary and intersecting indexes')
+    change_prefix = True
+    if change_prefix:
+        nb_vocabulary = [x.replace("/c/en/","") for x in nb_vocabulary if "/c/en/" in x]
     target_voc = pd.read_hdf(target_file_loc,'mat')
     clean_voc = target_voc.loc[target_voc.index.intersection(nb_vocabulary)]
     print('Saving. Replace:',replace)

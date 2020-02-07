@@ -9,6 +9,8 @@ from random import shuffle
 
 import numpy as np
 # from tensorflow_core.python.keras import backend as K
+os.environ["TF_KERAS"] = "1"
+from keras_adabound import AdaBound
 from numpy.random import seed
 from tensorflow.keras import backend as K
 from tensorflow import keras
@@ -35,7 +37,6 @@ import tools
 #
 # set_random_seed(2)
 # os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-from adabound import AdaBound
 
 
 def write_log(callback, names, logs, batch_no):
@@ -47,48 +48,11 @@ def write_log(callback, names, logs, batch_no):
         callback.writer.add_summary(summary, batch_no)
         callback.writer.flush()
 
-
-class ConstMultiplierLayer(Layer):
-    def __init__(self, **kwargs):
-        super(ConstMultiplierLayer, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        self.k = self.add_weight(
-            name='k',
-            shape=(),
-            initializer='zeros',
-            dtype='float32',
-            trainable=True,
-        )
-        super(ConstMultiplierLayer, self).build(input_shape)
-
-    def call(self, x, **kwargs):
-        return tf.math.multiply(self.k, x)
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-
-def attention(layer_input, amount=None):
-    # ATTENTION PART STARTS HERE
-    if amount is not None:
-        attention_probs = Dense(amount[1], activation='softmax')(layer_input)
-    else:
-        sh = tf.keras.backend.int_shape(layer_input)
-        attention_probs = Dense(sh[1], activation='softmax')(layer_input)
-    attention_mul = multiply([layer_input, attention_probs]
-                             )
-    attention_scale = ConstMultiplierLayer()(attention_mul)
-    attention = add([layer_input, attention_scale])
-    # ATTENTION PART FINISHES HERE
-    return attention
-
-
 class RetroCycleGAN():
     def __init__(self, save_index="0", save_folder="./", generator_size=32,
                  discriminator_size=64, word_vector_dimensions=300,
                  discriminator_lr=0.0001, generator_lr=0.0005,
-                 lambda_cycle=5, lambda_id_weight=1,
+                 lambda_cycle=10, lambda_id_weight=0.001,
                  clip_value=0.5, optimizer="sgd", batch_size=32):
         # @tf.function
 
@@ -183,29 +147,16 @@ class RetroCycleGAN():
                 minimize = tf.reduce_sum(tf.multiply(normalize_a, normalize_b))
                 maximize = tf.reduce_sum(tf.multiply(normalize_c, normalize_b))
                 mg = sim_margin - minimize + maximize
-                # cost += mg
                 cost += tf.keras.backend.clip(mg, 0, 10000)
-                # cost += tf.clip_by_value(mg, min=0)
-            return cost / (sim_neg * 1.0)
+            return cost / (sim_neg*1.0)
 
         def create_opt(lr=0.1):
             if optimizer == "sgd":
-                return tf.optimizers.SGD(lr=lr, momentum=0.9,decay=1/(1000*750))
+                return tf.optimizers.SGD(lr=0.00001, momentum=0.9,decay=1/(1000*10000))
             elif optimizer == "adam":
-                return tf.optimizers.Adam(lr=0.0001,epsilon=1e-9)
+                return tf.optimizers.Adam(lr=lr,epsilon=1e-10)
             elif optimizer == "adabound":
-                return AdaBound(lr=1e-04,
-                                final_learning_rate=0.05,
-                                gamma=1e-05,
-                                weight_decay=0.,
-                                amsbound=False,
-                                epsilon=1e-8)
-            elif optimizer == "nadam":
-                return tf.optimizers.Nadam()
-            elif optimizer == "rmsprop":
-                return RMSProp()
-            elif optimizer == "adadelta":
-                return tf.optimizers.Adadelta(lr=lr)
+                return AdaBound(lr=1e-3, final_lr=0.1,gamma=0.0000001)
             else:
                 raise KeyError("coULD NOT FIND THE OPTIMIZER")
 
@@ -259,48 +210,9 @@ class RetroCycleGAN():
         inpt = Input(shape=self.img_shape)
         # Continue into fc layers
         d0 = dense(inpt, 2048, normalization=False)
-        d0 = dense(d0, 2048, normalization=False)
-        d0 = dense(d0, 2048, normalization=False)
-        # d0 = dense(d0, 1024, normalization=True)
+        d0 = dense(d0, 2048, normalization=True)
         # d0 = dense(d0, 2048, normalization=True)
 
-        # r = tf.compat.v2.keras.layers.Reshape((d0.get_shape()[-1], 1))(d0)
-        # # # Downscaling
-        # # t1 = conv1d(r,self.gf*8,f_size=6)
-        # t2 = conv1d(r, 2048, f_size=8)
-        # t2 = conv1d(r, 128, f_size=4)
-        # # # t3 = conv1d(t2, self.gf, f_size=4)
-        # f = MaxPooling1D()(t2)
-        # f = Flatten()(f)
-        # f = tf.compat.v1.keras.layers.Reshape((-1))(f)
-        # # att
-        # # if tf.keras.backend.int_shape(f)[1] is None:
-        # #
-        # #     shape_flatten = np.prod(shape_before_flatten)  # value of shape in the non-batch dimension
-        # attn = attention(f)
-        # # else:
-        # attn = attention(d0)
-
-        # VAE Like layer
-        # latent_dim = 128
-        # z_mean = Dense(latent_dim,
-        #                     name='z_mean')(d2)
-        # z_log_var = Dense(latent_dim,
-        #                        name='z_log_var')(d2)
-        #
-        # # use reparameterization trick to push the sampling out as input
-        # # note that "output_shape" isn't necessary with the TensorFlow backend
-        # z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
-
-        # Last 2 fc layers
-        # Maybe attention
-        # r = Reshape((-1, 1))(attn)
-        # # Downscaling
-        # t4 = conv1d(r, self.gf, f_size=4)
-        # t5 = conv1d(t4, self.gf *2, f_size=4)
-        # f = Flatten()(t5)
-        # f = UpSampling1D(size=2)(t5)
-        # d4 = dense(d0, 2048)
         output_img = Dense(dimensionality)(d0)
         return Model(inpt, output_img, name=name)
 
@@ -309,21 +221,17 @@ class RetroCycleGAN():
         def d_layer(layer_input, filters, f_size=7, normalization=True, dropout=True):
             """Discriminator layer"""
             d = Dense(filters, activation="relu")(layer_input)
-            # d = LeakyReLU(alpha=0.2)(d)
             if normalization:
                 d = BatchNormalization()(d)
             if dropout:
-                d = Dropout(0.5)(d)
+                d = Dropout(0.3)(d)
             # d = GaussianNoise(0.1)(d)
             return d
 
         inpt = Input(shape=self.img_shape)
         # noise = GaussianNoise(0.01)(inpt)
-        d1 = d_layer(inpt, 2048, normalization=True, dropout=True)
-        d1 = d_layer(d1, 2048, normalization=True, dropout=True)
-        # d1 = d_layer(d1, 2048,normalization=False)
-        # d2 = d_layer(d1, self.df * 8)
-        # # d2 = attention(d2)
+        d1 = d_layer(inpt, 2048, normalization=False, dropout=True)
+        d1 = d_layer(d1, 2048, normalization=False, dropout=True)
         validity = Dense(1, activation="sigmoid")(d1)
         return Model(inpt, validity, name=name)
 
@@ -356,17 +264,6 @@ class RetroCycleGAN():
                                                           remove_constraint=rc)
         print("Done")
 
-        # X_train, Y_train, X_test, Y_test = load_training_input_3(seed=seed,test_split=0.001,dataset=dataset)
-
-        # def load_batch(batch_size=32):
-        #     l = X_train.shape[0]
-        #     iterable = list(range(0, l))
-        #     shuffle(iterable)
-        #     for ndx in tqdm(range(0, l, batch_size), ncols=30):
-        #         ixs = iterable[ndx:min(ndx + batch_size, l)]
-        #         imgs_A = X_train[ixs]
-        #         imgs_B = Y_train[ixs]
-        #         yield imgs_A, imgs_B
         def load_batch(batch_size=32, always_random=False):
             iterable = list(X_train.index)
             shuffle(iterable)
@@ -380,30 +277,12 @@ class RetroCycleGAN():
                 imgs_B = Y_train.loc[ixs]
                 batches.append((imgs_A, imgs_B))
             print("Begginging iteration")
+            # ds = tf.data.Dataset.from_tensor_slices(batches)
+
             for i in tqdm(range(0, len(batches)), ncols=30):
                 imgs_A, imgs_B = batches[i]
                 yield imgs_A, imgs_B
 
-        # def load_batch(batch_size=2,batch_amount=1000000):
-        #     l = X_train.shape[0]
-        #     iterable = list(range(0, l))
-        #     shuffle(iterable)
-        #     # for ndx in tqdm(range(0, l, batch_size), ncols=30):
-        #     for i in tqdm(range(batch_amount)):
-        #         ixs = random.sample(range(0,len(iterable)), batch_size)
-        #         imgs_A = X_train[ixs]
-        #         imgs_B = Y_train[ixs]
-        #         yield imgs_A, imgs_B
-
-        # def load_random_batch(batch_size=2,batch_amount=1000000):
-        #     iterable = list(X_train.index)
-        #     # shuffle(iterable)
-        #     for i in tqdm(range(batch_amount)):
-        #         ixs = random.sample(range(0,len(iterable)), batch_size)
-        #         fixs = np.array(iterable)[ixs]
-        #         imgs_A = X_train.loc[fixs]
-        #         imgs_B = Y_train.loc[fixs]
-        #         yield imgs_A, imgs_B
         def load_random_batch(batch_size=32, batch_amount=1000000):
             iterable = list(X_train.index)
             # shuffle(iterable)
@@ -413,7 +292,6 @@ class RetroCycleGAN():
             imgs_B = Y_train.loc[fixs]
             return imgs_A, imgs_B
 
-        # os.path.join(final_save_folder, str(idx))
 
         def exp_decay(epoch):
             initial_lrate = 0.1
@@ -421,13 +299,20 @@ class RetroCycleGAN():
             lrate = initial_lrate * math.exp(-k * epoch)
             return lrate
 
-        noise = np.random.normal(size=(batch_size, dimensionality), scale=0.01)
-        dis_train_amount = 2.0
+        # noise = np.random.normal(size=(batch_size, dimensionality), scale=0.01)
+        dis_train_amount = 5.0
 
         self.compile_all("adam")
 
         def train_(training_epochs, always_random=False):
             for epoch in range(training_epochs):
+                # dataset1 = tf.data.Dataset.from_generator(load_batch,
+                #                                           (tf.float32, tf.float32),
+                #                                           args=(batch_size, True)
+                #                                           )
+                # for count_batch in dataset1.take(5).interleave(4).prefetch(3):
+                #     print(count_batch)
+                # exit(1)
                 for batch_i, (imgs_A, imgs_B) in enumerate(load_batch(batch_size, always_random=always_random)):
                     fake_B = self.g_AB.predict(imgs_A)
                     fake_A = self.g_BA.predict(imgs_B)
@@ -464,9 +349,9 @@ class RetroCycleGAN():
                     #  Train Generators
                     # ------------------
                     # Train the generators
-                    rand_a, rand_b = load_random_batch(batch_size=32)
-                    mm_a_loss = self.g_AB.train_on_batch(rand_a, rand_b)
-                    mm_b_loss = self.g_BA.train_on_batch(rand_b, rand_a)
+                    # rand_a, rand_b = load_random_batch(batch_size=32)
+                    mm_a_loss = self.g_AB.train_on_batch(imgs_A, imgs_B)
+                    mm_b_loss = self.g_BA.train_on_batch(imgs_B, imgs_A)
 
                     g_loss = self.combined.train_on_batch([imgs_A, imgs_B],
                                                           [valid, valid,
@@ -483,17 +368,17 @@ class RetroCycleGAN():
                         'mma': mm_a_loss,
                         'mmb': mm_b_loss,
                     })
-                    if r["loss"] >10:
-                        self.combined.compile(loss=['binary_crossentropy', 'binary_crossentropy',
-                                                    'mae', 'mae',
-                                                    'mae', 'mae'],
-                                              loss_weights=[1, 1,
-                                                            0,0,
-                                                            0,0],
-                                              # TODO ADD A CUSTOM LOSS THAT SIMPLY ADDS A
-                                              # GENERALIZATION CONSTRAINT ON THE MAE
-                                              optimizer=tf.optimizers.Adam(lr=0.0001,epsilon=1e-9))
-                        self.combined_callback.on_epoch_end(epoch,{"nerfed_losses":1})
+                    # if r["loss"] >10:
+                    #     self.combined.compile(loss=['binary_crossentropy', 'binary_crossentropy',
+                    #                                 'mae', 'mae',
+                    #                                 'mae', 'mae'],
+                    #                           loss_weights=[1, 1,
+                    #                                         0,0,
+                    #                                         0,0],
+                    #                           # TODO ADD A CUSTOM LOSS THAT SIMPLY ADDS A
+                    #                           # GENERALIZATION CONSTRAINT ON THE MAE
+                    #                           optimizer=tf.optimizers.Adam(lr=0.0001,epsilon=1e-9))
+                    #     self.combined_callback.on_epoch_end(epoch,{"nerfed_losses":1})
 
                     self.combined_callback.on_epoch_end(batch_i,r )
                     # profiler_result = profiler.stop()
@@ -512,6 +397,7 @@ class RetroCycleGAN():
                                mm_a_loss,
                                mm_b_loss,
                                elapsed_time))
+                    # break
                 try:
                     # if epoch % 5 == 0:
                     #     self.save_model(name=str(epoch))
@@ -528,29 +414,6 @@ class RetroCycleGAN():
                     print("\n")
                 except Exception as e:
                     print(e)
-                #
-                # def step_decay(initial_lrate, epoch):
-                #     drop = 0.95
-                #     epochs_drop = 50.0
-                #     lrate = initial_lrate * math.pow(drop, math.floor((1 + epoch) / epochs_drop))  # 0.04*0.5^(1+1/10))
-                #     return lrate
-                # g1_current_learning_rate = step_decay(K.eval(self.g_AB.optimizer.lr),epoch)
-                # g2_current_learning_rate = step_decay(K.eval(self.g_BA.optimizer.lr),epoch)
-                # comb_current_learning_rate = step_decay(K.eval(self.combined.optimizer.lr),epoch)
-                # d_current_learning_rate = step_decay(K.eval(self.d_A.optimizer.lr),epoch)
-                # d2_current_learning_rate = step_decay(K.eval(self.d_B.optimizer.lr),epoch)
-                # K.set_value(self.d_A.optimizer.lr, d_current_learning_rate)  # set new lr
-                # K.set_value(self.d_B.optimizer.lr, d2_current_learning_rate)  # set new lr
-                # K.set_value(self.g_AB.optimizer.lr, g1_current_learning_rate)  # set new lr
-                # K.set_value(self.g_BA.optimizer.lr, g2_current_learning_rate)  # set new lr
-                # K.set_value(self.combined.optimizer.lr, comb_current_learning_rate)  # set new lr
-
-            # print("Final performance")
-            # sl = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimLex-999.txt",
-            #                     fast_text_location="fasttext_model/cc.en.300.bin")[0]
-            # sv = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimVerb-3500.txt",
-            #                     fast_text_location="fasttext_model/cc.en.300.bin")[0]
-            # res.append((sl, sv))
 
         print("Actual training")
         train_(pretraining_epochs)
@@ -593,47 +456,59 @@ if __name__ == '__main__':
         os.makedirs(save_folder, exist_ok=True)
     test_ds = [
         # {
-        #     "original":"original_ft.hd5clean",
-        #     "retrofitted":"arfdj_ft.hd5clean",
-        #     "directory":"./fasttext_model/",
+        #     "original":"completefastext.txt.hdf",
+        #     "retrofitted":"fullfasttext.hdf",
+        #     "directory":"./ft_full_alldata/",
         #     "rc":"adversarial_paper_data/simlexsimverb.words"
         # },
-        {
-            "original":"original_glove.hd5",
-            "retrofitted":"fdj_glove.hd5",
-            "directory":"./glove/",
-            "rc":"adversarial_paper_data/simlexsimverb.words"
-        }
         # {
-        #     "original": "original_ft.hd5clean",
-        #     "retrofitted": "ar_ft.hd5clean",
-        #     "directory": "./fasttext_model/",
-        #     "rc": None
-        # }
-        # {"original": "glove.hd5",
-        #  "retrofitted": "glove_ar.hd5",
-        #  "directory": "./adversarial_paper_data/",
-        #  "rc":None},
-        # {"original": "glove.hd5",
-        #  "retrofitted": "glove_ar.hd5",
-        #  "directory": "./adversarial_paper_data/",
-        #  "rc": "adversarial_paper_data/simlexsimverb.words"},
-        # {"original": "glove.hd5",
-        #  "retrofitted": "glove_fdj_ar.hd5",
-        #  "directory": "./adversarial_paper_data/",
-        #  "rc": "./adversarial_paper_data/simlexsimverb.words"},
-        # {"original": "ft.hd5",
-        #  "retrofitted": "ft_ar.hd5",
-        #  "directory": "./adversarial_paper_data/",
-        #  "rc":None},
-        # {"original": "ft.hd5",
-        #  "retrofitted": "ft_ar.hd5",
-        #  "directory": "./adversarial_paper_data/",
-        #  "rc": "./adversarial_paper_data/simlexsimverb.words"},
-        # {"original": "ft.hd5",
-        #  "retrofitted": "ft_fdj_ar.hd5",
-        #  "directory": "./adversarial_paper_data/",
-        #  "rc": "./adversarial_paper_data/simlexsimverb.words"}
+        #     "original":"completefastext.txt.hdf",
+        #     "retrofitted":"disjointfasttext.hdf",
+        #     "directory":"./ft_disjoint_alldata/",
+        #     "rc":"adversarial_paper_data/simlexsimverb.words"
+        # },
+        # {
+        #     "original":"completeglove.txt.hdf",
+        #     "retrofitted":"fullglove.hdf",
+        #     "directory":"./glove_full_alldata/",
+        #     "rc":"adversarial_paper_data/simlexsimverb.words"
+        # },
+        # {
+        #     "original":"completeglove.txt.hdf",
+        #     "retrofitted":"disjointglove.hdf",
+        #     "directory":"./glove_disjoint_alldata/",
+        #     "rc":"adversarial_paper_data/simlexsimverb.words"
+        # },
+        # {
+        #     "original": "completeglove.txt.hdf",
+        #     "retrofitted": "disjointglove.hdf",
+        #     "directory": "./glove_disjoint_paperdata/",
+        #     "rc": "adversarial_paper_data/simlexsimverb.words"
+        # },
+        # {
+        #     "original": "completeglove.txt.hdf",
+        #     "retrofitted": "fullglove.hdf",
+        #     "directory": "./glove_full_paperdata/",
+        #     "rc": "adversarial_paper_data/simlexsimverb.words"
+        # },
+        {
+            "original": "completefastext.txt.hdf",
+            "retrofitted": "disjointfasttext.hdf",
+            "directory": "./ft_disjoint_paperdata/",
+            "rc": "adversarial_paper_data/simlexsimverb.words"
+        },
+        {
+            "original": "completefastext.txt.hdf",
+            "retrofitted": "fullfasttext.hdf",
+            "directory": "./ft_full_paperdata/",
+            "rc": "adversarial_paper_data/simlexsimverb.words"
+        },
+        {
+            "original": "completefastext.txt.hdf",
+            "retrofitted": "fullfasttext.hdf",
+            "directory": "./ft_full_paperdata/",
+            "rc": None
+        }
     ]
     print("Testing")
     print(test_ds)
@@ -653,10 +528,10 @@ if __name__ == '__main__':
     for idx, ds in enumerate(test_ds):
         print("Training")
         print(ds)
-        rcgan = RetroCycleGAN(save_folder=save_folder, batch_size=32)
+        rcgan = RetroCycleGAN(save_folder=save_folder, batch_size=32,generator_lr=0.0005,discriminator_lr=0.001)
+        # rcgan.load_weights(preface="final", folder="/media/pedro/ssd_ext/mltests/models/trained_retrogan/2020-01-27 00:34:26.680643ftar")
         sl = tools.test_sem(rcgan.g_AB, ds, dataset_location="testing/SimLex-999.txt",
                             fast_text_location="fasttext_model/cc.en.300.bin")[0]
-
         models.append(rcgan)
         ds_res = rcgan.train(pretraining_epochs=300, epochs=0, batch_size=32, dataset=ds, rc=ds["rc"])
         results.append(ds_res)

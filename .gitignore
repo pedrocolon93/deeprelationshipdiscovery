@@ -12,3 +12,4 @@ retrogan/
 /fasttext_model/filtered_x_test
 /fasttext_model/fitted-debias.hd5
 /fasttext_model/trained_retrogan/
+/logs/train/

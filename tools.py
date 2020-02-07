@@ -410,7 +410,7 @@ def load_all_words_dataset_3(dataset, seed=42, test_split=0.1, save_folder="./",
     print("Loading concepts")
     # o = o.swapaxes(0,1)
     # r = r.swapaxes(0,1)
-    for i in tqdm(o.index):
+    for i in tqdm(r.index):
         cns.append(i)
     X_train = o.loc[cns, :]
     Y_train = r.loc[cns, :]
@@ -762,18 +762,18 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5):
 
 
 
-def find_in_fasttext(testwords,return_words=False, dataset="fasttext"):
+def find_in_fasttext(testwords,return_words=False, dataset="fasttext",prefix="/c/en/"):
     original,retrofitted = datasets[dataset]
     o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
     # r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
-    asarray1 = np.array(o.loc[["/c/en/"+x for x in testwords], :])
+    asarray1 = np.array(o.loc[[prefix+x for x in testwords], :])
     return asarray1
 
-def find_in_retrofitted(testwords, return_words=False, dataset="fasttext"):
+def find_in_retrofitted(testwords, return_words=False, dataset="fasttext",prefix="/c/en/"):
     # o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
     original,retrofitted = datasets[dataset]
     r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
-    asarray1 = np.array(r.loc[["/c/en/" + x for x in testwords], :])
+    asarray1 = np.array(r.loc[[prefix + x for x in testwords], :])
     return asarray1
 
 def check_index_in_dataset(testwords, dataset):
@@ -813,7 +813,7 @@ def hd5_to_txt(input_hd5,output_txt="out.txt",remove_qualifier=True):
             text+='\n'
             file.write(text)
 
-def find_in_dataset(testwords,dataset):
+def find_in_dataset(testwords,dataset,prefix=None):
     read = False
     if type(dataset) is str:
         r = pd.read_hdf(dataset, 'mat', encoding='utf-8')
@@ -823,9 +823,13 @@ def find_in_dataset(testwords,dataset):
     else:
         raise Exception("Neither string nor dataframe provided as dataset")
     def get_uri(name):
-        if "/c/en/" in name:
-            return name
-        else: return standardized_concept_uri('en', name)
+        if prefix is None:
+            if "/c/en/" in name:
+                return name
+            else: return standardized_concept_uri('en', name)
+        else:
+            return prefix+name
+    a = r.index
     asarray1 = r.loc[[get_uri(x) for x in testwords], :]
     # print(asarray1)
     asarray1 = np.array(asarray1)
