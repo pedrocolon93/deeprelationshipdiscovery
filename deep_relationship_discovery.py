@@ -119,7 +119,7 @@ def create_model():
 
 
 def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd",cutoff=0.75):
-    retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
+    # retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
     training_data_dict = {}
     training_func_dict = {}
     print("Amount of data:",len(data))
@@ -264,13 +264,13 @@ def create_data2(use_cache=True):
                 if "/r/" not in rel: rel = "/r/"+rel
                 weight = float(assertion_row[3])
                 # print(c1_split)
-                c1 = standardized_concept_uri("en",assertion_row[1])
-                c2 = standardized_concept_uri("en",assertion_row[2])
+                c1 = assertion_row[1]
+                c2 = assertion_row[2]
                 if c1 not in retrofitted_embeddings.index or c2 not in retrofitted_embeddings.index or rel not in relations:
                     skipped+=1
                     continue
 
-                valid_relations.append([assertion_row[1], c1, c2, weight])
+                valid_relations.append([rel, c1, c2, weight])
             except Exception as e:
                 # print(e)
                 pass
@@ -377,15 +377,34 @@ def load_model_ours(save_folder="./drd", model_name="all",probability_models=Fal
 # retroembeddings = "trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5"
 # retroembeddings = "trained_models/retroembeddings/2019-10-22 11:57:48.878874/retroembeddings.h5"
 # retroembeddings = "trained_models/retroembeddings/2019-05-15 11:47:52.802481/retroembeddings.h5"
-retroembeddings = "retrogan/mini.h5"
-retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
+# retroembeddings = "retrogan/mini.h5"
+retroembeddings = "/Users/pedro/Downloads/numberbatch-en-19.08.txt"
+retrofitted_embeddings = None
+
+def load_embeddings(path):
+    global retrofitted_embeddings
+    # if ".h5" in path or ".hd" in path:
+    #     retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat")
+    # elif ".txt" in path or ".vec" in path:
+    vecs = []
+    indexes = []
+    skip_first = True
+    with open(path) as f:
+        for line in f:
+            if skip_first:
+                skip_first = False
+                continue
+            indexes.append(line.split(" ")[0])
+            vecs.append(np.array([float(x) for x in line.split(" ")[1:]]))
+    retrofitted_embeddings = pd.DataFrame(index=indexes,data=vecs)
+load_embeddings(retroembeddings)
 
 if __name__ == '__main__':
     # # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
     global w1, w2, w3
-    w1 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "building")]).reshape(1, 300)
-    w2 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "photography")]).reshape(1, 300)
-    w3 = np.array(retrofitted_embeddings.loc[standardized_concept_uri("en", "surfing")]).reshape(1, 300)
+    w1 = np.array(retrofitted_embeddings.loc[ "building"]).reshape(1, 300)
+    w2 = np.array(retrofitted_embeddings.loc["photography"]).reshape(1, 300)
+    w3 = np.array(retrofitted_embeddings.loc["surfing"]).reshape(1, 300)
     model_name = "UsedFor"
     # del retrofitted_embeddings
     # gc.collect()

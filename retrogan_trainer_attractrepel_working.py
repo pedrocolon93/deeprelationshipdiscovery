@@ -52,7 +52,7 @@ class RetroCycleGAN():
     def __init__(self, save_index="0", save_folder="./", generator_size=32,
                  discriminator_size=64, word_vector_dimensions=300,
                  discriminator_lr=0.0001, generator_lr=0.0005,
-                 lambda_cycle=5, lambda_id_weight=0.01,
+                 lambda_cycle=1, lambda_id_weight=0.01,
                  clip_value=0.5, optimizer="sgd", batch_size=32):
         # @tf.function
 
@@ -210,7 +210,7 @@ class RetroCycleGAN():
         inpt = Input(shape=self.img_shape)
         # Continue into fc layers
         d0 = dense(inpt, 2048, normalization=False)
-        d0 = dense(d0, 2048, normalization=True)
+        d0 = dense(d0, 2048, normalization=False)
         # d0 = dense(d0, 2048, normalization=True)
 
         output_img = Dense(dimensionality)(d0)
@@ -231,7 +231,7 @@ class RetroCycleGAN():
         inpt = Input(shape=self.img_shape)
         # noise = GaussianNoise(0.01)(inpt)
         d1 = d_layer(inpt, 2048, normalization=False, dropout=True)
-        d1 = d_layer(d1, 2048, normalization=False, dropout=True)
+        d1 = d_layer(d1, 2048, normalization=True, dropout=True)
         validity = Dense(1, activation="sigmoid")(d1)
         return Model(inpt, validity, name=name)
 
@@ -349,9 +349,9 @@ class RetroCycleGAN():
                     #  Train Generators
                     # ------------------
                     # Train the generators
-                    # rand_a, rand_b = load_random_batch(batch_size=32)
-                    mm_a_loss = self.g_AB.train_on_batch(imgs_A, imgs_B)
-                    mm_b_loss = self.g_BA.train_on_batch(imgs_B, imgs_A)
+                    rand_a, rand_b = load_random_batch(batch_size=32)
+                    mm_a_loss = self.g_AB.train_on_batch(rand_a, rand_b)
+                    mm_b_loss = self.g_BA.train_on_batch(rand_b, rand_a)
 
                     g_loss = self.combined.train_on_batch([imgs_A, imgs_B],
                                                           [valid, valid,
@@ -491,18 +491,18 @@ if __name__ == '__main__':
         #     "directory": "./glove_full_paperdata/",
         #     "rc": "adversarial_paper_data/simlexsimverb.words"
         # },
-        # {
-        #     "original": "completefastext.txt.hdf",
-        #     "retrofitted": "disjointfasttext.hdf",
-        #     "directory": "./ft_disjoint_paperdata/",
-        #     "rc": "adversarial_paper_data/simlexsimverb.words"
-        # },
-        # {
-        #     "original": "completefastext.txt.hdf",
-        #     "retrofitted": "fullfasttext.hdf",
-        #     "directory": "./ft_full_paperdata/",
-        #     "rc": "adversarial_paper_data/simlexsimverb.words"
-        # },
+        {
+            "original": "completefastext.txt.hdf",
+            "retrofitted": "disjointfasttext.hdf",
+            "directory": "./ft_disjoint_paperdata/",
+            "rc": "adversarial_paper_data/simlexsimverb.words"
+        },
+        {
+            "original": "completefastext.txt.hdf",
+            "retrofitted": "fullfasttext.hdf",
+            "directory": "./ft_full_paperdata/",
+            "rc": "adversarial_paper_data/simlexsimverb.words"
+        },
         {
             "original": "completefastext.txt.hdf",
             "retrofitted": "fullfasttext.hdf",
@@ -528,7 +528,7 @@ if __name__ == '__main__':
     for idx, ds in enumerate(test_ds):
         print("Training")
         print(ds)
-        rcgan = RetroCycleGAN(save_folder=save_folder, batch_size=32,generator_lr=0.0005,discriminator_lr=0.00001)
+        rcgan = RetroCycleGAN(save_folder=save_folder, batch_size=32,generator_lr=0.0001,discriminator_lr=0.001)
         # rcgan.load_weights(preface="final", folder="/media/pedro/ssd_ext/mltests/models/trained_retrogan/2020-01-27 00:34:26.680643ftar")
         sl = tools.test_sem(rcgan.g_AB, ds, dataset_location="testing/SimLex-999.txt",
                             fast_text_location="fasttext_model/cc.en.300.bin")[0]
