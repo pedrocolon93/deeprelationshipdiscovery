@@ -13,6 +13,7 @@ if __name__ == '__main__':
     print(dataset)
     correct = 0
     total = 0
+    incorrect = 0
     for i in range(count):
         with open(os.path.join(path_to_light_ls_output,str(i)+".subs")) as substitutions:
             for line in substitutions:
@@ -20,5 +21,11 @@ if __name__ == '__main__':
                 if subsituted_word == dataset[str(i)][0]:
                     if substitution in dataset[str(i)][1]:
                         correct+=1
+                    else:
+                        print("*"*100)
+                        print("Error",line,dataset[str(i)],i)
+                        print("*"*100)
+
+                        incorrect+=1
         total+=1
-    print(correct,total,100*(correct/total*1.0))
+    print(correct,incorrect,total,100*(correct/total*1.0))

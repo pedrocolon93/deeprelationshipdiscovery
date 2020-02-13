@@ -209,7 +209,8 @@ class RetroCycleGAN():
 
     def build_generator(self, name):
         """U-Net Generator"""
-
+        global dimensionality
+        dimensionality=300
         def dense(layer_input, filters, f_size=6, normalization=True,dropout=True):
             """Layers used during downsampling"""
             # d = BatchNormalization()(layer_input)

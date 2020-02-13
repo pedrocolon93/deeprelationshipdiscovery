@@ -65,7 +65,6 @@ if __name__ == '__main__':
     retro_df = pandas.DataFrame()
     #
     word_embeddings = pd.read_hdf(plain_word_vector_path, 'mat', encoding='utf-8').swapaxes(0,1)
-    word_embeddings = word_embeddings.dropna(axis=1)
     # # word_embeddings = word_embeddings.loc[[x for x in word_embeddings.index if "." not in x]]
     vals = np.array(
         to_retro_converter.predict(np.array(word_embeddings.values).reshape((-1, dimensionality)),batch_size=64)
@@ -93,24 +92,29 @@ if __name__ == '__main__':
     testwords = ["human", "cat"]
     print("The test word vectors are:", testwords)
     # ft version
-    fastext_version = find_in_fasttext(testwords, dataset=dataset,prefix="en_")
-    print("The original vectors are", fastext_version)
+    fastext_words = find_in_fasttext(testwords, dataset=dataset,prefix="en_")
+    print("The original vectors are", fastext_words)
     # original retrofitted version
-    retro_version = tools.find_in_dataset(testwords, dataset=retro_word_embeddings.swapaxes(0,1), prefix="en_")
+    og_retro = pd.read_hdf(plain_retrofit_vector_path,"mat")
+    og_ft = pd.read_hdf(plain_word_vector_path,"mat")
+    retro_version = tools.find_in_dataset(testwords, dataset=og_retro, prefix="en_")
     print("The original retrofitted vectors are", retro_version)
 
-    # Check the closest by cosine dist
-    # print("Finding the words that are closest in the default numberbatch mappings")
-    # for idx, word in enumerate(testwords):
-    #     print(word)
-    #     retro_representation = retro_version[idx].reshape(1, dimensionality)
-    #     find_closest_2(retro_representation, dataset=dataset)
-    #     print(sklearn.metrics.mean_absolute_error(retro_version[idx], retro_representation.reshape((dimensionality,))))
+    print("Finding the words that are closest in the og fastext")
+    for idx, word in enumerate(testwords):
+        print(word)
+        f = fastext_words[idx]
+        print(tools.find_closest_in_dataset(f, plain_word_vector_path))
+    print("Finding the words that are closest in the og retrofitting ")
+    for idx, word in enumerate(testwords):
+        print(word)
+        r = retro_version[idx]
+        print(tools.find_closest_in_dataset(r, plain_retrofit_vector_path))
 
     print("Finding the words that are closest to the predictions/mappings that we make")
     for idx, word in enumerate(testwords):
         print(word)
-        retro_representation = to_retro_converter.predict(fastext_version[idx].reshape(1, dimensionality))
+        retro_representation = to_retro_converter.predict(fastext_words[idx].reshape(1, dimensionality))
         print(tools.find_closest_in_dataset(retro_representation, retrogan_word_vector_output_path))
         print(sklearn.metrics.mean_absolute_error(retro_version[idx], retro_representation.reshape((dimensionality,))))
 

@@ -12,6 +12,10 @@ if __name__ == '__main__':
                         default="cleaned_corpus.txt")
     parser.add_argument("outputhdf",default="original_ft.hd5clean",
                         help="The output hdf file")
+    parser.add_argument("--limit",default=None,
+                        help="Limit of vectors to load",
+                        type=int)
+    parser.add_argument("-sf",default=False, action='store_true')
     args = parser.parse_args()
 
     input_filename = args.inputtext
@@ -21,9 +25,17 @@ if __name__ == '__main__':
     prefix = ""
     indexes = []
     vectors = []
+    if args.limit is not None:
+        limit = args.limit
+    skip_first = args.sf
+
     with open(input_filename,encoding="utf-8") as vec_file:
         for line in tqdm(vec_file):
             count+=1
+            if skip_first: skip_first=False
+            if count == limit:
+                print("Reached limit",limit)
+                break
             word = line.strip().split(" ")[0]
             word = prefix+word
             vec = []

@@ -29,7 +29,7 @@ def remove_constraints_from_corpus(sl_sv_words="simlexsimverb.words",
     print(count)
 
 def remove_from_corpus(antonyms_file="antonyms.txt", synonyms_file="synonyms.txt",
-                       corpuse_to_clean="../../glove/glove_formatted.txt", output_corpus="cleaned_corpus_glove.txt",
+                       corpuse_to_clean="../../glove/glove_formatted.txt", output_corpus="seen_corpus_glove.txt",
                        separator=" ",
                        prefix="en_"):
     modified = set()
@@ -105,5 +105,5 @@ def remove_from_corpus_2(antonyms_file="antonyms.txt", synonyms_file="synonyms.t
     print(count)
 if __name__ == "__main__":
     modified = set()
-    # remove_from_corpus()
-    remove_constraints_from_corpus(sl_sv_words="../vocab/simlexsimverb.words", corpuse_to_clean="/media/pedro/ssd_ext/attract-repel/results/glove_ar_disjoint.txt",output_corpus="/media/pedro/ssd_ext/attract-repel/results/gloveclean_ar_disjoint.txt")
+    remove_from_corpus()
+    # remove_constraints_from_corpus(sl_sv_words="../vocab/simlexsimverb.words", corpuse_to_clean="/media/pedro/ssd_ext/attract-repel/results/glove_ar_disjoint.txt",output_corpus="/media/pedro/ssd_ext/attract-repel/results/gloveclean_ar_disjoint.txt")

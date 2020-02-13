@@ -719,43 +719,43 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5):
     else:
         raise Exception("Neither string nor dataframe provided as dataset")
     # if limit is None:
-    #     results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality),
-    #                                                                                      pred_y.reshape(1,dimensionality)),
-    #                                                          np.array(o.iloc[:,:])
-    #                                                          )))]
+    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality),
+                                                                                     pred_y.reshape(1,dimensionality)),
+                                                         np.array(o.iloc[:,:])
+                                                         )))]
     # else:
-    #     results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, dimensionality),
-    #                                                                                            pred_y.reshape(1, dimensionality)),
-    #                                                                np.array(o.iloc[0:limit, :])
-    #                                                                )))]
-    # sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
-    # final_n_results = []
-    # final_n_results_words = []
-    # for i in range(n_top):
-    #     if(verbose):
-    #         print(o.index[sorted_results[i][0]])
-    #     final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
-    #     final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
-    #
-    # del o,results,sorted_results
-    # gc.collect()
+    # results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, dimensionality),
+    #                                                                                        pred_y.reshape(1, dimensionality)),
+    #                                                            np.array(o.iloc[0:limit, :])
+    #                                                            )))]
+    sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
+    final_n_results = []
+    final_n_results_words = []
+    for i in range(n_top):
+        # if(verbose):
+        #     print(o.index[sorted_results[i][0]])
+        final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
+        final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
 
-    # testvec = find_in_dataset(["cat"], o)
-    testvec = pred_y
-    # print(testvec)
-    index = faiss.IndexFlatIP(dimensionality)  # build the index
-    # print(index.is_trained)
-    index.add(o.values.astype(np.float32))  # add vectors to the index
-    # print(index.ntotal)
-    tst = np.array([testvec.astype(np.float32)])
-    tst = tst.reshape((tst.shape[0],tst.shape[-1]))
-    # print(tst.shape)
-    D, I = index.search(tst, n_top)  # sanity check
-    # print(I)
-    # print(D)
-    # print(o.iloc[I[0]])
-    final_n_results = o.iloc[I[0]].values
-    final_n_results_words = o.index[I[0]].values
+    # del o,results,sorted_results
+    gc.collect()
+
+    # # testvec = find_in_dataset(["cat"], o)
+    # testvec = pred_y
+    # # print(testvec)
+    # index = faiss.IndexFlatIP(dimensionality)  # build the index
+    # # print(index.is_trained)
+    # index.add(o.values.astype(np.float32))  # add vectors to the index
+    # # print(index.ntotal)
+    # tst = np.array([testvec.astype(np.float32)])
+    # tst = tst.reshape((tst.shape[0],tst.shape[-1]))
+    # # print(tst.shape)
+    # D, I = index.search(tst, n_top)  # sanity check
+    # # print(I)
+    # # print(D)
+    # # print(o.iloc[I[0]])
+    # final_n_results = o.iloc[I[0]].values
+    # final_n_results_words = o.index[I[0]].values
 
     return final_n_results_words,final_n_results
 
@@ -765,9 +765,21 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5):
 def find_in_fasttext(testwords,return_words=False, dataset="fasttext",prefix="/c/en/"):
     original,retrofitted = datasets[dataset]
     o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
+    o = o.dropna()
     # r = pd.read_hdf(directory + retrofitted, 'mat', encoding='utf-8')
-    asarray1 = np.array(o.loc[[prefix+x for x in testwords], :])
-    return asarray1
+    result = []
+    for concept in testwords:
+        name_idx = prefix+concept
+        try:
+            a = np.array(o.loc[name_idx])
+            result.append(a)
+        except:
+            print("Generating for",name_idx)
+            a = np.array(generate_fastext_embedding(name_idx))
+            result.append(a)
+    t = np.array(result)
+    print(t)
+    return t
 
 def find_in_retrofitted(testwords, return_words=False, dataset="fasttext",prefix="/c/en/"):
     # o = pd.read_hdf(directory + original, 'mat', encoding='utf-8')
@@ -781,9 +793,11 @@ def check_index_in_dataset(testwords, dataset):
     return results
 
 ft_model = None
-def generate_fastext_embedding(word,keep_model_in_memory=True,ft_dir="fasttext_model/cc.en.300.bin"):
+def generate_fastext_embedding(word,keep_model_in_memory=True,ft_dir="fasttext_model/cc.en.300.bin",standardize=False):
     global ft_model
-    standardized_form = standardized_concept_uri("en",word).replace("/c/en/","")
+    standardized_form = word
+    if standardize:
+        standardized_form = standardized_concept_uri("en",word).replace("/c/en/","")
     if ft_model is None:
         ft_model = fasttext.load_model(ft_dir)
     wv = ft_model.get_word_vector(standardized_form)

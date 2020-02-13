@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import subprocess
 import numpy as np
 import pandas as pd
@@ -32,6 +33,17 @@ def to_hdf(file,outputname):
                 print(count)
         df = pd.DataFrame(index=indexes,data=vectors)
         df.to_hdf(outputname,"mat")
+
+
+def to_txt(param):
+    df = pd.read_hdf(param,"mat")
+
+    pass
+
+
+def generate_seen(ov, ar):
+    pass
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -138,3 +150,5 @@ max_iter = 5
     to_hdf(args.ccn,args.ccn+".hdf")
     print("Ar vectors")
     to_hdf(os.path.join(path_to_ar,"results",args.aroutput),args.dcn+".hdf")
+    print("Seen vectors")
+    # shutil.copy(os.path.join(path_to_ar,"results",args.aroutput), "./arvecs.txt")
