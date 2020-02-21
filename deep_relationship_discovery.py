@@ -1,4 +1,5 @@
 import csv
+import gc
 import pickle
 
 import sklearn
@@ -21,12 +22,44 @@ relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r
              "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf", #5
              "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty","/r/NotIsA","/r/NotHasA"] # 4
 
+print("Loading RetroG")
+rcgan = RetroCycleGAN(save_folder="test", batch_size=32, generator_lr=0.0001, discriminator_lr=0.001)
+rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_full_alldata_feb11")
+print("Loading ft")
+generate_fastext_embedding("cat")
+print("Ready")
+word_dict = {}
 
+def create_sentence_embedding(c1):
+    s = c1.split(" ")
+    concept_vecs = []
+    for word in s:
+        try:
+            concept_vecs.append(retrofitted_embeddings.loc[word])
+        except:
+            # print("Creating emb for", word)
+            if word in word_dict.keys():
+                concept_vecs.append(word_dict[word])
+            else:
+                concept_vecs.append(pd.Series(rcgan.g_AB.predict(np.array(generate_fastext_embedding(word))
+                                                             .reshape(1, 300)
+                                                             ).reshape(300)))
+    concept_vecs = np.array(concept_vecs)
+    avg = np.mean(concept_vecs, axis=0)
+    return pd.Series(avg)
 
-# def conv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
-#     d = Conv1D(filters, f_size, strides=strides, activation="relu")(layer_input)
-#     return d
-
+def get_embedding(param):
+    if param in word_dict.keys():
+        return word_dict[param]
+    s = param.split(" ")
+    if len(s)>1:
+        a = create_sentence_embedding(param)
+        word_dict[param] = a
+        return word_dict[param]
+    else:
+        a= rcgan.g_AB.predict(np.array(generate_fastext_embedding(param)).reshape(1, 300)).reshape(300)
+        word_dict[param] = a
+        return word_dict[param]
 
 def create_model():
     # Input needs to be 2 word vectors
@@ -55,7 +88,7 @@ def create_model():
 
     # Concatenate both expansions
     merge1 = Concatenate()([wv1_expansion_3, wv2_expansion_3])
-    merge1 = Dropout(0.1)(merge1)
+    # merge1 = Dropout(0.1)(merge1)
     merge_expand = Dense(intermediate_size, activation='relu')(merge1)
     merge_expand = BatchNormalization()(merge_expand)
     # Add atention layer
@@ -105,7 +138,7 @@ def create_model():
         model_outs.append(out)
         # drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
         drd = Model([wv1, wv2], out, name=layer_name)
-        optimizer = Adam(lr=0.0002)
+        optimizer = Adam(lr=0.001)
         drd.compile(optimizer=optimizer, loss=[loss])
         # drdp.compile(optimizer=optimizer, loss=[loss])
         # drdp.summary()
@@ -121,9 +154,9 @@ def create_model():
 
     return model_dict#, prob_model_dict
 
-
-def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd",cutoff=0.63):
+def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd",cutoff=0.99):
     # retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
+    global word_dict
     training_data_dict = {}
     training_func_dict = {}
     print("Amount of data:",len(data))
@@ -148,14 +181,14 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                 for ix in ixs:
                     try:
                         stuff = data.iloc[training_data_dict[output][ix]]
-                        l1 = np.array(retrofitted_embeddings.loc[stuff[1]]).reshape(1,300).astype(np.float32)
-                        l2 = np.array(retrofitted_embeddings.loc[stuff[2]]).reshape(1,300).astype(np.float32)
+                        l1 = np.array(get_embedding(stuff[1])).reshape(1,300)
+                        l2 = np.array(get_embedding(stuff[2])).reshape(1,300)
                         x_1.append(l1)
                         x_2.append(l2)
-                        # y.append(float(stuff[3]))
                         y.append(1)
                     except Exception as e:
                         print(e)
+                        raise Exception("Fuck")
                         continue
 
                 for idx in range(len(y)):
@@ -203,6 +236,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
             for output in exclude:
                 try:
                     it = training_func_dict[output]
+                    iter += 1
                     x_1, x_2, y = it.__next__()
                     # print(x_1.shape)
                     x_1 = x_1.reshape(x_1.shape[0],x_1.shape[-1])
@@ -219,7 +253,6 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
 
                     # loss_2 = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1':x_2,'retro_word_2':x_1},y=y)
                     total_loss += loss
-                    iter += 1
                     # if loss > 10:
                     #     print("Loss", output, loss)
                     # if iter%100:
@@ -248,10 +281,22 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
             else:
                 print(tasks_completed)
             iter += 1
+        try:
+            accuracy = test_model_3(model)
+            callback.on_epoch_end(epoch, {"acc": accuracy})
+        except Exception as e:
+            print(e)
 
         print("Avg loss", total_loss / iter)
         print(str(epoch) + "/" + str(epoch_amount))
 
+        if len(word_dict.keys())>10000:
+            try:
+                word_dict = {}
+                gc.collect()
+            except Exception as e:
+                print("Problem cleaning word dictionary!")
+                print(e)
         # for key in prob_model.keys():
         #     prob_model[key].save(save_folder + "/" + key + "probability.model")
             # exit()
@@ -259,6 +304,8 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         # model_name = "PartOf"
         # test_model(model, model_name=model_name)
         if epoch%10==0:
+
+
             try:
                 os.mkdir(save_folder)
             except Exception as e:
@@ -273,157 +320,6 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         print(e)
     for key in model.keys():
         model[key].save(save_folder + "/" + key + ".model")
-# def create_data(use_cache=True):
-#     if os.path.exists("tmp/valid_rels.hd5") and use_cache:
-#         print("Using cache")
-#         return pd.read_hdf("tmp/valid_rels.hd5", "mat")
-#     assertionspath = "retrogan/conceptnet-assertions-5.6.0.csv"
-#     valid_relations = []
-#     with open(assertionspath) as assertionsfile:
-#         assertions = csv.reader(assertionsfile, delimiter="\t")
-#         row_num = 0
-#         for assertion_row in assertions:
-#             row_num += 1
-#             if row_num % 100000 == 0: print(row_num)
-#             try:
-#                 if "/c/en/" not in assertion_row[2] or "/c/en/" not in assertion_row[3] or \
-#                         assertion_row[1] not in relations:
-#                     continue
-#                 info = json.loads(assertion_row[4])
-#                 weight = info["weight"]
-#                 c1_split = assertion_row[2].split("/")
-#                 # print(c1_split)
-#                 c1 = "/c/en/" + c1_split[3]
-#                 c2_split = assertion_row[3].split("/")
-#                 c2 = "/c/en/" + c2_split[3]
-#                 valid_relations.append([assertion_row[1], c1, c2, weight])
-#             except Exception as e:
-#                 # print(e)
-#                 pass
-#                 # print(e)
-#             if len(valid_relations) % 10000 == 0:
-#                 print(len(valid_relations))
-#
-
-def create_sentence_embedding(c1, retrofitted_embeddings,rcgan,newlist):
-    s = c1.split(" ")
-    concept_vecs = []
-    if len(s)>1:
-        for word in s:
-            try:
-                concept_vecs.append(retrofitted_embeddings.loc[word])
-            except:
-                print("Creating emb for",word)
-                added = False
-                for tup in newlist:
-                    if word == tup[0]:
-                        concept_vecs.append(tup[1])
-                        added = True
-                        break
-                if not added:
-                    concept_vecs.append(pd.Series(rcgan.g_AB.predict(np.array(generate_fastext_embedding(word))
-                                                           .reshape(1, 300)
-                                                           ).reshape(300)))
-    concept_vecs = np.array(concept_vecs)
-    avg = np.mean(concept_vecs,axis=0)
-    return (c1,pd.Series(avg))
-
-
-
-def create_data2(use_cache=True):
-    global retrofitted_embeddings
-    rcgan = RetroCycleGAN(save_folder="test", batch_size=32, generator_lr=0.0001, discriminator_lr=0.001)
-    rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_full_alldata_feb11")
-
-    if os.path.exists("tmp/valid_rels.hd5") and use_cache:
-        print("Using cache")
-        a = pd.read_hdf("tmp/valid_rels.hd5", "mat")
-        b = pd.read_hdf("tmp/updated_embeddings.hd5", "mat")
-        b.drop_duplicates(inplace=True)
-        return a, b
-    assertionspath = "train600k.txt"
-    valid_relations = []
-    new = []
-    with open(assertionspath) as assertionsfile:
-        assertions = csv.reader(assertionsfile, delimiter="\t")
-        row_num = 0
-        skipped = 0
-        for assertion_row in tqdm(assertions):
-            # if row_num>100: break
-            row_num += 1
-            if row_num % 100000 == 0: print(row_num)
-            try:
-                rel = assertion_row[0]
-                if "/r/" not in rel: rel = "/r/"+rel
-                weight = float(assertion_row[3])
-                # print(c1_split)
-                c1 = assertion_row[1]
-                c2 = assertion_row[2]
-
-                if c1 not in retrofitted_embeddings.index or \
-                        c2 not in retrofitted_embeddings.index or \
-                        rel not in relations:
-                    if rel not in relations:
-                        print("Skipping relation",rel)
-                        skipped+=1
-                        continue
-                    # try:
-                    if len(c1.split(" "))>1:
-                        #We have a sentence so create the embedding with the average.
-                        # print("Not in index c1:",c1,len(c1.split(" ")))
-                        a = create_sentence_embedding(c1,retrofitted_embeddings,rcgan,new)
-                        # a = rcgan.g_AB.predict(np.array(generate_fastext_embedding(c1)).reshape(1, 300))
-                        new.append(a)
-                    elif c1 not in retrofitted_embeddings.index:
-                        print("Not in index still and less than 1 c1:",c1,len(c1.split(" ")))
-                        a = rcgan.g_AB.predict(np.array(generate_fastext_embedding(c1)).reshape(1, 300)).reshape(300)
-                        new.append((c1,pd.Series(a)))
-
-                    if len(c2.split(" "))>1:
-                        # print("Not in index c2:",c2,len(c2.split(" ")))
-                        a= create_sentence_embedding(c2,retrofitted_embeddings,rcgan,new)
-                        new.append(a)
-                    elif c2 not in retrofitted_embeddings.index:
-                        print("Not in index still and less than 1 c2:",c2,len(c2.split(" ")))
-                        a = rcgan.g_AB.predict(np.array(generate_fastext_embedding(c2)).reshape(1, 300)).reshape(300)
-                        new.append((c2,pd.Series(a)))
-                            # else:
-                            #     a = np.array(generate_fastext_embedding(c1))
-                            #     new.append(a)
-                            #     print("Adding",c1)
-
-                    # except Exception as e:
-                    #     print(e)
-                    #     skipped+=1
-                    #     continue
-
-                valid_relations.append([rel, c1, c2, weight])
-            except Exception as e:
-                print("An error ocurred in",row_num,assertion_row)
-                print(e)
-                pass
-                # print(e)
-            if len(valid_relations) % 10000 == 0:
-                print(len(valid_relations), skipped)
-        print(skipped)
-    new_index = [x for x in retrofitted_embeddings.index]
-    new_vals = [x for x in retrofitted_embeddings.values]
-    for i in range(len(new)):
-        new_index.append(new[i][0])
-        new_vals.append(new[i][1])
-    print("Updating embeddings")
-    retrofitted_embeddings = pd.DataFrame(data=new_vals,index=new_index)
-    print("Dropping dupes")
-    retrofitted_embeddings.drop_duplicates(inplace=True)
-    print("SAVING TO FILE")
-    retrofitted_embeddings.to_hdf("tmp/updated_embeddings.hd5","mat")
-    print("Generating the training data")
-    af = pd.DataFrame(data=valid_relations, index=range(len(valid_relations)))
-    # af = retrofitted_embeddings
-    print("Training data:")
-    print(af)
-    af.to_hdf("tmp/valid_rels.hd5", "mat")
-    return af, retrofitted_embeddings
 
 
 def load_data(path):
@@ -545,9 +441,62 @@ def load_embeddings(path):
     retrofitted_embeddings = pd.DataFrame(index=indexes,data=vecs)
     print("Done")
 # print("Loading embeddings")
-load_embeddings(retroembeddings)
+# load_embeddings(retroembeddings)
 
-def test_model_2(model):
+
+
+def create_data3(use_cache):
+    global retrofitted_embeddings
+    rcgan = RetroCycleGAN(save_folder="test", batch_size=64, generator_lr=0.0001, discriminator_lr=0.001)
+    rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_full_alldata_feb11")
+
+    if os.path.exists("tmp/valid_rels.hd5") and use_cache:
+        print("Using cache")
+        a = pd.read_hdf("tmp/valid_rels.hd5", "mat")
+        return a
+    assertionspath = "train600k.txt"
+    valid_relations = []
+    new = []
+    with open(assertionspath) as assertionsfile:
+        assertions = csv.reader(assertionsfile, delimiter="\t")
+        row_num = 0
+        skipped = 0
+        for assertion_row in tqdm(assertions):
+            # if row_num>100: break
+            row_num += 1
+            if row_num % 100000 == 0: print(row_num)
+            try:
+                rel = assertion_row[0]
+                if "/r/" not in rel: rel = "/r/" + rel
+                weight = float(assertion_row[3])
+                # print(c1_split)
+                c1 = assertion_row[1]
+                c2 = assertion_row[2]
+
+                if rel not in relations:
+                    print("Skipping relation", rel)
+                    skipped += 1
+                    continue
+                valid_relations.append([rel, c1, c2, weight])
+            except Exception as e:
+                print("An error ocurred in", row_num, assertion_row)
+                print(e)
+                pass
+                # print(e)
+            if len(valid_relations) % 10000 == 0:
+                print(len(valid_relations), skipped)
+        print(skipped)
+
+    print("Generating the training data")
+    af = pd.DataFrame(data=valid_relations, index=range(len(valid_relations)))
+    # af = retrofitted_embeddings
+    print("Training data:")
+    print(af)
+    af.to_hdf("tmp/valid_rels.hd5", "mat")
+    return af
+
+
+def test_model_3(model):
     global retrofitted_embeddings
     rcgan = RetroCycleGAN(save_folder="test", batch_size=32, generator_lr=0.0001, discriminator_lr=0.001)
     rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_full_alldata_feb11")
@@ -570,78 +519,25 @@ def test_model_2(model):
             # print(c1_split)
             c1 = assertion_row[1]
             c2 = assertion_row[2]
-            x1 = None
-            x2 = None
-
-            if c1 not in retrofitted_embeddings.index or c2 not in retrofitted_embeddings.index:
-                if rel not in relations:
-                    skipped += 1
-                    continue
-                try:
-                    if len(c1.split(" ")) > 1:
-                        # We have a sentence so create the embedding with the average.
-                        a= create_sentence_embedding(c1, retrofitted_embeddings,rcgan,[])
-                        x1 = a[1]
-                    elif len(c1.split(" "))==0:
-                        x1 = retrofitted_embeddings.loc[c1]
-                    else:
-                        x1 = retrofitted_embeddings.loc[c1]
-                    if len(c2.split(" ")) > 1:
-                        a = create_sentence_embedding(c2, retrofitted_embeddings,rcgan,[])
-                        x2 = a[1]
-                    elif len(c2.split(" "))==0:
-                        x2 = retrofitted_embeddings.loc[c2]
-                    else:
-                        x2 = retrofitted_embeddings.loc[c2]
-
-                except Exception as e:
-                    print(e)
-                    skipped += 1
-                    continue
-
-            else:
-                try:
-                    x1 = retrofitted_embeddings.loc[c1]
-                except Exception as e:
-                    print("Skipping x1")
-                try:
-                    x2 = retrofitted_embeddings.loc[c2]
-                except Exception as e:
-                    print("Skupping x2 ")
-            if x1 is None or x2 is None:
-                # print("Skipping",assertion_row,row_num)
-                # skipped+=1
-                # x_1.append(None)
-                # x_2.append(None)
-                # y_true.append(0)
-                # rels.append(rel)
-                continue
-            else:
-                x_1.append(x1)
-                x_2.append(x2)
-                y_true.append(y)
-                rels.append(rel)
-        print("Skipped:",skipped)
+            x_1.append(c1)
+            x_2.append(c2)
+            y_true.append(y)
+            rels.append(rel)
 
     print("Done")
     y_pred = []
-    print(len(y_true),len(x_1),len(x_2),len(rels))
-    for i in tqdm(range(len(x_1))):
+    print(len(y_true), len(x_1), len(x_2), len(rels))
+    for i in tqdm(range(len(y_true))):
         try:
-            tmp1=np.array(x_1[i])
-            t1 = tmp1.reshape(1, tmp1.shape[0])
-            t1 = t1[0,:]
-            t1 = t1.reshape((1,t1.shape[-1]))
-            # print(tmp1)
-            # print(x_1.shape)
-            tmp2=np.array(x_2[i])
-            # print(tmp2)
-            t2 = tmp2.reshape(1, tmp2.shape[0])
-            t2 = t2[0,:]
-            t2 = t2.reshape((1,t2.shape[-1]))
-
-            pred = model[rels[i].replace("/r/", "")].predict(x={'input_1': t1,
-                                                                'input_2': t2})
+            t1 = np.array(get_embedding(x_1[i])).reshape(1, 300)
+            t2 = np.array(get_embedding(x_2[i])).reshape(1, 300)
+            pred = -1
+            try:
+                pred = model[rels[i].replace("/r/", "")].predict(x={"retro_word_1": t1,
+                                                         "retro_word_2": t2})
+            except:
+                pred = model[rels[i].replace("/r/", "")].predict(x={'input_1': t1,
+                                                                    'input_2': t2})
             y_pred.append(pred)
         except Exception as e:
             y_pred.append(-1)
@@ -649,11 +545,11 @@ def test_model_2(model):
     print(y_pred)
     avg = np.average(y_pred)
     print(avg)
-    final_y_pred = [0 if x<avg else 1 for x in y_pred]
+    final_y_pred = [0 if x < avg else 1 for x in y_pred]
     m = tf.keras.metrics.BinaryAccuracy()
     m.update_state(y_true, final_y_pred)
     print('Final result: ', m.result().numpy())  # Final result: 0.75
-    return
+    return  m.result().numpy()
 
 
 if __name__ == '__main__':
@@ -670,27 +566,26 @@ if __name__ == '__main__':
             print(e)
     # # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
     global w1, w2, w3, retrofitted_embeddings
-    data, retrofitted_embeddings = create_data2(use_cache=True)
+    data = create_data3(use_cache=False)
 
-    w1 = np.array(retrofitted_embeddings.loc["building"]).reshape(1, 300)
-    w2 = np.array(retrofitted_embeddings.loc["cat"]).reshape(1, 300)
-    w3 = np.array(retrofitted_embeddings.loc["dog"]).reshape(1, 300)
-    model_name = "UsedFor"
+    # w1 = np.array(retrofitted_embeddings.loc["building"]).reshape(1, 300)
+    # w2 = np.array(retrofitted_embeddings.loc["cat"]).reshape(1, 300)
+    # w3 = np.array(retrofitted_embeddings.loc["dog"]).reshape(1, 300)
+    # model_name = "UsedFor"
     # del retrofitted_embeddings
     # gc.collect()
     print("Creating model...")
-    # model = create_model()
+    model = create_model()
     print("Done\nLoading data")
-    model = load_model_ours("/home/pedro/mltests/trained_models/deepreldis/2020-02-13 04:25:15.169007")
+    # model = load_model_ours("/home/pedro/mltests/trained_models/deepreldis/2020-02-13 04:25:15.169007")
     # model = load_model_ours("trained_models/deepreldis/2020-02-12 07:49:00.552561")
     # # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
-    # train_on_assertions(model, data,save_folder="trained_models/deepreldis/"+str(datetime.datetime.now())+"/",epoch_amount=100,batch_size=32)
+    train_on_assertions(model, data,save_folder="trained_models/deepreldis/"+str(datetime.datetime.now())+"/",epoch_amount=100,batch_size=64)
     print("Done\n")
     # model = load_model_ours(save_folder="drd/",model_name="all")
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_2_sigmoid",model_name=model_name,probability_models=True)
     # normalizers = normalize_outputs(model,use_cache=False)
     # normalizers = normalize_outputs(model,use_cache=False)
-    test_model_2(model)
     # test_model(model, normalizers=None, model_name=model_name)
     # Output needs to be the relationship weights

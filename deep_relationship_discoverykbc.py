@@ -1,21 +1,15 @@
 import csv
-import json
 import pickle
 
-import numpy as np
 import pandas as pd
 import sklearn
 from conceptnet5.vectors import standardized_concept_uri
-from tensorflow.python.keras import Model
 # from keras.utils import plot_model
-from tensorflow.python.keras.layers import Input, Conv1D, Dense, BatchNormalization, \
-    Concatenate
-from tensorflow_core.python.keras.optimizer_v2.adam import Adam
+from tensorflow.python.keras.layers import Concatenate
 from tensorflow_core.python.keras.saving.save import load_model
 from tensorflow_core.python.keras.utils.vis_utils import plot_model
-from tqdm import tqdm
 
-from retrogan_trainer_attractrepel import *
+from failed_tests.retrogan_trainer_attractrepel import *
 
 relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires",
              "/r/AtLocation"

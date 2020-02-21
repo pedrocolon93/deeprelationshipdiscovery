@@ -1,22 +1,15 @@
 from __future__ import print_function, division
 
-import datetime
-import os
-
-import numpy as np
 import pandas
 import pandas as pd
 import sklearn
-from numpy.random import seed
-from retrogan_trainer_attractrepel import *
+from failed_tests.retrogan_trainer_attractrepel import *
 from tensorflow_core.python.framework.random_seed import set_random_seed
 from tensorflow_core.python.keras.optimizer_v2.adam import Adam
 from tensorflow_core.python.keras.saving.save import load_model
-import tensorflow as tf
 
 import tools
-from tools import find_in_fasttext, find_in_retrofitted, \
-    find_closest_2
+from tools import find_in_fasttext
 from vocabulary_cleaner import cleanup_vocabulary_nb_based
 
 seed(1)

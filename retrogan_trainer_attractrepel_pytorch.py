@@ -11,33 +11,15 @@ import numpy as np
 # from tensorflow_core.python.keras import backend as K
 import pandas as pd
 
-os.environ["TF_KERAS"] = "1"
-from keras_adabound import AdaBound
-from tensorflow.keras import backend as K
-from tensorflow import keras
-from tensorflow.python.keras.layers import Input, Conv1D, Dense, BatchNormalization, \
-    Dropout
-from tensorflow.python.keras import Model
-from tensorflow.python.framework.ops import disable_eager_execution
-# from tensorflow_core.python.framework.random_seed import set_random_seed
-# from tensorflow_core.python.keras.optimizer_v2.adam import Adam
-# from tensorflow_core.python.keras.optimizer_v2.rmsprop import RMSProp
-# from tensorflow_core.python.keras.optimizer_v2
-# from tensorflow_core.python.keras.utils.vis_utils import plot_model
-# from tensorflow_core.python.keras.optimizers import Adadelta
-from tqdm import tqdm
-import tensorflow as tf
+import torch.nn as nn
+import torch.nn.functional as F
+from torch import randperm, clamp
+from torch.optim import Adam
 
-# tf.debugging.set_log_device_placement(True)
+os.environ["TF_KERAS"] = "1"
+from tqdm import tqdm
 
 import tools
-
-
-# seed(1)
-#
-# set_random_seed(2)
-# os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-
 
 def write_log(callback, names, logs, batch_no):
     for name, value in zip(names, logs):
@@ -77,11 +59,8 @@ class RetroCycleGAN():
         self.g_lr = g_lr
         # cv = clip_value
         # cn = cn
-        self.d_A = self.build_discriminator(name="word_vector_discriminator")
-        self.d_B = self.build_discriminator(name="retrofitted_word_vector_discriminator")
-        # Best combo sofar SGD, gaussian, dropout,5,0.5 mml(0,5,.5),3x1024gen, 2x1024, no normalization
-
-        # return Adam(lr,amsgrad=True,decay=1e-8)
+        self.d_A = self.Discriminator(name="word_vector_discriminator")
+        self.d_B = self.Discriminator(name="retrofitted_word_vector_discriminator")
 
         # -------------------------
         # Construct Computational
@@ -89,12 +68,8 @@ class RetroCycleGAN():
         # -------------------------
 
         # Build the generators
-        self.g_AB = self.build_generator(name="to_retro_generator")
-
-        # self.d_A.summary()
-        # self.g_AB.summary()
-        # plot_model(self.g_AB, show_shapes=True)
-        self.g_BA = self.build_generator(name="from_retro_generator")
+        self.g_AB = self.Generator(name="to_retro_generator")
+        self.g_BA = self.Generator(name="from_retro_generator")
 
         # self.d_B.summary()
         # self.g_BA.summary()
@@ -120,6 +95,24 @@ class RetroCycleGAN():
         valid_A = self.d_A(fake_A)
         valid_B = self.d_B(fake_B)
 
+        mm_a = RetroCycleGAN.MaxMargin_Loss()
+        mm_b = RetroCycleGAN.MaxMargin_Loss()
+        id_ab = nn.L1Loss()
+        id_ab = nn.L1Loss()
+        cycle_ab = nn.L1Loss()
+        cycle_ba = nn.L1Loss()
+        adversarial_ab = nn.BCELoss()
+        adversarial_ba = nn.BCELoss()
+
+        mm_a_opt = Adam(lr=generator_lr)
+        mm_b_opt = Adam(lr=generator_lr)
+        adv_a_opt = Adam(lr=discriminator_lr)
+        adv_b_opt = Adam(lr=discriminator_lr)
+        id_a_opt = Adam(lr=generator_lr)
+        id_b_opt = Adam(lr=generator_lr)
+        cycle_opt = Adam(lr=generator_lr)
+
+
         # Combined model trains generators to fool discriminators
         self.combined = Model(inputs=[unfit_wv, fit_wv],
                               outputs=[valid_A, valid_B,
@@ -134,124 +127,75 @@ class RetroCycleGAN():
 
         # plot_model(self.combined, to_file="RetroGAN.png", show_shapes=True)
 
-    def compile_all(self, optimizer="sgd"):
-        def max_margin_loss(y_true, y_pred):
-            cost = 0
-            sim_neg = 25
-            sim_margin = 1
-            for i in range(0, sim_neg):
-                new_true = tf.random.shuffle(y_true)
-                normalize_a = tf.nn.l2_normalize(y_true)
-                normalize_b = tf.nn.l2_normalize(y_pred)
-                normalize_c = tf.nn.l2_normalize(new_true)
-                minimize = tf.reduce_sum(tf.multiply(normalize_a, normalize_b))
-                maximize = tf.reduce_sum(tf.multiply(normalize_c, normalize_b))
-                mg = sim_margin - minimize + maximize
-                cost += tf.keras.backend.clip(mg, 0, 10000)
-            return cost / (sim_neg * 1.0)
+    class MaxMargin_Loss(nn.Module):
 
-        def create_opt(lr=0.1):
-            if optimizer == "sgd":
-                return tf.optimizers.SGD(lr=0.00001, momentum=0.9, decay=1 / (1000 * 10000))
-            elif optimizer == "adam":
-                return tf.optimizers.Adam(lr=lr, epsilon=1e-10)
-            elif optimizer == "adabound":
-                return AdaBound(lr=1e-3, final_lr=0.1, gamma=0.0000001)
-            else:
-                raise KeyError("coULD NOT FIND THE OPTIMIZER")
+        def __init__(self, sim_neg=25,batch_size=32,cuda=True,sim_margin=1.0):
+            super(RetroCycleGAN.MaxMargin_Loss).__init__()
+            self.sim_margin = sim_margin
+            self.cuda=cuda
+            self.sim_neg = sim_neg
+            self.batch_size=batch_size
 
-        self.d_A.compile(loss='binary_crossentropy',
-                         optimizer=create_opt(self.d_lr),
-                         metrics=['accuracy'])
-        self.d_B.compile(loss='binary_crossentropy',
-                         optimizer=create_opt(self.d_lr),
-                         metrics=['accuracy'])
-        self.g_AB.compile(loss=max_margin_loss,
-                          optimizer=create_opt(self.g_lr),
-                          )
-        self.g_BA.compile(loss=max_margin_loss,
-                          optimizer=create_opt(self.g_lr),
-                          )
-        self.combined.compile(loss=['binary_crossentropy', 'binary_crossentropy',
-                                    'mae', 'mae',
-                                    'mae', 'mae'],
-                              loss_weights=[1, 1,
-                                            self.lambda_cycle, self.lambda_cycle,
-                                            self.lambda_id, self.lambda_id],
-                              # TODO ADD A CUSTOM LOSS THAT SIMPLY ADDS A
-                              # GENERALIZATION CONSTRAINT ON THE MAE
-                              optimizer=create_opt(self.g_lr))
-        # self.combined.summary()
+        def forward(self, y_pred, y_true):
+            cost = 0.
+            for i in range(0, self.params.sim_neg):
+                new_true = randperm(self.params.batch_size)
+                new_true = new_true.cuda() if self.params.cuda else new_true
+                new_true = y_true[new_true]
+                mg = self.params.sim_margin - F.cosine_similarity(y_true, y_pred) + F.cosine_similarity(new_true,
+                                                                                                        y_pred)
+                cost += clamp(mg, min=0)
+            return cost.mean()
 
-    def build_generator(self, name):
-        """U-Net Generator"""
 
-        def dense(layer_input, filters, f_size=6, normalization=True, dropout=True):
-            """Layers used during downsampling"""
-            # d = BatchNormalization()(layer_input)
-            d = Dense(filters, activation="relu")(layer_input)
-            # d = LeakyReLU(alpha=0.2)(d)
-            if normalization:
-                d = BatchNormalization()(d)
-            if dropout:
-                d = Dropout(0.2)(d)
-            return d
+    class Generator(nn.Module):
+        def __init__(self,name,input_image_shape=300,hidden_layers=2, hidden_dimension=2048, output_image_shape=300,norm=False,dropout=0.2):
+            super(RetroCycleGAN.Generator, self).__init__()
+            self.name = name
+            self.norm = norm
+            self.dropout_prob = dropout
+            self.input = nn.Linear(input_image_shape,hidden_dimension)
+            self.intermediate_layers = [nn.Linear(hidden_dimension,hidden_dimension) for x in range(hidden_layers)]
+            self.batch_norm = [nn.BatchNorm1d(hidden_dimension) for x in range(hidden_layers)]
+            self.dropout = [nn.Dropout(self.dropout_prob) for x in range(hidden_layers)]
+            self.output = nn.Linear(hidden_dimension,output_image_shape)
 
-        def conv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
-            d = Conv1D(filters, f_size, strides=strides, activation="relu")(layer_input)
+        def forward(self, input):  # Input is a 1D tensor
+            out = self.input(input)
+            for i in range(len(self.intermediate_layers)):
+                out = self.intermediate_layers[i](out)
+                out = F.relu(out)
+                if self.norm:
+                    out = self.batch_norm[i](out)
+                if self.dropout:
+                    out = self.dropout[i](out)
+            return self.output(out)
 
-            return d
+    class Discriminator(nn.Module):
+        def __init__(self,name,input_image_shape=300,hidden_layers=2, hidden_dimension=2048, output_image_shape=1,norm=True,dropout=0.3):
+            super(RetroCycleGAN.Discriminator, self).__init__()
+            self.name = name
+            self.norm = norm
+            self.dropout_prob = dropout
+            self.input = nn.Linear(input_image_shape,hidden_dimension)
+            self.intermediate_layers = [nn.Linear(hidden_dimension,hidden_dimension) for x in range(hidden_layers)]
+            self.batch_norm = [nn.BatchNorm1d(hidden_dimension) for x in range(hidden_layers)]
+            self.dropout = [nn.Dropout(self.dropout_prob) for x in range(hidden_layers)]
+            self.output = nn.Linear(hidden_dimension,output_image_shape)
 
-        # def deconv1d(layer_input, filters, f_size=6, strides=1, normalization=True):
-        #     d = UpSampling1D(filters, f_size, strides=strides, activation="relu")(layer_input)
-        #     return d
+        def forward(self, input):  # Input is a 1D tensor
+            out = self.input(input)
+            norm_skip = [0]
+            for i in range(len(self.intermediate_layers)):
+                out = self.intermediate_layers[i](out)
+                out = F.relu(out)
+                if self.norm:
+                    if i not in norm_skip:
+                        out = self.batch_norm[i](out)
+                if self.dropout:
+                    out = self.dropout[i](out)
+            return F.sigmoid(self.output(out))
 
-        # Image input
-        inpt = Input(shape=self.img_shape)
-        # Continue into fc layers
-        d0 = dense(inpt, 2048, normalization=False)
-        d0 = dense(d0, 2048, normalization=False)
-        # d0 = dense(d0, 2048, normalization=True)
-
-        output_img = Dense(dimensionality)(d0)
-        return Model(inpt, output_img, name=name)
-
-    def build_discriminator(self, name):
-
-        def d_layer(layer_input, filters, f_size=7, normalization=True, dropout=True):
-            """Discriminator layer"""
-            d = Dense(filters, activation="relu")(layer_input)
-            if normalization:
-                d = BatchNormalization()(d)
-            if dropout:
-                d = Dropout(0.3)(d)
-            # d = GaussianNoise(0.1)(d)
-            return d
-
-        inpt = Input(shape=self.img_shape)
-        # noise = GaussianNoise(0.01)(inpt)
-        d1 = d_layer(inpt, 2048, normalization=False, dropout=True)
-        d1 = d_layer(d1, 2048, normalization=True, dropout=True)
-        validity = Dense(1, activation="sigmoid")(d1)
-        return Model(inpt, validity, name=name)
-
-    def load_weights(self, preface="", folder=None):
-        if folder is None:
-            folder = self.save_folder
-        try:
-            self.g_AB.reset_states()
-            self.g_BA.reset_states()
-            self.combined.reset_states()
-            self.d_B.reset_states()
-            self.d_A.reset_states()
-            self.d_A.load_weights(os.path.join(folder, preface + "fromretrodis.h5"))
-            self.d_B.load_weights(os.path.join(folder, preface + "toretrodis.h5"))
-            self.g_AB.load_weights(os.path.join(folder, preface + "toretrogen.h5"))
-            self.g_BA.load_weights(os.path.join(folder, preface + "fromretrogen.h5"))
-            self.combined.load_weights(os.path.join(folder, preface + "combined_model.h5"))
-
-        except Exception as e:
-            print(e)
 
     def train(self, epochs, dataset, batch_size=1, pretraining_epochs=150, rc=None):
         start_time = datetime.datetime.now()
