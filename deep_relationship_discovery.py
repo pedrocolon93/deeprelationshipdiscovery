@@ -12,6 +12,12 @@ from tensorflow_core.python.keras.utils.vis_utils import plot_model
 from retrogan_trainer_attractrepel_working import *
 from tools import generate_fastext_embedding
 
+print("Removing!!!")
+print("*" * 100)
+shutil.rmtree("logs/", ignore_errors=True)
+print("Done!")
+print("*" * 100)
+
 relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires", #6
              "/r/AtLocation", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite", #5
              "/r/HasProperty", "/r/MotivatedByGoal", "/r/ObstructedBy", "/r/CreatedBy", "/r/Synonym", #5
@@ -21,13 +27,11 @@ relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r
              "/r/LocatedNear", "/r/HasContext", "/r/FormOf",  "/r/EtymologicallyRelatedTo", #4
              "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf", #5
              "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty","/r/NotIsA","/r/NotHasA"] # 4
-
-print("Loading RetroG")
-rcgan = RetroCycleGAN(save_folder="test", batch_size=32, generator_lr=0.0001, discriminator_lr=0.001)
-rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_full_alldata_feb11")
-print("Loading ft")
-generate_fastext_embedding("cat")
-print("Ready")
+# print("Disabling eager exec.")
+# disable_eager_execution()
+# print("Loading RetroG")
+rcgan_folder = "trained_models/retrogans/ft_full_alldata_feb11"
+fasttext_folder = "fasttext_model/cc.en.300.bin"
 word_dict = {}
 
 def create_sentence_embedding(c1):
@@ -49,6 +53,7 @@ def create_sentence_embedding(c1):
     return pd.Series(avg)
 
 def get_embedding(param):
+    global rcgan
     if param in word_dict.keys():
         return word_dict[param]
     s = param.split(" ")
@@ -65,8 +70,8 @@ def create_model():
     # Input needs to be 2 word vectors
     wv1 = Input(shape=(300,), name="retro_word_1")
     wv2 = Input(shape=(300,), name="retro_word_2")
-    expansion_size = 1024
-    intermediate_size = 512
+    expansion_size = 512
+    intermediate_size = 1024
 
     def create_word_input_abstraction(wv1):
         # Expand and contract the 2 word vectors
@@ -108,13 +113,12 @@ def create_model():
     # final = Dense(amount_of_relations)(semi_final_layer)
     # Many tasks
     task_layer_neurons = 512
-    losses = []
     model_dict = {}
     callback_dict = {}
     # prob_model_dict = {}
     # FOR PICS
-    model_outs = []
     for rel in relations:
+        model_outs = []
         task_layer = Dense(task_layer_neurons, activation='relu')(semi_final_layer)
         task_layer = BatchNormalization()(task_layer)
         task_layer = Dropout(0.1)(task_layer)
@@ -122,13 +126,18 @@ def create_model():
         # task_layer = attention(task_layer)
         task_layer = Dense(task_layer_neurons, activation='relu')(task_layer)
         task_layer = BatchNormalization()(task_layer)
+        losses = []
 
         layer_name = rel.replace("/r/", "")
         # loss = "mean_squared_error"
         loss = "binary_crossentropy"
+
         losses.append(loss)
+        losses.append("mean_squared_error")
 
         out = Dense(1,name=layer_name,activation='sigmoid')(task_layer)
+        out_strength = Dense(256,activation="relu")(task_layer)
+        out_strength = Dense(1,name=layer_name+"strength")(out_strength)
         # probability = Dense(units=1, activation='sigmoid',name=layer_name+"_prob")(task_layer)
         # scaler = Dense(units=1)(Dropout(0.5)(task_layer))
         # scaled_out = Dense(1)(multiply([probability,scaler]))
@@ -136,10 +145,11 @@ def create_model():
         # scale = ConstMultiplierLayer()(probability)
 
         model_outs.append(out)
+        model_outs.append(out_strength)
         # drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
-        drd = Model([wv1, wv2], out, name=layer_name)
+        drd = Model([wv1, wv2], model_outs, name=layer_name)
         optimizer = Adam(lr=0.001)
-        drd.compile(optimizer=optimizer, loss=[loss])
+        drd.compile(optimizer=optimizer, loss=losses)
         # drdp.compile(optimizer=optimizer, loss=[loss])
         # drdp.summary()
         drd.summary()
@@ -147,7 +157,6 @@ def create_model():
         model_dict[layer_name] = drd
 
         # prob_model_dict[layer_name] = drdp
-
     # plot_model(Model([wv1,wv2],model_outs,name="Deep_Relationship_Discovery"),show_shapes=True,to_file="DRD.png")
     # model_dict["common"]=common_layers_model
     common_layers_model.summary()
@@ -168,7 +177,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         training_data_dict[rel].append(i)
 
     def load_batch(output_name):
-        print("Loading batch for", output_name)
+        # print("Loading batch for", output_name)
         l = len(training_data_dict[output_name])
         iterable = list(range(0, l))
         shuffle(iterable)
@@ -178,6 +187,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                 x_1 = []
                 x_2 = []
                 y = []
+                y_strength = []
                 for ix in ixs:
                     try:
                         stuff = data.iloc[training_data_dict[output][ix]]
@@ -186,6 +196,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                         x_1.append(l1)
                         x_2.append(l2)
                         y.append(1)
+                        y_strength.append(float(stuff[3]))
                     except Exception as e:
                         print(e)
                         raise Exception("Fuck")
@@ -202,17 +213,20 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                     x_1.append(x_1[ix1[0]])
                     x_2.append(x2)
                     y.append(0)
+                    y_strength.append(0)
+
                     x_1.append(x1)
                     x_2.append(x_2[ix2[0]])
                     y.append(0)
+                    y_strength.append(0)
                     idx+=1
                 # print(np.array(x_1),np.array(x_2),np.array(y))
-                print("Shuffling in the confounders")
-                c = list(zip(x_1, x_2,y))
+                # print("Shuffling in the confounders")
+                c = list(zip(x_1, x_2,y,y_strength))
                 random.shuffle(c)
-                x_1,x_2,y = zip(*c)
-                print("Done")
-                yield np.array(x_1), np.array(x_2), np.array(y)
+                x_1,x_2,y,y_strength = zip(*c)
+                # print("Done")
+                yield np.array(x_1), np.array(x_2), np.array(y),np.array(y_strength)
             except Exception as e:
                 print(e)
                 return False
@@ -232,58 +246,67 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         for task in exclude:
             tasks_completed[task] = False
         iter = 0
-        while True:
-            for output in exclude:
-                try:
-                    it = training_func_dict[output]
+        with tqdm() as pbar:
+            with tqdm(total=len(tasks_completed.keys())) as pbar2:
+                while True:
+                    # break
+                    for output in exclude:
+                        try:
+                            it = training_func_dict[output]
+                            iter += 1
+                            x_1, x_2, y, y_strength = it.__next__()
+                            pbar.update(1)
+                            # print(x_1.shape)
+                            x_1 = x_1.reshape(x_1.shape[0],x_1.shape[-1])
+                            # print(x_1.shape)
+                            x_2 = x_2.reshape(x_2.shape[0], x_2.shape[-1])
+                            try:
+                                loss = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1': x_1, 'retro_word_2': x_2},
+                                                                                       y=(y,y_strength))
+                            except Exception as e:
+                                loss = model[output.replace("/r/", "")].train_on_batch(x={'input_1': x_1, 'input_2': x_2},
+                                                                                       y=(y,y_strength))
+
+                            callback.on_epoch_end(iter, {"loss_mse":loss[0],"loss_bin":loss[1]})
+
+                            # loss_2 = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1':x_2,'retro_word_2':x_1},y=y)
+                            total_loss += loss[0]
+                            # if loss > 10:
+                            #     print("Loss", output, loss)
+                            # if iter%100:
+                            #     print(loss)
+                        except KeyError as e:
+                            pass
+                            # print("No data for", e)
+                        except StopIteration as e:
+                            # print("Done with",output)
+                            if not tasks_completed[output]: pbar2.update(1)
+                            tasks_completed[output] = True
+                            # print("Resetting the iterator")
+                            training_func_dict[output] = load_batch(output)
+
+                        # except Exception as e:
+                        #     print(e)
+                        #     print("Error in", output, str(e))
+                            # print(training_func_dict)
+                            #
+                            # if 'the label' not in str(e):
+                            #     tasks_completed[output] = True
+                            # else:
+                            #     print(e)
+                    # print(len([x for x in tasks_completed.values() if x]),"/", len(tasks_completed.values()))
+                    if len([x for x in tasks_completed.values() if x]) / len(tasks_completed.values()) > cutoff:
+                        print(tasks_completed)
+                        break
+                    else:
+                        pass
+                        # print(tasks_completed)
                     iter += 1
-                    x_1, x_2, y = it.__next__()
-                    # print(x_1.shape)
-                    x_1 = x_1.reshape(x_1.shape[0],x_1.shape[-1])
-                    # print(x_1.shape)
-                    x_2 = x_2.reshape(x_2.shape[0], x_2.shape[-1])
-                    try:
-                        loss = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1': x_1, 'retro_word_2': x_2},
-                                                                               y=y)
-                    except:
-                        loss = model[output.replace("/r/", "")].train_on_batch(x={'input_1': x_1, 'input_2': x_2},
-                                                                               y=y)
-
-                    callback.on_epoch_end(iter, {"loss":loss})
-
-                    # loss_2 = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1':x_2,'retro_word_2':x_1},y=y)
-                    total_loss += loss
-                    # if loss > 10:
-                    #     print("Loss", output, loss)
-                    # if iter%100:
-                    #     print(loss)
-                except KeyError as e:
-                    print("No data for", e)
-                except StopIteration as e:
-                    print("Done with",output)
-                    tasks_completed[output] = True
-                    print("Resetting the iterator")
-                    training_func_dict[output] = load_batch(output)
-
-                # except Exception as e:
-                #     print(e)
-                #     print("Error in", output, str(e))
-                    # print(training_func_dict)
-                    #
-                    # if 'the label' not in str(e):
-                    #     tasks_completed[output] = True
-                    # else:
-                    #     print(e)
-            # print(len([x for x in tasks_completed.values() if x]),"/", len(tasks_completed.values()))
-            if len([x for x in tasks_completed.values() if x]) / len(tasks_completed.values()) > cutoff:
-                print(tasks_completed)
-                break
-            else:
-                print(tasks_completed)
-            iter += 1
         try:
             accuracy = test_model_3(model)
-            callback.on_epoch_end(epoch, {"acc": accuracy})
+            print("Accuracy is",accuracy)
+            callback.on_epoch_end(epoch, {"accuracy_test": float(accuracy)})
+            print("Pushed to callback!!")
         except Exception as e:
             print(e)
 
@@ -398,14 +421,14 @@ def load_model_ours(save_folder="./drd", model_name="all",probability_models=Fal
             print("Loading models")
             model_dict[layer_name] = load_model(save_folder + "/" + layer_name + ".model",
                                                 )
-            print("Loading weights")
-            model_dict[layer_name].load_weights(save_folder + "/" + layer_name + ".model")
+            # print("Loading weights")
+            # model_dict[layer_name].load_weights(save_folder + "/" + layer_name + ".model")
         else:
             print("Loading models")
             model_dict[layer_name] = load_model(save_folder + "/" + layer_name + "probability.model",
                                                 )
-            print("Loading weights")
-            model_dict[layer_name].load_weights(save_folder + "/" + layer_name + "probability.model")
+            # print("Loading weights")
+            # model_dict[layer_name].load_weights(save_folder + "/" + layer_name + "probability.model")
 
     # model_dict["common"] = load_model(save_folder + "/" + "common" + ".model",
     #                                         custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer})
@@ -447,8 +470,6 @@ def load_embeddings(path):
 
 def create_data3(use_cache):
     global retrofitted_embeddings
-    rcgan = RetroCycleGAN(save_folder="test", batch_size=64, generator_lr=0.0001, discriminator_lr=0.001)
-    rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_full_alldata_feb11")
 
     if os.path.exists("tmp/valid_rels.hd5") and use_cache:
         print("Using cache")
@@ -498,8 +519,6 @@ def create_data3(use_cache):
 
 def test_model_3(model):
     global retrofitted_embeddings
-    rcgan = RetroCycleGAN(save_folder="test", batch_size=32, generator_lr=0.0001, discriminator_lr=0.001)
-    rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_full_alldata_feb11")
     assertionspath = "test.txt"
     x_1 = []
     x_2 = []
@@ -538,11 +557,11 @@ def test_model_3(model):
             except:
                 pred = model[rels[i].replace("/r/", "")].predict(x={'input_1': t1,
                                                                     'input_2': t2})
-            y_pred.append(pred)
+            y_pred.append(pred[0][0][0])
         except Exception as e:
             y_pred.append(-1)
             print(e)
-    print(y_pred)
+    # print(y_pred)
     avg = np.average(y_pred)
     print(avg)
     final_y_pred = [0 if x < avg else 1 for x in y_pred]
@@ -552,7 +571,17 @@ def test_model_3(model):
     return  m.result().numpy()
 
 
+def load_things():
+    rcgan = RetroCycleGAN(save_folder="test", batch_size=32, generator_lr=0.0001, discriminator_lr=0.001)
+    rcgan.load_weights(preface="final", folder=rcgan_folder)
+    print("Loading ft")
+    generate_fastext_embedding("cat", ft_dir=fasttext_folder)
+    print("Ready")
+    return rcgan
+
 if __name__ == '__main__':
+    global rcgan
+    rcgan = load_things()
     gpus = tf.config.experimental.list_physical_devices('GPU')
     if gpus:
         try:
@@ -577,15 +606,15 @@ if __name__ == '__main__':
     print("Creating model...")
     model = create_model()
     print("Done\nLoading data")
-    # model = load_model_ours("/home/pedro/mltests/trained_models/deepreldis/2020-02-13 04:25:15.169007")
+    # model = load_model_ours("trained_models/deepreldis/2020-02-22 14:20:21.182244")
     # model = load_model_ours("trained_models/deepreldis/2020-02-12 07:49:00.552561")
     # # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
-    train_on_assertions(model, data,save_folder="trained_models/deepreldis/"+str(datetime.datetime.now())+"/",epoch_amount=100,batch_size=64)
+    train_on_assertions(model, data,save_folder="trained_models/deepreldis/"+str(datetime.datetime.now())+"/",epoch_amount=100,batch_size=128)
     print("Done\n")
     # model = load_model_ours(save_folder="drd/",model_name="all")
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_2_sigmoid",model_name=model_name,probability_models=True)
     # normalizers = normalize_outputs(model,use_cache=False)
     # normalizers = normalize_outputs(model,use_cache=False)
-    # test_model(model, normalizers=None, model_name=model_name)
+    test_model_3(model)
     # Output needs to be the relationship weights

@@ -5,14 +5,10 @@ from random import shuffle
 import spacy
 from conceptnet5.nodes import standardized_concept_uri
 from nltk.corpus import stopwords
-
+import tensorflow as tf
 # You will have to download the set of stop words the first time
 import nltk
-from tensorflow.python.keras.layers import Input, Conv1D, Dense, BatchNormalization, \
-    Concatenate
-from tensorflow_core.python.keras.optimizer_v2.adam import Adam
-from tensorflow_core.python.keras.saving.save import load_model
-from tensorflow_core.python.keras.utils.vis_utils import plot_model
+
 
 import deep_relationship_discovery
 import tools
@@ -63,7 +59,7 @@ def generate_kg(clean_file_contents,limit=1000,input_limit=10,
     retrogan = load_model(trained_model_path,
                           custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer},
                           compile=False)
-    retrogan.compile(optimizer=Adam(), loss=['mae'])
+    retrogan.compile(optimizer=tf.keras.optimizers.Adam(), loss=['mae'])
     retrogan.load_weights(trained_model_path)
     # Load our vocabulary
     target_voc = pd.read_hdf(target_file_loc,'mat')

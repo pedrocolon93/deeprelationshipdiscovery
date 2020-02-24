@@ -1,5 +1,5 @@
 import json
-
+import numpy as np
 from flask import Flask
 from flask import request
 from flask_cors import CORS
@@ -7,12 +7,17 @@ from tensorflow import Graph
 from tensorflow_core.python import Session
 
 import CNQuery
-from deep_relationship_discovery import load_model_ours, normalize_outputs, relations
-from knowledge_graph_generation import *
+import deep_relationship_discovery
+import tools
+from knowledge_graph_generation import read_file, clean_file, generate_kg
+from deep_relationship_discovery import get_embedding, load_model_ours, relations
 from tools import find_in_dataset, find_closest_in_dataset
 
+
 app = Flask(__name__)
-global retro_e, drd_models
+app.config["drd_models_path"] = "../trained_models/deepreldis/2020-02-24 10:25:38.473155"
+app.config["ft_model_path"] = "../fasttext_model/cc.en.300.bin"
+app.config["retrogan_model_path"] = "../trained_models/retrogans/ft_full_alldata_feb11/"
 CORS(app)
 
 app.route("/")
@@ -68,24 +73,34 @@ def get_inferred_relations():
     start = request.json["start"]
     end = request.json["end"]
     rel = request.json["rel"]
-    start_vec, end_vec = find_in_dataset([start, end], retro_e)
-    start_vec = start_vec.reshape(1, tools.dimensionality)
-    end_vec = end_vec.reshape(1, tools.dimensionality)
+    start_vec = np.array(get_embedding(start)).reshape(1, tools.dimensionality)
+    end_vec = np.array(get_embedding(end)).reshape(1, tools.dimensionality)
+    # end_vec = end_vec.reshape(1, tools.dimensionality)
     graph1 = Graph()
     with graph1.as_default():
         session1 = Session()
         with session1.as_default():
-            drd_model = load_model_ours(save_folder=drd_models_path, model_name=rel)
-            inferred_res = drd_model[rel].predict(x={"retro_word_1": start_vec,
-                                                     "retro_word_2": end_vec})
+            drd_model = load_model_ours(save_folder=app.config["drd_models_path"], model_name=rel)
+            try:
+                try:
+                    inferred_res = drd_model[rel].predict(x={"retro_word_1": start_vec,
+                                                             "retro_word_2": end_vec})
+                except:
+                    inferred_res = drd_model[rel].predict(x={"input_1": start_vec,
+                                                             "input_2": end_vec})
+            except Exception as e:
+                print(e)
+                return json.dumps([0.0])
+
             print(inferred_res)
             try:
-                norm_res = normalizers[rel].transform(inferred_res)
-
-                norm_res = norm_res[0][0]
+                norm_res = inferred_res[0][0][0]
+                # norm_res = normalizers[rel].transform(inferred_res)
+                #
+                # norm_res = norm_res[0][0]
                 return json.dumps([float(norm_res)])
             except:
-                return json.dumps([float(inferred_res[0][0])])
+                return json.dumps([float(inferred_res[0][0][0])])
 
 
 @app.route("/kg_from_webpage_test")
@@ -104,14 +119,9 @@ def get_available_models():
 
 if __name__ == '__main__':
     tools.dimensionality = 300
-    retroembeddings_path = '../trained_models/retroembeddings/2019-04-0813:03:02.430691/retroembeddings.h5clean'
-    retro_e = pd.read_hdf(retroembeddings_path, 'mat')
-    print(retro_e)
-    global drd_models_path
-    drd_models_path = "../trained_models/deepreldis/2019-04-2314:43:00.000000"
-    global normalizers
-    normalizers = normalize_outputs(None, save_folder="../trained_models/deepreldis/2019-04-1614:43:00.000000")
-    # drd_models = load_model_ours(save_folder=drd_models_path,model_name='all')
+    deep_relationship_discovery.rcgan_folder = app.config["retrogan_model_path"]
+    deep_relationship_discovery.fasttext_folder = app.config["ft_model_path"]
+    deep_relationship_discovery.rcgan = deep_relationship_discovery.load_things()
     app.run(
         host='0.0.0.0',
         port=4000
