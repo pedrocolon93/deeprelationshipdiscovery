@@ -5,7 +5,7 @@ import tools
 import pandas as pd
 import numpy as np
 
-from retrogan_trainer_attractrepel_working import RetroCycleGAN
+from rcgan import RetroCycleGAN
 
 if __name__ == '__main__':
     # dimensionality = 300

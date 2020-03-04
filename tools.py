@@ -711,51 +711,66 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
     return final_n_results_words,final_n_results
 
 def find_closest_in_dataset(pred_y,dataset, n_top=5):
-    # print("Finding closest")
+    print("Finding closest")
     if type(dataset) is str:
         o = pd.read_hdf(dataset, 'mat', encoding='utf-8')
     elif type(dataset) is pd.DataFrame:
         o = dataset
     else:
         raise Exception("Neither string nor dataframe provided as dataset")
+    print(o)
     # if limit is None:
-    results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality),
-                                                                                     pred_y.reshape(1,dimensionality)),
-                                                         np.array(o.iloc[:,:])
-                                                         )))]
+    # results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality),
+    #                                                                                  pred_y.reshape(1,dimensionality)),
+    #                                                      np.array(o.iloc[:,:])
+    #                                                      )))]
     # else:
     # results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, dimensionality),
     #                                                                                        pred_y.reshape(1, dimensionality)),
     #                                                            np.array(o.iloc[0:limit, :])
     #                                                            )))]
-    sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
-    final_n_results = []
-    final_n_results_words = []
-    for i in range(n_top):
-        # if(verbose):
-        #     print(o.index[sorted_results[i][0]])
-        final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
-        final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
+    # sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
+    # final_n_results = []
+    # final_n_results_words = []
+    # FULL FLEDGED COMPUTATION
+    # for i in range(n_top):
+    #     # if(verbose):
+    #     #     print(o.index[sorted_results[i][0]])
+    #     final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
+    #     final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
 
     # del o,results,sorted_results
-    gc.collect()
+    # gc.collect()
 
-    # # testvec = find_in_dataset(["cat"], o)
-    # testvec = pred_y
-    # # print(testvec)
-    # index = faiss.IndexFlatIP(dimensionality)  # build the index
-    # # print(index.is_trained)
-    # index.add(o.values.astype(np.float32))  # add vectors to the index
-    # # print(index.ntotal)
-    # tst = np.array([testvec.astype(np.float32)])
-    # tst = tst.reshape((tst.shape[0],tst.shape[-1]))
-    # # print(tst.shape)
-    # D, I = index.search(tst, n_top)  # sanity check
-    # # print(I)
-    # # print(D)
-    # # print(o.iloc[I[0]])
-    # final_n_results = o.iloc[I[0]].values
-    # final_n_results_words = o.index[I[0]].values
+    # testvec = find_in_dataset(["cat"], o)
+    print("Loading everything")
+    testvec = pred_y
+    # print(testvec)
+    try:
+        print("Creating index")
+        index = faiss.IndexFlatIP(300)  # build the index
+        # print(index.is_trained)
+        print('Adding items to it')
+        print(o.values.shape)
+        index.add(np.ascontiguousarray(o.values).astype(np.float32))  # add vectors to the index
+        # print(index.ntotal)
+        print("Converting the testvect to query")
+        tst = np.array([testvec.astype(np.float32)])
+        tst = tst.reshape((tst.shape[0],tst.shape[-1]))
+        print("Ready to query")
+    except Exception as e:
+        print("We died")
+        print(e)
+        return [],[]
+    # print(tst.shape)
+    print("Searching")
+    D, I = index.search(tst, n_top)  # sanity check
+    # print(I)
+    # print(D)
+    # print(o.iloc[I[0]])
+    print("Dumping results")
+    final_n_results = o.iloc[I[0]].values
+    final_n_results_words = o.index[I[0]].values
 
     return final_n_results_words,final_n_results
 

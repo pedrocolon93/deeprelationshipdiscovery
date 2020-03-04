@@ -1,10 +1,12 @@
 import json
 import numpy as np
+import pandas as pd
 from flask import Flask
 from flask import request
 from flask_cors import CORS
 from tensorflow import Graph
 from tensorflow_core.python import Session
+from tqdm import tqdm
 
 import CNQuery
 import deep_relationship_discovery
@@ -18,6 +20,7 @@ app = Flask(__name__)
 app.config["drd_models_path"] = "../trained_models/deepreldis/2020-02-24 10:25:38.473155"
 app.config["ft_model_path"] = "../fasttext_model/cc.en.300.bin"
 app.config["retrogan_model_path"] = "../trained_models/retrogans/ft_full_alldata_feb11/"
+app.config["retroembeddings_path"] = "../ft_full_ar_vecs.txt"
 CORS(app)
 
 app.route("/")
@@ -30,18 +33,17 @@ def hello():
 
 @app.route("/get_neighbors", methods=['POST'])
 def get_neighbors():
-    global retro_e
     neighbors = []
     try:
         print("Checking neighbors")
         concept_to_explore = request.json["concept"]
         amount = int(request.json["amount"])
         print("for", concept_to_explore)
-        concept_to_explore_vec = find_in_dataset([concept_to_explore], retro_e)
-        print(concept_to_explore_vec)
-        print("Finding the neighbors")
-        neighbors, _ = find_closest_in_dataset(concept_to_explore_vec, retro_e, n_top=int(amount))
-        neighbors = list(neighbors)
+        target_embedding =  np.array(get_embedding(concept_to_explore)).reshape(1, tools.dimensionality)
+
+        print("Closest in default fasttext")
+        neighbors, _ = tools.find_closest_in_dataset(target_embedding, retro_e, n_top=int(amount))
+        neighbors = [word for word in neighbors]
         print("Done")
         print(neighbors)
     except Exception as e:
@@ -62,7 +64,7 @@ def get_relations():
         end = request.json["end"]
     except:
         pass
-    query = CNQuery.CNQuery()
+    query = CNQuery.CNQuery(base_url="http://18.27.78.196/")
     queryres = query.query(start, end, None)
     print(queryres)
     return json.dumps(queryres)
@@ -122,6 +124,32 @@ if __name__ == '__main__':
     deep_relationship_discovery.rcgan_folder = app.config["retrogan_model_path"]
     deep_relationship_discovery.fasttext_folder = app.config["ft_model_path"]
     deep_relationship_discovery.rcgan = deep_relationship_discovery.load_things()
+    global retro_e
+    count = 0
+    prefix = ""
+    indexes = []
+    vectors = []
+    skip_first = False
+    input_filename = app.config["retroembeddings_path"]
+    limit = 40000
+    with open(input_filename, encoding="utf-8") as vec_file:
+        for line in tqdm(vec_file):
+            count += 1
+            if skip_first: skip_first = False
+            word = line.strip().split(" ")[0]
+            word = prefix + word
+            vec = []
+            for element in line.strip().split(" ")[1:]:
+                vec.append(float(element))
+            indexes.append(word)
+            vectors.append(np.array(vec))
+            if count % 10000 == 0:
+                print(count)
+            if count == limit:
+                break
+    print("Outputting df")
+    retro_e = pd.DataFrame(index=indexes, data=vectors)
+
     app.run(
         host='0.0.0.0',
         port=4000

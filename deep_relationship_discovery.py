@@ -1,13 +1,16 @@
 import csv
+import datetime
 import gc
 import pickle
+import random
+from random import shuffle
 
+import numpy as np
+import pandas as pd
 import sklearn
+import tensorflow as tf
 # from keras.utils import plot_model
-from tensorflow.python.keras.layers import Concatenate
-from tensorflow_core.python.keras.optimizer_v2.adam import Adam
-from tensorflow_core.python.keras.saving.save import load_model
-from tensorflow_core.python.keras.utils.vis_utils import plot_model
+from tqdm import tqdm
 
 from retrogan_trainer_attractrepel_working import *
 from tools import generate_fastext_embedding
@@ -26,7 +29,8 @@ relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r
              "/r/MannerOf", "/r/RelatedTo",#2
              "/r/LocatedNear", "/r/HasContext", "/r/FormOf",  "/r/EtymologicallyRelatedTo", #4
              "/r/EtymologicallyDerivedFrom", "/r/CausesDesire", "/r/MadeOf", "/r/ReceivesAction", "/r/InstanceOf", #5
-             "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty","/r/NotIsA","/r/NotHasA"] # 4
+             "/r/NotDesires", "/r/NotUsedFor", "/r/NotCapableOf", "/r/NotHasProperty","/r/NotIsA","/r/NotHasA",
+             "/r/InheritsFrom","/r/HasPainIntensity","/r/DesireOf","/r/LocationOfAction","/r/NotMadeOf"] # 4
 # print("Disabling eager exec.")
 # disable_eager_execution()
 # print("Loading RetroG")
@@ -68,43 +72,43 @@ def get_embedding(param):
 
 def create_model():
     # Input needs to be 2 word vectors
-    wv1 = Input(shape=(300,), name="retro_word_1")
-    wv2 = Input(shape=(300,), name="retro_word_2")
+    wv1 = tf.keras.layers.Input(shape=(300,), name="retro_word_1")
+    wv2 = tf.keras.layers.Input(shape=(300,), name="retro_word_2")
     expansion_size = 512
-    intermediate_size = 1024
+    intermediate_size = 512
 
     def create_word_input_abstraction(wv1):
         # Expand and contract the 2 word vectors
-        wv1_expansion_1 = Dense(expansion_size)(wv1)
-        wv1_expansion_1 = BatchNormalization()(wv1_expansion_1)
-        wv1_expansion_1 = Dropout(0.1)(wv1_expansion_1)
+        wv1_expansion_1 = tf.keras.layers.Dense(expansion_size)(wv1)
+        wv1_expansion_1 = tf.keras.layers.BatchNormalization()(wv1_expansion_1)
+        wv1_expansion_1 = tf.keras.layers.Dropout(0.1)(wv1_expansion_1)
         # r_1 = Reshape((-1, 1))(wv1_expansion_1)
         # t1 = conv1d(r_1, filters, f_size=4)
         # f1 = MaxPooling1D(pool_size=4)(t1)
         # f1 = Flatten()(f1)
         # wv1_expansion_2 = attention(f1)
         # wv1_expansion_2 = attention(wv1_expansion_1)
-        wv1_expansion_3 = Dense(int(expansion_size / 4), activation='relu')(wv1_expansion_1)
-        wv1_expansion_3 = BatchNormalization()(wv1_expansion_3)
+        wv1_expansion_3 = tf.keras.layers.Dense(int(expansion_size / 2), activation='relu')(wv1_expansion_1)
+        wv1_expansion_3 = tf.keras.layers.BatchNormalization()(wv1_expansion_3)
         return wv1_expansion_3
 
     wv1_expansion_3 = create_word_input_abstraction(wv1)
     wv2_expansion_3 = create_word_input_abstraction(wv2)
 
     # Concatenate both expansions
-    merge1 = Concatenate()([wv1_expansion_3, wv2_expansion_3])
+    merge1 = tf.keras.layers.Concatenate()([wv1_expansion_3, wv2_expansion_3])
     # merge1 = Dropout(0.1)(merge1)
-    merge_expand = Dense(intermediate_size, activation='relu')(merge1)
-    merge_expand = BatchNormalization()(merge_expand)
+    merge_expand = tf.keras.layers.Dense(intermediate_size, activation='relu')(merge1)
+    merge_expand = tf.keras.layers.BatchNormalization()(merge_expand)
     # Add atention layer
     # merge_attention = attention(merge_expand)
-    attention_expand = Dense(intermediate_size, activation='relu')(merge_expand)
-    attention_expand = BatchNormalization()(attention_expand)
-    attention_expand = Dropout(0.1)(attention_expand)
+    attention_expand = tf.keras.layers.Dense(intermediate_size, activation='relu')(merge_expand)
+    attention_expand = tf.keras.layers.BatchNormalization()(attention_expand)
+    attention_expand = tf.keras.layers.Dropout(0.1)(attention_expand)
 
-    semi_final_layer = Dense(intermediate_size, activation='relu')(attention_expand)
-    semi_final_layer = BatchNormalization()(semi_final_layer)
-    common_layers_model = Model([wv1, wv2], semi_final_layer, name="Common layers")
+    semi_final_layer = tf.keras.layers.Dense(intermediate_size, activation='relu')(attention_expand)
+    semi_final_layer = tf.keras.layers.BatchNormalization()(semi_final_layer)
+    common_layers_model = tf.keras.Model([wv1, wv2], semi_final_layer, name="Common layers")
     # common_optimizer = Adam(lr=0.000002)
     # common_layers_model.compile()
     # Output layer
@@ -119,13 +123,13 @@ def create_model():
     # FOR PICS
     for rel in relations:
         model_outs = []
-        task_layer = Dense(task_layer_neurons, activation='relu')(semi_final_layer)
-        task_layer = BatchNormalization()(task_layer)
-        task_layer = Dropout(0.1)(task_layer)
+        task_layer = tf.keras.layers.Dense(task_layer_neurons, activation='relu')(semi_final_layer)
+        task_layer = tf.keras.layers.BatchNormalization()(task_layer)
+        task_layer = tf.keras.layers.Dropout(0.1)(task_layer)
 
         # task_layer = attention(task_layer)
-        task_layer = Dense(task_layer_neurons, activation='relu')(task_layer)
-        task_layer = BatchNormalization()(task_layer)
+        task_layer = tf.keras.layers.Dense(task_layer_neurons, activation='relu')(task_layer)
+        task_layer = tf.keras.layers.BatchNormalization()(task_layer)
         losses = []
 
         layer_name = rel.replace("/r/", "")
@@ -135,9 +139,9 @@ def create_model():
         losses.append(loss)
         losses.append("mean_squared_error")
 
-        out = Dense(1,name=layer_name,activation='sigmoid')(task_layer)
-        out_strength = Dense(256,activation="relu")(task_layer)
-        out_strength = Dense(1,name=layer_name+"strength")(out_strength)
+        out = tf.keras.layers.Dense(1,name=layer_name,activation='sigmoid')(task_layer)
+        out_strength = tf.keras.layers.Dense(256,activation="relu")(task_layer)
+        out_strength = tf.keras.layers.Dense(1,name=layer_name+"strength")(out_strength)
         # probability = Dense(units=1, activation='sigmoid',name=layer_name+"_prob")(task_layer)
         # scaler = Dense(units=1)(Dropout(0.5)(task_layer))
         # scaled_out = Dense(1)(multiply([probability,scaler]))
@@ -147,13 +151,13 @@ def create_model():
         model_outs.append(out)
         model_outs.append(out_strength)
         # drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
-        drd = Model([wv1, wv2], model_outs, name=layer_name)
-        optimizer = Adam(lr=0.001)
+        drd = tf.keras.Model([wv1, wv2], model_outs, name=layer_name)
+        optimizer = tf.keras.optimizers.Adam(lr=0.001)
         drd.compile(optimizer=optimizer, loss=losses)
         # drdp.compile(optimizer=optimizer, loss=[loss])
         # drdp.summary()
         drd.summary()
-        plot_model(drd,show_shapes=True)
+        tf.keras.utils.plot_model(drd,show_shapes=True)
         model_dict[layer_name] = drd
 
         # prob_model_dict[layer_name] = drdp
@@ -181,6 +185,17 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         l = len(training_data_dict[output_name])
         iterable = list(range(0, l))
         shuffle(iterable)
+        extra_concepts = []
+        with open("ft_full_alldata/fullfasttext") as ft:
+        # with open("ft_full_ar_vecs.txt") as ft:
+            limit = 50000
+            count = 0
+            for line in ft:
+                if count==limit:break
+                extra_concepts.append(line.split(" ")[0].replace("en_",""))
+                count+=1
+        batches = []
+        # print("Preloading")
         for ndx in range(0, l, batch_size):
             try:
                 ixs = iterable[ndx:min(ndx + batch_size, l)]
@@ -222,16 +237,32 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                     idx+=1
                 # print(np.array(x_1),np.array(x_2),np.array(y))
                 # print("Shuffling in the confounders")
+
+                #Add extra data!!!
+                # print("Adding extra data")
+                l1 = np.array(get_embedding(extra_concepts[random.sample(range(0, len(extra_concepts)), 1)[0]])).reshape(1, 300)
+                l2 = np.array(get_embedding(extra_concepts[random.sample(range(0, len(extra_concepts)), 1)[0]])).reshape(1, 300)
+                x_1.append(l1)
+                x_2.append(l2)
+                y.append(0)
+                y_strength.append(0)
+                # print("Adding extra data done")
+
                 c = list(zip(x_1, x_2,y,y_strength))
                 random.shuffle(c)
                 x_1,x_2,y,y_strength = zip(*c)
                 # print("Done")
                 yield np.array(x_1), np.array(x_2), np.array(y),np.array(y_strength)
+                # batches.append((np.array(x_1), np.array(x_2), np.array(y),np.array(y_strength)))
             except Exception as e:
-                print(e)
+                print("Exception occurred!!!",e)
                 return False
+        # print("Preloading done")
+        # for tup in batches:
+        #     yield tup
+
         return True
-    callback = keras.callbacks.TensorBoard(log_dir="./logs/")
+    callback = tf.keras.callbacks.TensorBoard(log_dir="./logs/")
     # callback.set_model(drd)
     # callback_dict[layer_name] = callback
     for epoch in tqdm(range(epoch_amount)):
@@ -313,8 +344,10 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         print("Avg loss", total_loss / iter)
         print(str(epoch) + "/" + str(epoch_amount))
 
-        if len(word_dict.keys())>10000:
+        if len(word_dict.keys())>2000:
             try:
+                print("Dumping the dictionary")
+                del word_dict
                 word_dict = {}
                 gc.collect()
             except Exception as e:
@@ -408,24 +441,24 @@ def load_model_ours(save_folder="./drd", model_name="all",probability_models=Fal
             layer_name = rel.replace("/r/", "")
             if probability_models:
                 print("Loading",save_folder + "/" + layer_name + "probability.model")
-                model_dict[layer_name] = load_model(save_folder + "/" + layer_name + "probability.model",
+                model_dict[layer_name] = tf.keras.models.load_model(save_folder + "/" + layer_name + "probability.model",
                                                     )
                 model_dict[layer_name].summary()
             else:
-                model_dict[layer_name] = load_model(save_folder + "/" + layer_name + ".model",
+                model_dict[layer_name] = tf.keras.models.load_model(save_folder + "/" + layer_name + ".model",
                                                     )
 
     else:
         layer_name = model_name.replace("/r/", "")
         if not probability_models:
             print("Loading models")
-            model_dict[layer_name] = load_model(save_folder + "/" + layer_name + ".model",
+            model_dict[layer_name] = tf.keras.models.load_model(save_folder + "/" + layer_name + ".model",
                                                 )
             # print("Loading weights")
             # model_dict[layer_name].load_weights(save_folder + "/" + layer_name + ".model")
         else:
             print("Loading models")
-            model_dict[layer_name] = load_model(save_folder + "/" + layer_name + "probability.model",
+            model_dict[layer_name] = tf.keras.models.load_model(save_folder + "/" + layer_name + "probability.model",
                                                 )
             # print("Loading weights")
             # model_dict[layer_name].load_weights(save_folder + "/" + layer_name + "probability.model")
