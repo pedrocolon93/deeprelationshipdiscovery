@@ -22,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument("output",
                         help="Output vectors")
     parser.add_argument("-op",default="")
-    parser.add_argument("-l",default=400000,type=int)
+    parser.add_argument("-l",default=200000,type=int)
     args = parser.parse_args()
 
     # embeddings_1 = "/Users/pedro/PycharmProjects/OOVconverter/glove/glove.840B.300d.txt"

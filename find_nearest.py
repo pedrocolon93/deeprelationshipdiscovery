@@ -30,20 +30,27 @@ if __name__ == '__main__':
     # print(final_n_results_words)
     print("Starting")
     # dataset = {
-    #     "original": "allft.hdf",
-    #     "retrofitted": "fullfasttext.hdf",
-    #     "directory": "ft_full_alldata/",
+    #     "original": "completefastext.txt.hdf",
+    #     "retrofitted": "finalfullfasttext.hdf",
+    #     "directory": "ft_full_paperdata/",
     #     "rc": None
     # }
     dataset = {
-        "original": "allgove.hdf",
+        "original": "completeglove.txt.hdf",
         "retrofitted": "fullglove.hdf",
-        "directory": "glove_full_alldata/",
+        "directory": "glove_full_paperdata/",
         "rc": None
     }
+    outputname = "glove_full_paperdataretrogan.txt"
+    # dataset = {
+    #     "original": "allgove.hdf",
+    #     "retrofitted": "fullglove.hdf",
+    #     "directory": "glove_full_alldata/",
+    #     "rc": None
+    # }
     tools.datasets.update({"mine": [dataset["original"], dataset["retrofitted"]]})
     rcgan = RetroCycleGAN(save_folder="test", batch_size=32, generator_lr=0.0001, discriminator_lr=0.001)
-    rcgan.load_weights(preface="final", folder="final_retroganfeb11/2")
+    rcgan.load_weights(preface="checkpoint", folder="models/trained_retrogan/glove_full_paperdata")
     print("\n")
     # sl = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimLex-999.txt",
     #                     fast_text_location="fasttext_model/cc.en.300.bin")[0]
@@ -63,8 +70,8 @@ if __name__ == '__main__':
         cns.append(i)
     X_train = o.loc[cns, :]
     print(X_train)
-    testwords = ["human"]
-    print("The test word vectors are:", testwords)
+    # testwords = ["human"]
+    # print("The test word vectors are:", testwords)
     # ft version
     vals = np.array(
         rcgan.g_AB.predict(np.array(X_train.values).reshape((-1, dimensionality)),
@@ -72,13 +79,16 @@ if __name__ == '__main__':
     )
 
     testds = pd.DataFrame(data=vals, index=X_train.index)
+    sl = tools.test_sem(rcgan.g_AB, o, dataset_location="testing/SimLex-999.txt",
+                        fast_text_location="fasttext_model/cc.en.300.bin", prefix="en_")[0]
+
     testds.dropna(inplace=True)
     print("Dumping to hdf")
-    testds.to_hdf("glove_full_ar_vecs.hdf","mat")
+    testds.to_hdf(dataset["directory"]+outputname+"hdf","mat")
 
     Y_train = testds.loc[cns,:]
     print("Dumping to text file")
-    output_ar = "glove_full_ar_vecs.txt"
+    output_ar = dataset["directory"]+outputname
     with open(output_ar,"w") as ar:
         for concept in tqdm(cns):
             try:
@@ -88,7 +98,7 @@ if __name__ == '__main__':
                 print("Could not process line:",concept,e)
                 continue
     print("Finished the dumps")
-    # exit(0)
+    exit(0)
     print(testds)
     tools.directory = dataset["directory"]
     tools.dimensionality=300

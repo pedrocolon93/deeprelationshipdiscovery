@@ -1,15 +1,17 @@
 import time
 from urllib.parse import urlencode
-
+import datetime
 import requests
 
 import tools
 
 
 class CNQuery():
-    def __init__(self,base_url="http://8kboxx/"):
+    def __init__(self,base_url="http://18.27.78.196/"):
         # self.base_url = "http://8kboxx/"
+        # self.base_url="http://api.conceptnet.io/"
         self.base_url = base_url
+        self.last_query_time = datetime.datetime.now()
         # node = / c / en / dog & other = / c / en / pizza
 
     def parse(self, result):
