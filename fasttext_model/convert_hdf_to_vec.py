@@ -5,11 +5,11 @@ import numpy as np
 from tqdm import tqdm
 
 if __name__ == '__main__':
-    input_filename = "glove_full_ar_vecs.hdf"
-    output_filename = "glove_full_ar_vecs.txt"
+    input_filename = "cskg_retrofitted"
+    output_filename = "cskg_retrofitted.txt"
     indexes = []
     vectors = []
-    limit = 200000
+    limit = 20000000
     invecs = pd.read_hdf(input_filename,"mat")
     count = 0
     with open(output_filename,"w") as outfile:

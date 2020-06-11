@@ -36,12 +36,12 @@ if __name__ == '__main__':
     #     "rc": None
     # }
     dataset = {
-        "original": "completeglove.txt.hdf",
-        "retrofitted": "fullglove.hdf",
-        "directory": "glove_full_paperdata/",
+        "original": "glove_840b_unseen.hdf",
+        "retrofitted": "glove_840b_retrogan.hdf",
+        "directory": "light-ls-test-data/",
         "rc": None
     }
-    outputname = "glove_full_paperdataretrogan.txt"
+    outputname = "glove_840b_retrogan.txt"
     # dataset = {
     #     "original": "allgove.hdf",
     #     "retrofitted": "fullglove.hdf",
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     # }
     tools.datasets.update({"mine": [dataset["original"], dataset["retrofitted"]]})
     rcgan = RetroCycleGAN(save_folder="test", batch_size=32, generator_lr=0.0001, discriminator_lr=0.001)
-    rcgan.load_weights(preface="checkpoint", folder="models/trained_retrogan/glove_full_paperdata")
+    rcgan.load_weights(preface="final", folder="final_retrogan/glovefinaltest")
     print("\n")
     # sl = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimLex-999.txt",
     #                     fast_text_location="fasttext_model/cc.en.300.bin")[0]
@@ -70,6 +70,7 @@ if __name__ == '__main__':
         cns.append(i)
     X_train = o.loc[cns, :]
     print(X_train)
+    # print(X_train.loc["christen"])
     # testwords = ["human"]
     # print("The test word vectors are:", testwords)
     # ft version
@@ -80,7 +81,7 @@ if __name__ == '__main__':
 
     testds = pd.DataFrame(data=vals, index=X_train.index)
     sl = tools.test_sem(rcgan.g_AB, o, dataset_location="testing/SimLex-999.txt",
-                        fast_text_location="fasttext_model/cc.en.300.bin", prefix="en_")[0]
+                        fast_text_location="fasttext_model/cc.en.300.bin", prefix="")[0]
 
     testds.dropna(inplace=True)
     print("Dumping to hdf")

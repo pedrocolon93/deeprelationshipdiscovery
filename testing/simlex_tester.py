@@ -1,7 +1,7 @@
 import csv
 
 import conceptnet5.uri
-import fastText
+import fasttext
 import numpy as np
 import pandas as pd
 from conceptnet5.vectors import cosine_similarity
@@ -20,7 +20,7 @@ if __name__ == '__main__':
     # ft_model = fastText.load_model("../fasttext_model/cc.en.300.bin")
     # trained_model_path = "../trained_models/retrogans/2019-04-0721:33:44.223104/toretrogen.h5"
     retrowords = pd.read_hdf("../trained_models/retroembeddings/2019-10-03 15:06:06.747188/retroembeddings.h5", 'mat', encoding='utf-8')
-    ft_model = fastText.load_model("../fasttext_model/cc.en.300.bin")
+    ft_model = fasttext.load_model("../fasttext_model/cc.en.300.bin")
     trained_model_path = "../fasttext_model/trained_retrogan/2019-10-03 11:41:57.136812ftar/toretrogen.h5"
     retrogan = load_model(trained_model_path,
                           custom_objects={"ConstMultiplierLayer": ConstMultiplierLayer},

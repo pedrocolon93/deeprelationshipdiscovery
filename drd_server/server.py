@@ -17,7 +17,8 @@ from tools import find_in_dataset, find_closest_in_dataset
 
 
 app = Flask(__name__)
-app.config["drd_models_path"] = "../trained_models/deepreldis/2020-02-24 10:25:38.473155"
+# app.config["drd_models_path"] = "../trained_models/deepreldis/2020-02-24 10:25:38.473155"
+app.config["drd_models_path"] = "../trained_models/deepreldis/att_sota_v4_2020-04-16 14:03:08.713135"
 app.config["ft_model_path"] = "../fasttext_model/cc.en.300.bin"
 app.config["retrogan_model_path"] = "../trained_models/retrogans/ft_full_alldata_feb11/"
 app.config["retroembeddings_path"] = "../ft_full_ar_vecs.txt"
@@ -64,7 +65,7 @@ def get_relations():
         end = request.json["end"]
     except:
         pass
-    query = CNQuery.CNQuery(base_url="http://18.27.78.196/")
+    query = CNQuery.CNQuery(base_url="http://api.conceptnet.io/")
     queryres = query.query(start, end, None)
     print(queryres)
     return json.dumps(queryres)

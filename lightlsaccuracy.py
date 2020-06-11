@@ -2,7 +2,7 @@ import os
 
 if __name__ == '__main__':
     path_to_light_ls = "/Users/pedro/Downloads/lex.mturk.txt"
-    path_to_light_ls_output = "/Users/pedro/Documents/git/lightls/testdir/"
+    path_to_light_ls_output = "/Users/pedro/Documents/git/lightls/exampleout/"
     dataset = dict()
     count = 0
     with open(path_to_light_ls,'r',encoding="latin-1") as lightls:

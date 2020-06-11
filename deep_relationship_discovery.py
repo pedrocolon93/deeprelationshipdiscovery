@@ -3,7 +3,14 @@ import datetime
 import gc
 import pickle
 import random
+from collections import Iterable
 from random import shuffle
+from tensorflow_addons.optimizers import AdamW
+import wandb
+from wandb.keras import WandbCallback
+wandb.init(project="deep-relationship-discovery",magic=True)
+from wandb import magic
+
 
 import numpy as np
 import pandas as pd
@@ -15,11 +22,7 @@ from tqdm import tqdm
 from retrogan_trainer_attractrepel_working import *
 from tools import generate_fastext_embedding
 
-print("Removing!!!")
-print("*" * 100)
-shutil.rmtree("logs/", ignore_errors=True)
-print("Done!")
-print("*" * 100)
+
 
 relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r/Desires", #6
              "/r/AtLocation", "/r/HasSubevent", "/r/HasFirstSubevent", "/r/HasLastSubevent", "/r/HasPrerequisite", #5
@@ -37,6 +40,200 @@ relations = ["/r/PartOf", "/r/IsA", "/r/HasA", "/r/UsedFor", "/r/CapableOf", "/r
 rcgan_folder = "trained_models/retrogans/ft_full_alldata_feb11"
 fasttext_folder = "fasttext_model/cc.en.300.bin"
 word_dict = {}
+
+def create_model_kxlnet():
+    pass
+
+def create_model_akbc():
+    # Input needs to be 2 word vectors
+    wv1 = tf.keras.layers.Input(shape=(300,), name="retro_word_1")
+    wv2 = tf.keras.layers.Input(shape=(300,), name="retro_word_2")
+    expansion_size = 1024
+    intermediate_size = 512
+
+    def create_word_input_abstraction(wv1):
+        # Expand and contract the 2 word vectors
+        wv1_expansion_1 = tf.keras.layers.Dense(expansion_size)(wv1)
+        wv1_expansion_1 = tf.keras.layers.BatchNormalization()(wv1_expansion_1)
+        wv1_expansion_1 = tf.keras.layers.Dropout(0.1)(wv1_expansion_1)
+        # r_1 = Reshape((-1, 1))(wv1_expansion_1)
+        # t1 = conv1d(r_1, filters, f_size=4)
+        # f1 = MaxPooling1D(pool_size=4)(t1)
+        # f1 = Flatten()(f1)
+        # wv1_expansion_2 = attention(f1)
+        # wv1_expansion_2 = attention(wv1_expansion_1)
+        wv1_expansion_3 = tf.keras.layers.Dense(int(expansion_size / 4), activation='relu')(wv1_expansion_1)
+        wv1_expansion_3 = tf.keras.layers.BatchNormalization()(wv1_expansion_3)
+        return wv1_expansion_3
+
+    wv1_expansion_3 = create_word_input_abstraction(wv1)
+    wv2_expansion_3 = create_word_input_abstraction(wv2)
+
+    # Concatenate both expansions
+    merge1 = tf.keras.layers.Concatenate()([wv1_expansion_3, wv2_expansion_3])
+    merge1 = tf.keras.layers.Dropout(0.1)(merge1)
+    merge_expand = tf.keras.layers.Dense(intermediate_size, activation='relu')(merge1)
+    merge_expand = tf.keras.layers.BatchNormalization()(merge_expand)
+    # Add atention layer
+    # merge_attention = attention(merge_expand)
+    attention_expand = tf.keras.layers.Dense(intermediate_size, activation='relu')(merge_expand)
+    attention_expand = tf.keras.layers.BatchNormalization()(attention_expand)
+    attention_expand = tf.keras.layers.Dropout(0.1)(attention_expand)
+
+    semi_final_layer = tf.keras.layers.Dense(intermediate_size, activation='relu')(attention_expand)
+    semi_final_layer = tf.keras.layers.BatchNormalization()(semi_final_layer)
+    common_layers_model = tf.keras.Model([wv1, wv2], semi_final_layer, name="Common layers")
+    # common_optimizer = Adam(lr=0.000002)
+    # common_layers_model.compile()
+    # Output layer
+    # amount_of_relations = len(relations)
+    # One big layer
+    # final = Dense(amount_of_relations)(semi_final_layer)
+    # Many tasks
+    task_layer_neurons = 512
+    losses = []
+    model_dict = {}
+    callback_dict = {}
+    # prob_model_dict = {}
+    # FOR PICS
+    model_outs = []
+    for rel in relations:
+        task_layer = tf.keras.layers.Dense(task_layer_neurons, activation='relu')(semi_final_layer)
+        task_layer = tf.keras.layers.BatchNormalization()(task_layer)
+        task_layer = tf.keras.layers.Dropout(0.1)(task_layer)
+
+        # task_layer = attention(task_layer)
+        task_layer = tf.keras.layers.Dense(task_layer_neurons, activation='relu')(task_layer)
+        task_layer = tf.keras.layers.BatchNormalization()(task_layer)
+
+        layer_name = rel.replace("/r/", "")
+        # loss = "mean_squared_error"
+        loss = "binary_crossentropy"
+        losses.append(loss)
+
+        out = tf.keras.layers.Dense(1,name=layer_name,activation='sigmoid')(task_layer)
+        # probability = Dense(units=1, activation='sigmoid',name=layer_name+"_prob")(task_layer)
+        # scaler = Dense(units=1)(Dropout(0.5)(task_layer))
+        # scaled_out = Dense(1)(multiply([probability,scaler]))
+        # out = multiply([scale, probability])
+        # scale = ConstMultiplierLayer()(probability)
+
+        model_outs.append(out)
+        # drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
+        drd = tf.keras.Model([wv1, wv2], out, name=layer_name)
+        optimizer = tf.keras.optimizers.Adam(lr=0.0002)
+        # lr_schedule = tf.optimizers.schedules.ExponentialDecay(2e-4, 9000, 0.9)
+        # wd_schedule = tf.optimizers.schedules.ExponentialDecay(5e-5, 9000, 0.9)
+        # optimizer = AdamW(learning_rate=lr_schedule, weight_decay=lambda: None)
+        # optimizer.weight_decay = lambda: wd_schedule(optimizer.iterations)
+
+        drd.compile(optimizer=optimizer, loss=[loss])
+        # drdp.compile(optimizer=optimizer, loss=[loss])
+        # drdp.summary()
+        drd.summary()
+        # plot_model(drd,show_shapes=True)
+        model_dict[layer_name] = drd
+
+        # prob_model_dict[layer_name] = drdp
+
+    # plot_model(Model([wv1,wv2],model_outs,name="Deep_Relationship_Discovery"),show_shapes=True,to_file="DRD.png")
+    # model_dict["common"]=common_layers_model
+    common_layers_model.summary()
+
+    return model_dict#, prob_model_dict
+
+def create_model_akbc_baseline():
+    # Input needs to be 2 word vectors
+    wv1 = tf.keras.layers.Input(shape=(300,), name="retro_word_1")
+    wv2 = tf.keras.layers.Input(shape=(300,), name="retro_word_2")
+    expansion_size = 1024
+    intermediate_size = 512
+
+    def create_word_input_abstraction(wv1):
+        # Expand and contract the 2 word vectors
+        wv1_expansion_1 = tf.keras.layers.Dense(expansion_size)(wv1)
+        wv1_expansion_1 = tf.keras.layers.BatchNormalization()(wv1_expansion_1)
+        wv1_expansion_1 = tf.keras.layers.Dropout(0.1)(wv1_expansion_1)
+        # r_1 = Reshape((-1, 1))(wv1_expansion_1)
+        # t1 = conv1d(r_1, filters, f_size=4)
+        # f1 = MaxPooling1D(pool_size=4)(t1)
+        # f1 = Flatten()(f1)
+        # wv1_expansion_2 = attention(f1)
+        # wv1_expansion_2 = attention(wv1_expansion_1)
+        wv1_expansion_3 = tf.keras.layers.Dense(int(expansion_size / 4), activation='relu')(wv1_expansion_1)
+        wv1_expansion_3 = tf.keras.layers.BatchNormalization()(wv1_expansion_3)
+        return wv1_expansion_3
+
+    wv1_expansion_3 = create_word_input_abstraction(wv1)
+    wv2_expansion_3 = create_word_input_abstraction(wv2)
+
+    # Concatenate both expansions
+    merge1 = tf.keras.layers.Concatenate()([wv1_expansion_3, wv2_expansion_3])
+    merge1 = tf.keras.layers.Dropout(0.1)(merge1)
+    merge_expand = tf.keras.layers.Dense(intermediate_size, activation='relu')(merge1)
+    merge_expand = tf.keras.layers.BatchNormalization()(merge_expand)
+    # Add atention layer
+    # merge_attention = attention(merge_expand)
+    attention_expand = tf.keras.layers.Dense(intermediate_size, activation='relu')(merge_expand)
+    attention_expand = tf.keras.layers.BatchNormalization()(attention_expand)
+    attention_expand = tf.keras.layers.Dropout(0.1)(attention_expand)
+
+    semi_final_layer = tf.keras.layers.Dense(intermediate_size, activation='relu')(attention_expand)
+    semi_final_layer = tf.keras.layers.BatchNormalization()(semi_final_layer)
+    common_layers_model = tf.keras.Model([wv1, wv2], semi_final_layer, name="Common layers")
+    # common_optimizer = Adam(lr=0.000002)
+    # common_layers_model.compile()
+    # Output layer
+    # amount_of_relations = len(relations)
+    # One big layer
+    # final = Dense(amount_of_relations)(semi_final_layer)
+    # Many tasks
+    task_layer_neurons = 512
+    losses = []
+    model_dict = {}
+    callback_dict = {}
+    # prob_model_dict = {}
+    # FOR PICS
+    model_outs = []
+    for rel in relations:
+        # task_layer = tf.keras.layers.Dense(task_layer_neurons, activation='relu')(semi_final_layer)
+        # task_layer = tf.keras.layers.BatchNormalization()(task_layer)
+        # task_layer = tf.keras.layers.Dropout(0.1)(task_layer)
+        #
+        # # task_layer = attention(task_layer)
+        # task_layer = tf.keras.layers.Dense(task_layer_neurons, activation='relu')(task_layer)
+        # task_layer = tf.keras.layers.BatchNormalization()(task_layer)
+
+        layer_name = rel.replace("/r/", "")
+        # loss = "mean_squared_error"
+        loss = "binary_crossentropy"
+        losses.append(loss)
+
+        out = tf.keras.layers.Dense(1,name=layer_name,activation='sigmoid')(semi_final_layer)
+        # probability = Dense(units=1, activation='sigmoid',name=layer_name+"_prob")(task_layer)
+        # scaler = Dense(units=1)(Dropout(0.5)(task_layer))
+        # scaled_out = Dense(1)(multiply([probability,scaler]))
+        # out = multiply([scale, probability])
+        # scale = ConstMultiplierLayer()(probability)
+
+        model_outs.append(out)
+        # drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
+        drd = tf.keras.Model([wv1, wv2], out, name=layer_name)
+        optimizer = tf.keras.optimizers.Adam(lr=0.0002)
+        drd.compile(optimizer=optimizer, loss=[loss])
+        # drdp.compile(optimizer=optimizer, loss=[loss])
+        # drdp.summary()
+        drd.summary()
+        # plot_model(drd,show_shapes=True)
+        model_dict[layer_name] = drd
+
+        # prob_model_dict[layer_name] = drdp
+
+    # plot_model(Model([wv1,wv2],model_outs,name="Deep_Relationship_Discovery"),show_shapes=True,to_file="DRD.png")
+    # model_dict["common"]=common_layers_model
+    common_layers_model.summary()
+
+    return model_dict#, prob_model_dict
 
 def create_sentence_embedding(c1):
     s = c1.split(" ")
@@ -74,13 +271,13 @@ def create_model():
     # Input needs to be 2 word vectors
     wv1 = tf.keras.layers.Input(shape=(300,), name="retro_word_1")
     wv2 = tf.keras.layers.Input(shape=(300,), name="retro_word_2")
-    expansion_size = 512
-    intermediate_size = 512
+    expansion_size = 1024
+    intermediate_size = 1024
 
     def create_word_input_abstraction(wv1):
         # Expand and contract the 2 word vectors
         wv1_expansion_1 = tf.keras.layers.Dense(expansion_size)(wv1)
-        wv1_expansion_1 = tf.keras.layers.BatchNormalization()(wv1_expansion_1)
+        # wv1_expansion_1 = tf.keras.layers.BatchNormalization()(wv1_expansion_1)
         wv1_expansion_1 = tf.keras.layers.Dropout(0.1)(wv1_expansion_1)
         # r_1 = Reshape((-1, 1))(wv1_expansion_1)
         # t1 = conv1d(r_1, filters, f_size=4)
@@ -89,7 +286,7 @@ def create_model():
         # wv1_expansion_2 = attention(f1)
         # wv1_expansion_2 = attention(wv1_expansion_1)
         wv1_expansion_3 = tf.keras.layers.Dense(int(expansion_size / 2), activation='relu')(wv1_expansion_1)
-        wv1_expansion_3 = tf.keras.layers.BatchNormalization()(wv1_expansion_3)
+        # wv1_expansion_3 = tf.keras.layers.BatchNormalization()(wv1_expansion_3)
         return wv1_expansion_3
 
     wv1_expansion_3 = create_word_input_abstraction(wv1)
@@ -116,7 +313,7 @@ def create_model():
     # One big layer
     # final = Dense(amount_of_relations)(semi_final_layer)
     # Many tasks
-    task_layer_neurons = 512
+    task_layer_neurons = 1024
     model_dict = {}
     callback_dict = {}
     # prob_model_dict = {}
@@ -125,6 +322,140 @@ def create_model():
         model_outs = []
         task_layer = tf.keras.layers.Dense(task_layer_neurons, activation='relu')(semi_final_layer)
         task_layer = tf.keras.layers.BatchNormalization()(task_layer)
+        task_layer = tf.keras.layers.Dropout(0.1)(task_layer)
+
+        # task_layer = attention(task_layer)
+        task_layer = tf.keras.layers.Dense(task_layer_neurons, activation='relu')(task_layer)
+        task_layer = tf.keras.layers.BatchNormalization()(task_layer)
+        losses = []
+
+        layer_name = rel.replace("/r/", "")
+        # loss = "mean_squared_error"
+        loss = "binary_crossentropy"
+
+        losses.append(loss)
+        losses.append("mean_squared_error")
+
+        out = tf.keras.layers.Dense(1,name=layer_name,activation='sigmoid')(task_layer)
+        out_strength = tf.keras.layers.Dense(512,activation="relu")(task_layer)
+        out_strength = tf.keras.layers.Dense(1,name=layer_name+"strength")(out_strength)
+        # probability = Dense(units=1, activation='sigmoid',name=layer_name+"_prob")(task_layer)
+        # scaler = Dense(units=1)(Dropout(0.5)(task_layer))
+        # scaled_out = Dense(1)(multiply([probability,scaler]))
+        # out = multiply([scale, probability])
+        # scale = ConstMultiplierLayer()(probability)
+
+        model_outs.append(out)
+        model_outs.append(out_strength)
+        # drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
+        drd = tf.keras.Model([wv1, wv2], model_outs, name=layer_name)
+        optimizer = tf.keras.optimizers.Adam(lr=0.001)
+        # lr_schedule = tf.optimizers.schedules.ExponentialDecay(2e-4, 9000, 0.9)
+        # wd_schedule = tf.optimizers.schedules.ExponentialDecay(5e-5, 9000, 0.9)
+        # optimizer = AdamW(learning_rate=lr_schedule, weight_decay=lambda: None)
+        # optimizer.weight_decay = lambda: wd_schedule(optimizer.iterations)
+
+        drd.compile(optimizer=optimizer, loss=losses)
+        # drdp.compile(optimizer=optimizer, loss=[loss])
+        # drdp.summary()
+        drd.summary()
+        tf.keras.utils.plot_model(drd,show_shapes=True)
+        model_dict[layer_name] = drd
+
+        # prob_model_dict[layer_name] = drdp
+    # plot_model(Model([wv1,wv2],model_outs,name="Deep_Relationship_Discovery"),show_shapes=True,to_file="DRD.png")
+    # model_dict["common"]=common_layers_model
+    common_layers_model.summary()
+
+    return model_dict#, prob_model_dict
+
+
+def create_model_attn():
+    # Input needs to be 2 word vectors
+    wv1 = tf.keras.layers.Input(shape=(300,), name="retro_word_1")
+    wv2 = tf.keras.layers.Input(shape=(300,), name="retro_word_2")
+    expansion_size = 2048
+    intermediate_size = 1024
+
+    def create_word_input_abstraction(wv1):
+        # Expand and contract the 2 word vectors
+        wv1_expansion_1 = tf.keras.layers.Dense(expansion_size)(wv1)
+        # wv1_expansion_1 = tf.keras.layers.BatchNormalization()(wv1_expansion_1)
+        wv1_expansion_1 = tf.keras.layers.Dropout(0.1)(wv1_expansion_1)
+        # r_1 = Reshape((-1, 1))(wv1_expansion_1)
+        # t1 = conv1d(r_1, filters, f_size=4)
+        # f1 = MaxPooling1D(pool_size=4)(t1)
+        # f1 = Flatten()(f1)
+        # wv1_expansion_2 = attention(f1)
+        # wv1_expansion_2 = attention(wv1_expansion_1)
+        wv1_expansion_3 = tf.keras.layers.Dense(int(expansion_size/2.0), activation='relu')(wv1_expansion_1)
+        # wv1_expansion_3 = tf.keras.layers.BatchNormalization()(wv1_expansion_3)
+        return wv1_expansion_3
+
+    wv1_expansion_3 = create_word_input_abstraction(wv1)
+    wv2_expansion_3 = create_word_input_abstraction(wv2)
+
+    # Concatenate both expansions
+    merge1 = tf.keras.layers.Concatenate()([wv1_expansion_3, wv2_expansion_3])
+    #Attention
+    query_input = merge1
+
+    # Embedding lookup.
+
+    class MyAttention(tf.keras.layers.Layer):
+
+        def __init__(self, max_tokens=512, dimension=256, num_heads=4):
+            super(MyAttention, self).__init__()
+            w_init = tf.random_normal_initializer()
+            self.keys = tf.Variable(initial_value=w_init(shape=(max_tokens, dimension),
+                                                      dtype='float32'),
+                                 trainable=True)
+            self.values = tf.Variable(initial_value=w_init(shape=(max_tokens, dimension),
+                                                         dtype='float32'),
+                                    trainable=True)
+            self.query_downscaler = tf.keras.layers.Dense(dimension)
+            self.att_heads = [tf.keras.layers.Attention(use_scale=True) for x in range(num_heads)]
+            # self.att_fuse = tf.keras.layers.Dense(intermediate_size)
+
+        def call(self, inputs):
+            q = self.query_downscaler(inputs)
+            atts = [x([q, self.values,self.keys])for x in self.att_heads]
+            head_conc = tf.keras.layers.Concatenate()(atts)
+            # head_conc = self.att_fuse(head_conc)
+            return head_conc
+
+    head_conc = MyAttention()(query_input)
+
+    #Other route
+    # merge1 = Dropout(0.1)(merge1)
+    merge_expand = tf.keras.layers.Dense(intermediate_size, activation='relu')(merge1)
+    merge_expand = tf.keras.layers.BatchNormalization()(merge_expand)
+    # Add atention layer
+    # merge_attention = attention(merge_expand)
+    attention_expand = tf.keras.layers.Dense(intermediate_size, activation='relu')(merge_expand)
+    attention_expand = tf.keras.layers.BatchNormalization()(attention_expand)
+    attention_expand = tf.keras.layers.Dropout(0.1)(attention_expand)
+
+    semi_final_layer = tf.keras.layers.Dense(intermediate_size, activation='relu')(attention_expand)
+    semi_final_layer = tf.keras.layers.BatchNormalization()(semi_final_layer)
+    common_layers_model = tf.keras.Model([wv1, wv2], semi_final_layer, name="Common layers")
+    semi_final_layer = semi_final_layer+head_conc
+    # common_optimizer = Adam(lr=0.000002)
+    # common_layers_model.compile()
+    # Output layer
+    # amount_of_relations = len(relations)
+    # One big layer
+    # final = Dense(amount_of_relations)(semi_final_layer)
+    # Many tasks
+    task_layer_neurons = 1024
+    model_dict = {}
+    callback_dict = {}
+    # prob_model_dict = {}
+    # FOR PICS
+    for rel in relations:
+        model_outs = []
+        task_layer = tf.keras.layers.Dense(task_layer_neurons, activation='relu',name=layer_name+"init_proj")(semi_final_layer)
+        # task_layer = tf.keras.layers.BatchNormalization()(task_layer)
         task_layer = tf.keras.layers.Dropout(0.1)(task_layer)
 
         # task_layer = attention(task_layer)
@@ -152,7 +483,12 @@ def create_model():
         model_outs.append(out_strength)
         # drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
         drd = tf.keras.Model([wv1, wv2], model_outs, name=layer_name)
-        optimizer = tf.keras.optimizers.Adam(lr=0.001)
+        # optimizer = tf.keras.optimizers.Adam(lr=0.001)
+        lr_schedule = tf.optimizers.schedules.ExponentialDecay(2e-4, 9000, 0.95)
+        wd_schedule = tf.optimizers.schedules.ExponentialDecay(5e-5, 9000, 0.95)
+        optimizer = AdamW(learning_rate=lr_schedule, weight_decay=lambda: None)
+        optimizer.weight_decay = lambda: wd_schedule(optimizer.iterations)
+
         drd.compile(optimizer=optimizer, loss=losses)
         # drdp.compile(optimizer=optimizer, loss=[loss])
         # drdp.summary()
@@ -167,7 +503,8 @@ def create_model():
 
     return model_dict#, prob_model_dict
 
-def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd",cutoff=0.99):
+
+def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folder="drd",cutoff=0.99,logdir="./logs/",name="default"):
     # retrofitted_embeddings = pd.read_hdf(retroembeddings, "mat", encoding='utf-8')
     global word_dict
     training_data_dict = {}
@@ -180,20 +517,26 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
             training_data_dict[rel] = []
         training_data_dict[rel].append(i)
 
+    extra_concepts = []
+    with open("ft_full_alldata/fullfasttext") as ft:
+        # with open("ft_full_ar_vecs.txt") as ft:
+        limit = 50000
+        count = 0
+        print("Loading extra concepts")
+        for line in tqdm(ft):
+            if count == limit: break
+            c = line.split(" ")[0].replace("en_", "")
+            get_embedding(c)
+            extra_concepts.append(c)
+
+            count += 1
+
     def load_batch(output_name):
         # print("Loading batch for", output_name)
         l = len(training_data_dict[output_name])
         iterable = list(range(0, l))
         shuffle(iterable)
-        extra_concepts = []
-        with open("ft_full_alldata/fullfasttext") as ft:
-        # with open("ft_full_ar_vecs.txt") as ft:
-            limit = 50000
-            count = 0
-            for line in ft:
-                if count==limit:break
-                extra_concepts.append(line.split(" ")[0].replace("en_",""))
-                count+=1
+
         batches = []
         # print("Preloading")
         for ndx in range(0, l, batch_size):
@@ -216,35 +559,40 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                         print(e)
                         raise Exception("Fuck")
                         continue
-
+                orig_y = len(y)
                 for idx in range(len(y)):
                     x1 = x_1[idx]
                     x2 = x_2[idx]
                     # print(idx)
-                    ix1 = random.sample(range(0, len(y)), 1)
-                    ix2 = random.sample(range(0, len(y)), 1)
+                    ix1 = random.sample(range(0, orig_y), 1)
+                    ix2 = random.sample(range(0, orig_y), 1)
                     # print(ix1)
                     # print(ix2)
                     x_1.append(x_1[ix1[0]])
                     x_2.append(x2)
-                    y.append(0)
+                    yval = random.sample([0,1],1)[0]
+                    y.append(yval)
                     y_strength.append(0)
+                    yval = random.sample([0,1],1)[0]
 
                     x_1.append(x1)
                     x_2.append(x_2[ix2[0]])
-                    y.append(0)
+                    y.append(yval)
                     y_strength.append(0)
-                    idx+=1
+                    # idx+=1
                 # print(np.array(x_1),np.array(x_2),np.array(y))
                 # print("Shuffling in the confounders")
 
                 #Add extra data!!!
                 # print("Adding extra data")
-                l1 = np.array(get_embedding(extra_concepts[random.sample(range(0, len(extra_concepts)), 1)[0]])).reshape(1, 300)
-                l2 = np.array(get_embedding(extra_concepts[random.sample(range(0, len(extra_concepts)), 1)[0]])).reshape(1, 300)
+                extra_data_amount = 1
+                l1 = np.array(get_embedding(extra_concepts[random.sample(range(0, len(extra_concepts)), extra_data_amount)[0]])).reshape(1, 300)
+                l2 = np.array(get_embedding(extra_concepts[random.sample(range(0, len(extra_concepts)), extra_data_amount)[0]])).reshape(1, 300)
                 x_1.append(l1)
                 x_2.append(l2)
-                y.append(0)
+                yval = random.sample([0, 1], 1)[0]
+
+                y.append(yval)
                 y_strength.append(0)
                 # print("Adding extra data done")
 
@@ -262,7 +610,17 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         #     yield tup
 
         return True
-    callback = tf.keras.callbacks.TensorBoard(log_dir="./logs/")
+    callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
+    wandbcb = WandbCallback(
+                  monitor='accuracy_test',
+                  verbose=0,
+                  mode='auto',
+                  log_weights=True,
+                  save_model=True,
+                  log_evaluation=True,
+                  log_best_prefix='best_',
+                  log_batch_frequency=50)
+    wandbcb.set_model(model[list(model.keys())[0]])
     # callback.set_model(drd)
     # callback_dict[layer_name] = callback
     for epoch in tqdm(range(epoch_amount)):
@@ -294,14 +652,34 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                             try:
                                 loss = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1': x_1, 'retro_word_2': x_2},
                                                                                        y=(y,y_strength))
+                                # loss = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1': x_1, 'retro_word_2': x_2},
+                                #                                                        y=(y))
                             except Exception as e:
                                 loss = model[output.replace("/r/", "")].train_on_batch(x={'input_1': x_1, 'input_2': x_2},
                                                                                        y=(y,y_strength))
+                                # loss = model[output.replace("/r/", "")].train_on_batch(x={'input_1': x_1, 'input_2': x_2},
+                                #                                                        y=(y))
+                            if isinstance(loss,Iterable):
+                                callback.on_epoch_end(iter, {"loss":loss[0],"loss_bin":loss[1],"loss_mse":loss[2]})
+                                try:
+                                    # wandb.log({"loss":loss[0],"loss_bin":loss[1],"loss_mse":loss[2]})
+                                    # print("Wandb logging")
+                                    wandbcb.on_batch_end(iter,
+                                                         {"loss":loss[0],"loss_bin":loss[1],"loss_mse":loss[2]})
+                                    # print("End wandb logging")
+                                except Exception as e:
+                                    print(e)
+                                    pass
 
-                            callback.on_epoch_end(iter, {"loss_mse":loss[0],"loss_bin":loss[1]})
+                            else:
+                                callback.on_epoch_end(iter, {"loss_bin":loss})
+
 
                             # loss_2 = model[output.replace("/r/", "")].train_on_batch(x={'retro_word_1':x_2,'retro_word_2':x_1},y=y)
-                            total_loss += loss[0]
+                            if isinstance(loss,Iterable):
+                                total_loss += loss[0]
+                            else:
+                                total_loss+=loss
                             # if loss > 10:
                             #     print("Loss", output, loss)
                             # if iter%100:
@@ -335,8 +713,11 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
                     iter += 1
         try:
             accuracy = test_model_3(model)
+            print(name,save_fol)
             print("Accuracy is",accuracy)
             callback.on_epoch_end(epoch, {"accuracy_test": float(accuracy)})
+            wandbcb.on_epoch_end(epoch,{"accuracy_test": float(accuracy)})
+            # wandb.log({"accuracy_test": float(accuracy)})
             print("Pushed to callback!!")
         except Exception as e:
             print(e)
@@ -344,7 +725,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         print("Avg loss", total_loss / iter)
         print(str(epoch) + "/" + str(epoch_amount))
 
-        if len(word_dict.keys())>2000:
+        if len(word_dict.keys())>1060000:
             try:
                 print("Dumping the dictionary")
                 del word_dict
@@ -360,14 +741,13 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
         # model_name = "PartOf"
         # test_model(model, model_name=model_name)
         if epoch%10==0:
-
-
             try:
                 os.mkdir(save_folder)
             except Exception as e:
                 print(e)
             for key in model.keys():
-                model[key].save(save_folder + "/" + key + ".model")
+                model[key].save(save_folder + "/" + key + ".model",include_optimizer=False)
+            wandb.save(save_folder + "/""*.model")
         # test_model(prob_model, model_name=model_name)
     print("Saving...")
     try:
@@ -375,8 +755,7 @@ def train_on_assertions(model, data, epoch_amount=100, batch_size=32, save_folde
     except Exception as e:
         print(e)
     for key in model.keys():
-        model[key].save(save_folder + "/" + key + ".model")
-
+        model[key].save(save_folder + "/" + key + ".model",include_optimizer=False)
 
 def load_data(path):
     data = pd.read_hdf(path, "mat", encoding="utf-8")
@@ -436,7 +815,7 @@ def normalize_outputs(model, save_folder="./drd", use_cache=True):
 def load_model_ours(save_folder="./drd", model_name="all",probability_models=False):
     model_dict = {}
     if model_name == 'all':
-        for rel in relations:
+        for rel in tqdm(relations):
             print("Loading", rel)
             layer_name = rel.replace("/r/", "")
             if probability_models:
@@ -445,15 +824,31 @@ def load_model_ours(save_folder="./drd", model_name="all",probability_models=Fal
                                                     )
                 model_dict[layer_name].summary()
             else:
-                model_dict[layer_name] = tf.keras.models.load_model(save_folder + "/" + layer_name + ".model",
-                                                    )
-
+                model_dict[layer_name] = tf.keras.models.load_model(save_folder + "/" + layer_name + ".model")
+                loss = "binary_crossentropy"
+                losses = []
+                losses.append(loss)
+                losses.append("mean_squared_error")
+                lr_schedule = tf.optimizers.schedules.ExponentialDecay(2e-4, 9000, 0.9)
+                wd_schedule = tf.optimizers.schedules.ExponentialDecay(5e-5, 9000, 0.9)
+                optimizer = AdamW(learning_rate=lr_schedule, weight_decay=lambda: None)
+                optimizer.weight_decay = lambda: wd_schedule(optimizer.iterations)
+                model_dict[layer_name].compile(optimizer=optimizer,loss=losses)
+                print("Adding adamw")
     else:
         layer_name = model_name.replace("/r/", "")
         if not probability_models:
             print("Loading models")
-            model_dict[layer_name] = tf.keras.models.load_model(save_folder + "/" + layer_name + ".model",
-                                                )
+            model_dict[layer_name] = tf.keras.models.load_model(save_folder + "/" + layer_name + ".model")
+            loss = "binary_crossentropy"
+            losses = []
+            losses.append(loss)
+            losses.append("mean_squared_error")
+            lr_schedule = tf.optimizers.schedules.ExponentialDecay(2e-4, 9000, 0.9)
+            wd_schedule = tf.optimizers.schedules.ExponentialDecay(5e-5, 9000, 0.9)
+            optimizer = AdamW(learning_rate=lr_schedule, weight_decay=lambda: None)
+            optimizer.weight_decay = lambda: wd_schedule(optimizer.iterations)
+            model_dict[layer_name].compile(optimizer=optimizer, loss=losses)
             # print("Loading weights")
             # model_dict[layer_name].load_weights(save_folder + "/" + layer_name + ".model")
         else:
@@ -552,6 +947,7 @@ def create_data3(use_cache):
 
 def test_model_3(model):
     global retrofitted_embeddings
+    # assertionspath = "test.txt"
     assertionspath = "test.txt"
     x_1 = []
     x_2 = []
@@ -590,7 +986,10 @@ def test_model_3(model):
             except:
                 pred = model[rels[i].replace("/r/", "")].predict(x={'input_1': t1,
                                                                     'input_2': t2})
-            y_pred.append(pred[0][0][0])
+            if isinstance(pred[0][0],Iterable):
+                y_pred.append(pred[0][0][0])
+            else:
+                y_pred.append(pred[0][0])
         except Exception as e:
             y_pred.append(-1)
             print(e)
@@ -598,10 +997,36 @@ def test_model_3(model):
     avg = np.average(y_pred)
     print(avg)
     final_y_pred = [0 if x < avg else 1 for x in y_pred]
-    m = tf.keras.metrics.BinaryAccuracy()
-    m.update_state(y_true, final_y_pred)
+    results = []
+    cutoffs = []
+    for i in range(1,100):
+        cutoff = i/100.0
+        cutoffs.append(cutoff)
+        m = tf.keras.metrics.BinaryAccuracy(threshold=cutoff)
+        m.update_state(y_true, y_pred)
+        results.append(m.result().numpy())
+    print(results)
+    maxacc = np.argmax(results)
+    print("max is at",cutoffs[maxacc])
+    m = tf.keras.metrics.BinaryAccuracy(threshold=cutoffs[maxacc])
+    m.update_state(y_true, y_pred)
     print('Final result: ', m.result().numpy())  # Final result: 0.75
-    return  m.result().numpy()
+    import matplotlib
+    import matplotlib.pyplot as plt
+
+    # Data for plotting
+    t = cutoffs
+    s = results
+
+    fig, ax = plt.subplots()
+    ax.plot(t, s)
+
+    ax.set(xlabel='cutoff', ylabel='accuracy',
+           title='About as simple as it gets, folks')
+    ax.grid()
+    fig.savefig("test.png")
+    plt.show()
+    return m.result().numpy()
 
 
 def load_things():
@@ -613,8 +1038,6 @@ def load_things():
     return rcgan
 
 if __name__ == '__main__':
-    global rcgan
-    rcgan = load_things()
     gpus = tf.config.experimental.list_physical_devices('GPU')
     if gpus:
         try:
@@ -626,6 +1049,9 @@ if __name__ == '__main__':
         except RuntimeError as e:
             # Memory growth must be set before GPUs have been initialized
             print(e)
+    global rcgan
+    rcgan = load_things()
+
     # # save_folder =     "./trained_models/deepreldis/"+str(datetime.datetime.now())
     global w1, w2, w3, retrofitted_embeddings
     data = create_data3(use_cache=False)
@@ -637,13 +1063,29 @@ if __name__ == '__main__':
     # del retrofitted_embeddings
     # gc.collect()
     print("Creating model...")
-    model = create_model()
+    name = input("Model name")
+    # name = "attention_sota"
+    save_fol = "trained_models/deepreldis/"+name+"_"+str(datetime.datetime.now())+"/"
+    # save_fol = "trained_models/deepreldis/attention_sota_2020-04-12 12:18:20.076260/"
+    # model = create_model()
+    model = create_model_attn()
+    # model = create_model_akbc()
+    # model = create_model_akbc_baseline()
     print("Done\nLoading data")
+    # model = load_model_ours(save_fol)
     # model = load_model_ours("trained_models/deepreldis/2020-02-22 14:20:21.182244")
-    # model = load_model_ours("trained_models/deepreldis/2020-02-12 07:49:00.552561")
+    # model = load_model_ours("trained_models/deepreldis/att_sota_2_2020-04-14 11:38:05.216330")
     # # data = load_data("valid_rels.hd5")
     print("Done\nTraining")
-    train_on_assertions(model, data,save_folder="trained_models/deepreldis/"+str(datetime.datetime.now())+"/",epoch_amount=100,batch_size=128)
+    # print("Saving to,",save_fol)
+    print("Removing!!!")
+    print("*" * 100)
+    # shutil.rmtree(save_fol, ignore_errors=True)
+    print("Done!")
+    print("*" * 100)
+
+    # train_on_assertions(model, data,save_folder=save_fol,
+    #                     epoch_amount=100,batch_size=128,cutoff=0.99,logdir=save_fol,name=name)
     print("Done\n")
     # model = load_model_ours(save_folder="drd/",model_name="all")
     # model = load_model_ours(save_folder="trained_models/deepreldis/2019-04-25_2_sigmoid",model_name=model_name,probability_models=True)

@@ -725,6 +725,7 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5):
     #                                                      np.array(o.iloc[:,:])
     #                                                      )))]
     # else:
+    # limit = 400000
     # results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, dimensionality),
     #                                                                                        pred_y.reshape(1, dimensionality)),
     #                                                            np.array(o.iloc[0:limit, :])
@@ -732,10 +733,10 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5):
     # sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
     # final_n_results = []
     # final_n_results_words = []
-    # FULL FLEDGED COMPUTATION
+    # # FULL FLEDGED COMPUTATION
     # for i in range(n_top):
-    #     # if(verbose):
-    #     #     print(o.index[sorted_results[i][0]])
+    # #     # if(verbose):
+    # #     #     print(o.index[sorted_results[i][0]])
     #     final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
     #     final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
 
@@ -743,17 +744,17 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5):
     # gc.collect()
 
     # testvec = find_in_dataset(["cat"], o)
-    print("Loading everything")
+    # print("Loading everything")
     testvec = pred_y
-    # print(testvec)
+    print(testvec)
     try:
         print("Creating index")
         index = faiss.IndexFlatIP(300)  # build the index
-        # print(index.is_trained)
+        print(index.is_trained)
         print('Adding items to it')
         print(o.values.shape)
         index.add(np.ascontiguousarray(o.values).astype(np.float32))  # add vectors to the index
-        # print(index.ntotal)
+        print(index.ntotal)
         print("Converting the testvect to query")
         tst = np.array([testvec.astype(np.float32)])
         tst = tst.reshape((tst.shape[0],tst.shape[-1]))
@@ -762,13 +763,13 @@ def find_closest_in_dataset(pred_y,dataset, n_top=5):
         print("We died")
         print(e)
         return [],[]
-    # print(tst.shape)
+    print(tst.shape)
     print("Searching")
     D, I = index.search(tst, n_top)  # sanity check
-    # print(I)
-    # print(D)
+    print(I)
+    print(D)
     # print(o.iloc[I[0]])
-    print("Dumping results")
+    # print("Dumping results")
     final_n_results = o.iloc[I[0]].values
     final_n_results_words = o.index[I[0]].values
 
@@ -869,15 +870,18 @@ def find_in_dataset(testwords,dataset,prefix=None):
     return asarray1
 
 ft_model = None
-def test_sem(model, dataset, dataset_location='SimLex-999.txt',fast_text_location="../fasttext_model/cc.en.300.bin"):
+def test_sem(model, dataset, dataset_location='SimLex-999.txt',fast_text_location="../fasttext_model/cc.en.300.bin",prefix=""):
     word_tuples = []
     my_word_tuples = []
     global ft_model
     ds_model = None
     # if ft_model is None:
     #     ft_model= fasttext.load_model(fast_text_location)
-    if dataset is not None:
+    if isinstance(dataset,pd.DataFrame):
+        ds_model = dataset
+    elif dataset is not None:
         ds_model = pd.read_hdf(dataset["directory"]+dataset["original"],"mat")
+
         # ds_model=ds_model.swapaxes(0,1)
     retrogan = model
     with open(dataset_location) as csv_file:
@@ -896,10 +900,10 @@ def test_sem(model, dataset, dataset_location='SimLex-999.txt',fast_text_locatio
             # conceptnet5.uri.concept_uri("en",row[0].lower())
             # mw1 = ft_model.get_word_vector(row[0].lower())
             try:
-                mw1 = ds_model.loc["en_"+row[0].lower(),:]
+                mw1 = ds_model.loc[prefix+row[0].lower(),:]
                 mw1 = np.array(retrogan.predict(np.array(mw1).reshape(1, 300))).reshape((300,))
                 # mw2 = ft_model.get_word_vector(row[1].lower())
-                mw2 = ds_model.loc["en_" + row[1].lower(),:]
+                mw2 = ds_model.loc[prefix + row[1].lower(),:]
                 mw2 = np.array(retrogan.predict(np.array(mw2).reshape(1, 300))).reshape((300,))
 
                 score = cosine_similarity([mw1], [mw2])

@@ -12,7 +12,7 @@ if __name__ == '__main__':
                         default="cleaned_corpus.txt")
     parser.add_argument("outputhdf",default="original_ft.hd5clean",
                         help="The output hdf file")
-    parser.add_argument("--limit",default=None,
+    parser.add_argument("--limit",default=200000,
                         help="Limit of vectors to load",
                         type=int)
     parser.add_argument("-sf",default=False, action='store_true')
