@@ -8,29 +8,27 @@ import shutil
 from random import shuffle
 
 import numpy as np
-# from tensorflow_core.python.keras import backend as K
 import pandas as pd
 
 os.environ["TF_KERAS"] = "1"
-from keras_adabound import AdaBound
+# from keras_adabound import AdaBound
 from tensorflow.keras import backend as K
 from tensorflow import keras
 from tensorflow.python.keras.layers import Input, Conv1D, Dense, BatchNormalization, \
-    Dropout
+    Dropout, LayerNormalization
 from tensorflow.python.keras import Model
 from tensorflow.python.framework.ops import disable_eager_execution
-# from tensorflow_core.python.framework.random_seed import set_random_seed
-# from tensorflow_core.python.keras.optimizer_v2.adam import Adam
-# from tensorflow_core.python.keras.optimizer_v2.rmsprop import RMSProp
-# from tensorflow_core.python.keras.optimizer_v2
-# from tensorflow_core.python.keras.utils.vis_utils import plot_model
-# from tensorflow_core.python.keras.optimizers import Adadelta
 from tqdm import tqdm
 import tensorflow as tf
+from tensorflow_addons.optimizers import AdamW
+from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
 # tf.debugging.set_log_device_placement(True)
 
 import tools
+
+
+# from wandb import magic
 
 
 # seed(1)
@@ -52,7 +50,7 @@ dimensionality = 300
 class RetroCycleGAN():
     def __init__(self, save_index="0", save_folder="./", generator_size=32,
                  discriminator_size=64, word_vector_dimensions=300,
-                 discriminator_lr=0.0001, generator_lr=0.0005,
+                 discriminator_lr=0.0001, generator_lr=0.0001,
                  lambda_cycle=1, lambda_id_weight=0.01,
                  clip_value=0.5, optimizer="sgd", batch_size=32,dimensionality=300):
 
@@ -108,21 +106,24 @@ class RetroCycleGAN():
         # Translate images back to original domain
         reconstr_A = self.g_BA(fake_B)
         reconstr_B = self.g_AB(fake_A)
+        print("Building recon model")
+        # self.reconstr = Model(inputs=[unfit_wv,fit_wv],outputs=[reconstr_A,reconstr_B])
+        print("Done")
         # Identity mapping of images
         unfit_wv_id = self.g_BA(unfit_wv)
         fit_wv_id = self.g_AB(fit_wv)
 
         # For the combined model we will only train the generators
-        self.d_A.trainable = False
-        self.d_B.trainable = False
-
         # Discriminators determines validity of translated images
         valid_A = self.d_A(fake_A)
         valid_B = self.d_B(fake_B)
-
         # Combined model trains generators to fool discriminators
+        self.d_A.trainable = False
+        self.d_B.trainable = False
+
         self.combined = Model(inputs=[unfit_wv, fit_wv],
                               outputs=[valid_A, valid_B,
+                                       reconstr_A, reconstr_B,
                                        reconstr_A, reconstr_B,
                                        unfit_wv_id, fit_wv_id],
                               name="combinedmodel")
@@ -145,7 +146,7 @@ class RetroCycleGAN():
                 normalize_b = tf.nn.l2_normalize(y_pred)
                 normalize_c = tf.nn.l2_normalize(new_true)
                 minimize = tf.reduce_sum(tf.multiply(normalize_a, normalize_b))
-                maximize = tf.reduce_sum(tf.multiply(normalize_c, normalize_b))
+                maximize = tf.reduce_sum(tf.multiply(normalize_a, normalize_c))
                 mg = sim_margin - minimize + maximize
                 cost += tf.keras.backend.clip(mg, 0, 10000)
             return cost / (sim_neg * 1.0)
@@ -154,7 +155,18 @@ class RetroCycleGAN():
             if optimizer == "sgd":
                 return tf.optimizers.SGD(lr=0.00001, momentum=0.9, decay=1 / (1000 * 10000))
             elif optimizer == "adam":
-                return tf.optimizers.Adam(lr=lr, epsilon=1e-10)
+                #lr_schedule = tf.optimizers.schedules.ExponentialDecay(lr, 25000, 0.98)
+                # #lr_schedule =tf.optimizers.schedules.PolynomialDecay(lr, 7500, end_learning_rate=lr/100, power=1.0)
+                #wd_schedule = tf.optimizers.schedules.ExponentialDecay(lr*1e-10, 25000, 0.98)
+                # #wd_schedule =tf.optimizers.schedules.PolynomialDecay(lr/10, 7500, end_learning_rate=lr/1000, power=1.0)
+                #
+                #opt = AdamW(learning_rate=lr_schedule, weight_decay=lambda: None)
+                #opt.weight_decay = lambda: wd_schedule(opt.iterations)
+                #return opt
+                opt = tf.optimizers.Adam(lr=lr, epsilon=1e-10)
+                opt = tf.train.experimental.enable_mixed_precision_graph_rewrite(opt)
+                return opt
+                # return opt
             elif optimizer == "adabound":
                 return AdaBound(lr=1e-3, final_lr=0.1, gamma=0.0000001)
             else:
@@ -172,11 +184,18 @@ class RetroCycleGAN():
         self.g_BA.compile(loss=max_margin_loss,
                           optimizer=create_opt(self.g_lr),
                           )
+        # self.reconstr.compile(loss=max_margin_loss,
+        #                   optimizer=create_opt(self.g_lr),
+        #                     loss_weights=[0.1,0.1]
+        #                   )
+
         self.combined.compile(loss=['binary_crossentropy', 'binary_crossentropy',
                                     'mae', 'mae',
+                                    max_margin_loss,max_margin_loss,
                                     'mae', 'mae'],
                               loss_weights=[1, 1,
-                                            self.lambda_cycle, self.lambda_cycle,
+                                            self.lambda_cycle*1, self.lambda_cycle*1,
+                                            self.lambda_cycle*2, self.lambda_cycle*2,
                                             self.lambda_id, self.lambda_id],
                               # TODO ADD A CUSTOM LOSS THAT SIMPLY ADDS A
                               # GENERALIZATION CONSTRAINT ON THE MAE
@@ -209,12 +228,11 @@ class RetroCycleGAN():
         # Image input
         inpt = Input(shape=self.img_shape)
         # Continue into fc layers
-        d0 = dense(inpt, 2048, normalization=False)
-        d0 = dense(d0, 2048, normalization=False)
-        # d0 = dense(d0, 2048, normalization=True)
-
-        output_img = Dense(dimensionality)(d0)
-        return Model(inpt, output_img, name=name)
+        encoder = dense(inpt, 2048, normalization=False)
+        #intermediate = dense(encoder, 512, normalization=False)
+        decoder = dense(encoder, 2048, normalization=False)#+encoder
+        output = Dense(dimensionality)(decoder)
+        return Model(inpt, output, name=name)
 
     def build_discriminator(self, name):
 
@@ -229,10 +247,13 @@ class RetroCycleGAN():
             return d
 
         inpt = Input(shape=self.img_shape)
-        # noise = GaussianNoise(0.01)(inpt)
+        # d1 = tf.keras.layers.GaussianNoise(1)(inpt)
         d1 = d_layer(inpt, 2048, normalization=False, dropout=True)
         d1 = d_layer(d1, 2048, normalization=True, dropout=True)
-        validity = Dense(1, activation="sigmoid")(d1)
+        #d1 = d_layer(d1, 512, normalization=False, dropout=True)
+        # d1 = d_layer(d1, 2048, normalization=False, dropout=True)
+        # validity = Dense(1, activation="sigmoid")(d1)
+        validity = Dense(1, activation="sigmoid",dtype='float32')(d1)
         return Model(inpt, validity, name=name)
 
     def load_weights(self, preface="", folder=None):
@@ -262,34 +283,80 @@ class RetroCycleGAN():
                                                           threshold=0.90,
                                                           cache=False,
                                                           remove_constraint=rc)
+        print("SHapes",X_train.shape,Y_train.shape)
+        # import wandb
+        # wandb.init(project="retrogan")
+        #
+        # from wandb.keras import WandbCallback
+        # wandbcb = WandbCallback(
+        #     log_best_prefix="best_",
+        #     monitor='simverb',
+        #     verbose=0,
+        #     mode='auto',
+        #     save_weights_only=True,
+        #     log_weights=True,
+        #     save_model=True,
+        #     log_gradients=False,
+        #     log_evaluation=True,
+        #     log_batch_frequency=50)
+        # wandbcb.set_model(self.g_AB)
+
+        print(X_train)
+        print(Y_train)
+        print("*"*100)
+        # print(np.isnan(X_train).any())
+        # print(np.isnan(Y_train).any())
         print("Done")
 
         def load_batch(batch_size=32, always_random=False):
-            iterable = list(X_train.index)
-            shuffle(iterable)
-            batches = []
-            print("Prefetching batches")
-            for ndx in tqdm(range(0, len(iterable), batch_size), ncols=30):
-                ixs = iterable[ndx:min(ndx + batch_size, len(iterable))]
-                if always_random:
-                    ixs = list(np.array(iterable)[random.sample(range(0, len(iterable)), batch_size)])
-                imgs_A = X_train.loc[ixs]
-                imgs_B = Y_train.loc[ixs]
-                batches.append((imgs_A, imgs_B))
-            print("Begginging iteration")
-            # ds = tf.data.Dataset.from_tensor_slices(batches)
+            def _int_load():
+                iterable = list(Y_train.index)
+                shuffle(iterable)
+                batches = []
+                print("Prefetching batches")
+                for ndx in tqdm(range(0, len(iterable), batch_size)):
+                    try:
+                        ixs = iterable[ndx:min(ndx + batch_size, len(iterable))]
+                        if always_random:
+                            ixs = list(np.array(iterable)[random.sample(range(0, len(iterable)), batch_size)])
+                        imgs_A = X_train.loc[ixs]
+                        imgs_B = Y_train.loc[ixs]
+                        if np.isnan(imgs_A).any().any() or np.isnan(imgs_B).any().any():#np.isnan(imgs_B).any():
+                            # print(ixs)
+                            continue
 
+                        batches.append((imgs_A, imgs_B))
+                    except Exception as e:
+                        print("Skipping batch")
+                        # print(e)
+                return batches
+            # while True:
+            #     try:
+            batches = _int_load()
+                    # break
+                # except:
+                #     batches = None
+                
+            print("Begginging iteration")
             for i in tqdm(range(0, len(batches)), ncols=30):
                 imgs_A, imgs_B = batches[i]
-                yield imgs_A, imgs_B
+                yield imgs_A.values, imgs_B.values
 
         def load_random_batch(batch_size=32, batch_amount=1000000):
-            iterable = list(X_train.index)
+            iterable = list(Y_train.index)
             # shuffle(iterable)
-            ixs = random.sample(range(0, len(iterable)), batch_size)
-            fixs = np.array(iterable)[ixs]
-            imgs_A = X_train.loc[fixs]
-            imgs_B = Y_train.loc[fixs]
+            ixs = list(np.array(iterable)[random.sample(range(0, len(iterable)), batch_size)])
+            imgs_A = X_train.loc[ixs]
+            imgs_B = Y_train.loc[ixs]
+            def test_nan(a,b):
+                return np.isnan(a).any().any() or np.isnan(b).any().any()
+            while True:
+                if(test_nan(imgs_A,imgs_B)):
+                    ixs = list(np.array(iterable)[random.sample(range(0, len(iterable)), batch_size)])
+                    imgs_A = X_train.loc[ixs]
+                    imgs_B = Y_train.loc[ixs]
+                else:
+                    break
             return imgs_A, imgs_B
 
         def exp_decay(epoch):
@@ -298,169 +365,141 @@ class RetroCycleGAN():
             lrate = initial_lrate * math.exp(-k * epoch)
             return lrate
 
-        # noise = np.random.normal(size=(batch_size, dimensionality), scale=0.01)
-        dis_train_amount = 2.0
+        # noise = np.random.normal(size=(1, dimensionality), scale=0.001)
+        # noise = np.tile(noise,(batch_size,1))
+        dis_train_amount = 3.0
 
         self.compile_all("adam")
-
+        # ds = tf.data.Dataset.from_generator(load_batch,(tf.float32,tf.float32),args=(batch_size,))
+        # ds = ds.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
         def train_(training_epochs, always_random=False):
             for epoch in range(training_epochs):
-                # dataset1 = tf.data.Dataset.from_generator(load_batch,
-                #                                           (tf.float32, tf.float32),
-                #                                           args=(batch_size, True)
-                #                                           )
-                # for count_batch in dataset1.take(5).interleave(4).prefetch(3):
-                #     print(count_batch)
-                # exit(1)
+                noise = np.random.normal(size=(batch_size, dimensionality),scale=0.01)
                 for batch_i, (imgs_A, imgs_B) in enumerate(load_batch(batch_size, always_random=always_random)):
-                    try:
-                        fake_B = self.g_AB.predict(imgs_A)
-                        fake_A = self.g_BA.predict(imgs_B)
-                        # Train the discriminators (original images = real / translated = Fake)
-                        dA_loss = None
-                        dB_loss = None
-                        valid = np.ones((imgs_A.shape[0],))  # *noisy_entries_num,) )
-                        fake = np.zeros((imgs_A.shape[0],))  # *noisy_entries_num,) )
+                # for batch_i, (imgs_A, imgs_B) in enumerate(ds):
+                    #try:
+                    # if epoch % 2 == 0:
+                    #     # print("Adding noise")
+                    #     imgs_A = np.add(noise[0:imgs_A.shape[0], :], imgs_A)
+                    #     imgs_B = np.add(noise[0:imgs_B.shape[0], :], imgs_B)
 
-                        for i in range(int(dis_train_amount)):
-                            nimgs_A = imgs_A
-                            nimgs_B = imgs_B
-                            # if i % 2 == 0:
-                            #     print("Adding noise")
-                            #     nimgs_A = np.add(noise[0:imgs_A.shape[0], :], imgs_A)
-                            #     nimgs_B = np.add(noise[0:imgs_B.shape[0], :], imgs_B)
+                    fake_B = self.g_AB.predict(imgs_A)
+                    fake_A = self.g_BA.predict(imgs_B)
+                    # Train the discriminators (original images = real / translated = Fake)
+                    dA_loss = None
+                    dB_loss = None
+                    valid = np.ones((imgs_A.shape[0],))  # *noisy_entries_num,) )
+                    fake = np.zeros((imgs_A.shape[0],))  # *noisy_entries_num,) )
 
-                            dA_loss_real = self.d_A.train_on_batch(nimgs_A, valid)
-                            dA_loss_fake = self.d_A.train_on_batch(fake_A, fake)
-                            if dA_loss is None:
-                                dA_loss = 0.5 * np.add(dA_loss_real, dA_loss_fake)
-                            else:
-                                dA_loss += 0.5 * np.add(dA_loss_real, dA_loss_fake)
+                    for i in range(int(dis_train_amount)):
+                        nimgs_A = imgs_A
+                        nimgs_B = imgs_B
 
-                            dB_loss_real = self.d_B.train_on_batch(nimgs_B, valid)
-                            dB_loss_fake = self.d_B.train_on_batch(fake_B, fake)
-                            if dB_loss is None:
-                                dB_loss = 0.5 * np.add(dB_loss_real, dB_loss_fake)
-                            else:
-                                dB_loss += 0.5 * np.add(dB_loss_real, dB_loss_fake)
-                        d_loss = 0.5 * np.add(dA_loss / dis_train_amount, dB_loss / dis_train_amount)
-                        # Total disciminator loss
-                        # ------------------
-                        #  Train Generators
-                        # ------------------
-                        # Train the generators
-                        rand_a, rand_b = load_random_batch(batch_size=32)
-                        mm_a_loss = self.g_AB.train_on_batch(rand_a, rand_b)
-                        mm_b_loss = self.g_BA.train_on_batch(rand_b, rand_a)
+                        dA_loss_real = self.d_A.train_on_batch(nimgs_A, valid)
+                        dA_loss_fake = self.d_A.train_on_batch(fake_A, fake)
+                        if dA_loss is None:
+                            dA_loss = 0.5 * np.add(dA_loss_real, dA_loss_fake)
+                        else:
+                            dA_loss += 0.5 * np.add(dA_loss_real, dA_loss_fake)
 
-                        g_loss = self.combined.train_on_batch([imgs_A, imgs_B],
-                                                              [valid, valid,
-                                                               imgs_A, imgs_B,
-                                                               imgs_A, imgs_B])
+                        dB_loss_real = self.d_B.train_on_batch(nimgs_B, valid)
+                        dB_loss_fake = self.d_B.train_on_batch(fake_B, fake)
+                        if dB_loss is None:
+                            dB_loss = 0.5 * np.add(dB_loss_real, dB_loss_fake)
+                        else:
+                            dB_loss += 0.5 * np.add(dB_loss_real, dB_loss_fake)
+                    d_loss = 0.5 * np.add(dA_loss / dis_train_amount, dB_loss / dis_train_amount)
+                    # Total disciminator loss
+                    # ------------------
+                    #  Train Generators
+                    # ------------------
+                    # Train the generators
+                    # rand_a, rand_b = load_random_batch(batch_size=batch_size)
+                    mm_a_loss = self.g_AB.train_on_batch(imgs_A, imgs_B)
+                    mm_b_loss = self.g_BA.train_on_batch(imgs_B, imgs_A)
+                    # self.d_A.trainable = False
+                    # self.d_B.trainable = False
 
-                        def named_logs(model, logs):
-                            result = {}
-                            for l in zip(model.metrics_names, logs):
-                                result[l[0]] = l[1]
-                            return result
+                    g_loss = self.combined.train_on_batch([imgs_A, imgs_B],
+                                                          [valid, valid,
+                                                           imgs_A, imgs_B,
+                                                           imgs_A, imgs_B,
+                                                           imgs_A, imgs_B])
+                    # self.d_A.trainable = True
+                    # self.d_B.trainable = True
 
-                        r = named_logs(self.combined, g_loss)
-                        r.update({
-                            'mma': mm_a_loss,
-                            'mmb': mm_b_loss,
-                        })
-                        # if r["loss"] >10:
-                        #     self.combined.compile(loss=['binary_crossentropy', 'binary_crossentropy',
-                        #                                 'mae', 'mae',
-                        #                                 'mae', 'mae'],
-                        #                           loss_weights=[1, 1,
-                        #                                         0,0,
-                        #                                         0,0],
-                        #                           # TODO ADD A CUSTOM LOSS THAT SIMPLY ADDS A
-                        #                           # GENERALIZATION CONSTRAINT ON THE MAE
-                        #                           optimizer=tf.optimizers.Adam(lr=0.0001,epsilon=1e-9))
-                        #     self.combined_callback.on_epoch_end(epoch,{"nerfed_losses":1})
+                    def named_logs(model, logs):
+                        result = {}
+                        for l in zip(model.metrics_names, logs):
+                            result[l[0]] = l[1]
+                        return result
 
-                        self.combined_callback.on_epoch_end(batch_i, r)
-                        # profiler_result = profiler.stop()
-                        # profiler.save("./logs", profiler_result)
-                        elapsed_time = datetime.datetime.now() - start_time
-                        if batch_i % 50 == 0:
-                            print(
-                                "\n[Epoch %d/%d] [Batch %d] [D loss: %f, acc: %3d%%] [G loss: %05f, adv: %05f, recon: %05f, id: %05f][mma:%05f,mmb:%05f]time: %s " \
-                                % (epoch, training_epochs,
-                                   batch_i,
-                                   d_loss[0], 100 * d_loss[1],
-                                   g_loss[0],
-                                   np.mean(g_loss[1:3]),
-                                   np.mean(g_loss[3:5]),
-                                   np.mean(g_loss[5:6]),
-                                   mm_a_loss,
-                                   mm_b_loss,
-                                   elapsed_time))
-                    except Exception as e:
-                        print("There was a problem")
-                        print("*"*100)
-                        print(e)
-                        print("*"*100)
+                    r = named_logs(self.combined, g_loss)
+                    r.update({
+                        'mma': mm_a_loss,
+                        'mmb': mm_b_loss,
+                    })
+
+                    elapsed_time = datetime.datetime.now() - start_time
+                    if batch_i % 50 == 0:
+                        print(
+                            "\n[Epoch %d/%d] [Batch %d] [D loss: %f, acc: %3d%%] "
+                            "[G loss: %05f, adv: %05f, recon: %05f, recon_mm: %05f,id: %05f][mma:%05f,mmb:%05f]time: %s " \
+                            % (epoch, training_epochs,
+                               batch_i,
+                               d_loss[0], 100* d_loss[1],
+                               g_loss[0],
+                               np.mean(g_loss[1:3]),
+                               np.mean(g_loss[3:5]),
+                               np.mean(g_loss[5:7]),
+                               np.mean(g_loss[7:8]),
+                               mm_a_loss,
+                               mm_b_loss,
+                               elapsed_time))
+                        # wandbcb.on_batch_end(batch_i, r)
+                        # wandb.log({"batch_num":batch_i,"epoch_num":epoch})
+                        # self.combined_callback.on_batch_end(batch_i, r)
+
+                    # except Exception as e:
+                    #     print("There was a problem")
+                    #     print("*"*100)
+                    #     print(e)
+                    #     print("*"*100)
 
                 # try:
                 # if epoch % 5 == 0:
                 #     self.save_model(name=str(epoch))
-                self.save_model(name="checkpoint")
                 print("\n")
                 sl = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimLex-999.txt",
-                                    fast_text_location="fasttext_model/cc.en.300.bin")[0]
+                                    fast_text_location="fasttext_model/cc.en.300.bin",prefix="en_")[0]
                 sv = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimVerb-3500.txt",
-                                    fast_text_location="fasttext_model/cc.en.300.bin")[0]
+                                    fast_text_location="fasttext_model/cc.en.300.bin",prefix="en_")[0]
+                if epoch%4==0:
+                    self.save_model(name="checkpoint_"+str(epoch))
+
                 res.append((sl, sv))
+                # if epoch%10==0:
+                #     testwords = ["human", "cat"]
+                #     print("The test word vectors are:", testwords)
+                    # ft version
+                    # vals = np.array(
+                    #     rcgan.g_AB.predict(np.array(X_train.values).reshape((-1, dimensionality)),
+                    #                        batch_size=64)
+                    # )
 
-                testwords = ["human", "cat"]
-                print("The test word vectors are:", testwords)
-                # ft version
-                vals = np.array(
-                    rcgan.g_AB.predict(np.array(X_train.values).reshape((-1, dimensionality)),
-                                       batch_size=64)
-                )
+                    # testds = pd.DataFrame(data=vals, index=X_train.index)
+                    # tools.datasets.update({"mine": [dataset["original"], dataset["retrofitted"]]})
+                    # fastext_words = tools.find_in_fasttext(testwords, dataset="mine", prefix="en_")
+                    # for idx, word in enumerate(testwords):
+                    #     print(word)
+                    #     retro_representation = rcgan.g_AB.predict(fastext_words[idx].reshape(1, dimensionality))
+                    #     print(tools.find_closest_in_dataset(retro_representation, testds))
 
-                testds = pd.DataFrame(data=vals, index=X_train.index)
-                tools.datasets.update({"mine": [dataset["original"], dataset["retrofitted"]]})
-                fastext_words = tools.find_in_fasttext(testwords, dataset="mine", prefix="en_")
-                for idx, word in enumerate(testwords):
-                    print(word)
-                    retro_representation = rcgan.g_AB.predict(fastext_words[idx].reshape(1, dimensionality))
-                    print(tools.find_closest_in_dataset(retro_representation, testds))
-
-                self.combined_callback.on_epoch_end(epoch, {"simlex": sl, "simverb": sv})
-                if epoch ==50:
-                    print("Nerfing the identity loss the learning rate")
-                    self.combined.compile(loss=['binary_crossentropy', 'binary_crossentropy',
-                                                'mae', 'mae',
-                                                'mae', 'mae'],
-                                          loss_weights=[1, 1,
-                                                        self.lambda_cycle, self.lambda_cycle,
-                                                        0, 0],
-                                          # TODO ADD A CUSTOM LOSS THAT SIMPLY ADDS A
-                                          # GENERALIZATION CONSTRAINT ON THE MAE
-                                          optimizer=self.combined.optimizer)
-
-                if epoch ==124:
-                    print("Dropping the learning rate")
-                    g1_current_learning_rate =K.eval(self.g_AB.optimizer.lr)/10.0
-                    g2_current_learning_rate = K.eval(self.g_BA.optimizer.lr)/10.0
-                    comb_current_learning_rate = K.eval(self.combined.optimizer.lr)/10.0
-                    d_current_learning_rate =K.eval(self.d_A.optimizer.lr)/10.0
-                    d2_current_learning_rate = K.eval(self.d_B.optimizer.lr)/10.0
-                    K.set_value(self.d_A.optimizer.lr, d_current_learning_rate)  # set new lr
-                    K.set_value(self.d_B.optimizer.lr, d2_current_learning_rate)  # set new lr
-                    K.set_value(self.g_AB.optimizer.lr, g1_current_learning_rate)  # set new lr
-                    K.set_value(self.g_BA.optimizer.lr, g2_current_learning_rate)  # set new lr
-                    K.set_value(self.combined.optimizer.lr, comb_current_learning_rate)  # set new lr
+                #self.combined_callback.on_epoch_end(epoch, {"simlex": sl, "simverb": sv})
+                #wandbcb.on_epoch_end(epoch, {"simlex": sl, "simverb": sv})
 
                 print(res)
                 print("\n")
-                # except Exception as e:
-                #     print(e)
 
         print("Actual training")
         train_(pretraining_epochs)
@@ -469,9 +508,9 @@ class RetroCycleGAN():
         train_(epochs, always_random=True)
         print("Final performance")
         sl = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimLex-999.txt",
-                            fast_text_location="fasttext_model/cc.en.300.bin")[0]
+                            fast_text_location="fasttext_model/cc.en.300.bin",prefix="en_")[0]
         sv = tools.test_sem(rcgan.g_AB, dataset, dataset_location="testing/SimVerb-3500.txt",
-                            fast_text_location="fasttext_model/cc.en.300.bin")[0]
+                            fast_text_location="fasttext_model/cc.en.300.bin",prefix="en_")[0]
         res.append((sl, sv))
 
         self.save_model(name="final")
@@ -483,6 +522,7 @@ class RetroCycleGAN():
         self.g_AB.save(os.path.join(self.save_folder, name + "toretrogen.h5"), include_optimizer=False)
         self.g_BA.save(os.path.join(self.save_folder, name + "fromretrogen.h5"), include_optimizer=False)
         self.combined.save(os.path.join(self.save_folder, name + "combined_model.h5"), include_optimizer=False)
+        # wandb.save(os.path.join(self.save_folder, name + "toretrogen.h5"))
 
 
 if __name__ == '__main__':
@@ -497,22 +537,35 @@ if __name__ == '__main__':
         except RuntimeError as e:
             # Memory growth must be set before GPUs have been initialized
             print(e)
+
+
+    ##input("press enter")
     print("Removing!!!")
     print("*" * 100)
     shutil.rmtree("logs/", ignore_errors=True)
     print("Done!")
     print("*" * 100)
     disable_eager_execution()
+    # policy = mixed_precision.Policy('mixed_float16')
+    # mixed_precision.set_policy(policy)
+    # print('Compute dtype: %s' % policy.compute_dtype)
+    # print('Variable dtype: %s' % policy.variable_dtype)
     # with tf.device('/GPU:0'):
     tools.dimensionality = dimensionality
-    postfix = "ftar"
+    postfix = "retrogan"
     test_ds = [
-        {
-            "original":"completefastext.txt.hdf",
-            "retrofitted":"fullfasttext.hdf",
-            "directory":"ft_full_alldata/",
-            "rc":None
-        },
+        #{
+        #    "original":"original_ft_cc_nb.hdf",
+        #    "retrofitted":"retrofitted_ft_cc_nb.hdf",
+        #    "directory":"../conceptnetretrogan/",
+        #    "rc":None
+        #}
+        #{
+        #    "original":"completefastext.txt.hdf",
+        #    "retrofitted":"fullfasttext.hdf",
+        #    "directory":"ft_full_alldata/",
+        #    "rc":None
+        #},
         # {
         #     "original":"completefastext.txt.hdf",
         #     "retrofitted":"disjointfasttext.hdf",
@@ -537,24 +590,66 @@ if __name__ == '__main__':
         #     "directory": "glove_disjoint_paperdata/",
         #     "rc": "adversarial_paper_data/simlexsimverb.words"
         # },
-        # {
-        #     "original": "completeglove.txt.hdf",
-        #     "retrofitted": "fullglove.hdf",
-        #     "directory": "glove_full_paperdata/",
-        #     "rc": None
-        # },
+       # {
+       #     "original": "completeglove.txt.hdf",
+       #     "retrofitted": "fullglove.hdf",
+       #     "directory": "glove_full_paperdata/",
+       #     "rc": None
+       # },
         # {
         #     "original": "completefastext.txt.hdf",
         #     "retrofitted": "disjointfasttext.hdf",
         #     "directory": "ft_disjoint_paperdata/",
         #     "rc": "adversarial_paper_data/simlexsimverb.words"
         # },
+        #{
+        #    "original": "completefastext.txt.hdf",
+        #    "retrofitted": "fullfasttext.hdf",
+        #    "directory": "ft_full_paperdata/",
+        #    "rc": None
+        #},
         # {
-        #     "original": "completefastext.txt.hdf",
-        #     "retrofitted": "fullfasttext.hdf",
-        #     "directory": "ft_full_paperdata/",
+        #     "original": "cskg_ft_embs.h5",
+        #     "retrofitted": "cskg_ft_ar_embs.h5",
+        #     "directory": "cskg_atomic_data2/",
+        #     "rc": None
+        # },
+        # {
+        #     "original": "fasttext_seen.hdf",
+        #     "retrofitted": "fasttext_seen_attractrepelretrofitted.hdf",
+        #     "directory": "Data/ft_full/",
+        #     "rc": None
+        # },
+        # {
+        #     "original": "fasttext_seen.hdf",
+        #     "retrofitted": "fasttext_seen_ook_attractrepelretrofitted.hdf",
+        #     "directory": "Data/ft_ook/",
+        #     "rc": None
+        # },
+        # {
+        #     "original": "glove_seen.hdf",
+        #     "retrofitted": "glove_seen_attractrepelretrofitted.hdf",
+        #     "directory": "Data/glove_full/",
+        #     "rc": None
+        # },
+        # {
+        #     "original": "glove_seen.hdf",
+        #     "retrofitted": "glove_seen_ook_attractrepelretrofitted.hdf",
+        #     "directory": "Data/glove_ook/",
         #     "rc": None
         # }
+        # {
+        #     "original": "ft_nb_seen.h5",
+        #     "retrofitted": "nb_retrofitted_attractrepelretrofitted.h5",
+        #     "directory": "Data/nb_full/",
+        #     "rc": None
+        # },
+        {
+            "original": "ft_nb_seen.h5",
+            "retrofitted": "nb_retrofitted_ook_attractrepel.h5",
+            "directory": "Data/nb_ook/",
+            "rc": None
+        },
     ]
     print("Testing")
     print(test_ds)
@@ -572,20 +667,22 @@ if __name__ == '__main__':
     os.makedirs(final_save_folder, exist_ok=True)
 
     for idx, ds in enumerate(test_ds):
-        save_folder = "models/trained_retrogan/" + ds["directory"]
+        save_folder = "models/trained_retrogan/" + ds["directory"]+"500modarch"
         if not os.path.exists(save_folder):
             os.makedirs(save_folder, exist_ok=True)
 
         print("Training")
         print(ds)
         tools.directory = ds["directory"]
-        rcgan = RetroCycleGAN(save_folder=save_folder, batch_size=32, generator_lr=0.00001, discriminator_lr=0.0001)
-
-        # rcgan.load_weights(preface="final", folder="/media/pedro/ssd_ext/mltests/models/trained_retrogan/2020-01-27 00:34:26.680643ftar")
+        bs = 32
+        rcgan = RetroCycleGAN(save_folder=save_folder, batch_size=bs,
+                              generator_lr=0.00005, discriminator_lr=0.0001)
+        #rcgan.load_weights(preface="final", folder="/media/pedro/ssd_ext/OOVconverter/models/trained_retrogan/Data")
         sl = tools.test_sem(rcgan.g_AB, ds, dataset_location="testing/SimLex-999.txt",
-                            fast_text_location="fasttext_model/cc.en.300.bin")[0]
+                            fast_text_location="fasttext_model/cc.en.300.bin",prefix="en_")[0]
+        #continue
         models.append(rcgan)
-        ds_res = rcgan.train(pretraining_epochs=1000, epochs=0, batch_size=32, dataset=ds, rc=ds["rc"])
+        ds_res = rcgan.train(pretraining_epochs=500, epochs=0, batch_size=bs, dataset=ds, rc=ds["rc"])
         results.append(ds_res)
         print("*" * 100)
         print(ds, results[-1])

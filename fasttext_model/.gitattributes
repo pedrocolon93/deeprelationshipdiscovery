@@ -1,0 +1,8 @@
+*.bin filter=lfs diff=lfs merge=lfs -text
+attract_repel.hd5clean filter=lfs diff=lfs merge=lfs -text
+fitted-debias.hd5clean filter=lfs diff=lfs merge=lfs -text
+fitted.hd5clean filter=lfs diff=lfs merge=lfs -text
+unfitted.hd5clean filter=lfs diff=lfs merge=lfs -text
+*.hd5* filter=lfs diff=lfs merge=lfs -text
+*.txt filter=lfs diff=lfs merge=lfs -text
+*.h5 filter=lfs diff=lfs merge=lfs -text
