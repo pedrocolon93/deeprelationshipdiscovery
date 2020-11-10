@@ -20,7 +20,6 @@ from tensorflow.python.keras import Model
 from tensorflow.python.framework.ops import disable_eager_execution
 from tqdm import tqdm
 import tensorflow as tf
-from tensorflow_addons.optimizers import AdamW
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
 # tf.debugging.set_log_device_placement(True)

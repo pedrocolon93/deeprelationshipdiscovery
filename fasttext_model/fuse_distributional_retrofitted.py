@@ -7,46 +7,41 @@ from tqdm import tqdm
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("inputtext",
-                        help="Text vectors that will be converted to hdf",
-                        default="cleaned_corpus.txt")
-    parser.add_argument("outputhdf",default="original_ft.hd5clean",
-                        help="The output hdf file")
-    parser.add_argument("--limit",default=200000,
-                        help="Limit of vectors to load",
-                        type=int)
-    parser.add_argument("-sf",default=False, action='store_true')
+    parser.add_argument("distributional",
+                        help="Text vectors that will be fused with retrofitted ones",
+                        default="distributional.txt")
+    parser.add_argument("retrofitted",default="retrofitted.txt",
+                        help="File that contains the retrofitted vectors")
+    parser.add_argument("output",default="fused.txt",
+                        help="The name of the fusion output files",)
+    parser.add_argument("-l",default=None, type=int)
     args = parser.parse_args()
 
-    input_filename = args.inputtext
-    output_filename = args.outputhdf
-
-    count = 0
-    prefix = ""
-    indexes = []
-    vectors = []
-    if args.limit is not None:
-        limit = args.limit
-    skip_first = args.sf
-
-    with open(input_filename,encoding="utf-8") as vec_file:
-        for line in tqdm(vec_file):
-            count+=1
-            if skip_first: skip_first=False
-            if count == limit:
-                print("Reached limit",limit)
-                break
-            word = line.strip().split(" ")[0]
-            word = prefix+word
-            vec = []
-            for element in line.strip().split(" ")[1:]:
-                vec.append(float(element))
-            indexes.append(word)
-            vectors.append(np.array(vec))
-            if count%10000==0:
-                print(count)
-    print("Outputting df")
-    df = pd.DataFrame(index=indexes,data=vectors)
-    df.to_hdf(output_filename,"mat")
-    print("Finished")
-
+    distributional_filename = args.distributional
+    retrofitted_filename = args.retrofitted
+    output_filename = args.output
+    limit = args.l
+    prefix = "en_"
+    with open(distributional_filename) as dist_file:
+        with open(output_filename,"w") as out_file:
+            with open(retrofitted_filename) as retrofitted_file:
+                labels = []
+                vecs = []
+                print("INgesting retrofitted")
+                for line in tqdm(retrofitted_file):
+                    separated = line.split(" ")
+                    labels.append(separated[0].strip().replace(prefix,""))
+                    vecs.append(line.replace(prefix,""))
+                print("Going through the original and replacing.")
+                count = 0
+                for line in tqdm(dist_file):
+                    sep = line.split(" ")
+                    try:
+                        idx = labels.index(sep[0].strip().replace(prefix,""))
+                        out_file.write(vecs[idx].replace(prefix,""))
+                    except:
+                        out_file.write(line.replace(prefix,""))
+                    count+=1
+                    if limit:
+                        if count==limit:
+                            break
