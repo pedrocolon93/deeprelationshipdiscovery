@@ -363,6 +363,35 @@ def load_all_words_dataset(dataset, seed=42, test_split=0.1, save_folder="./", c
         return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
     else:
         return np.array(X_train.values),np.array(Y_train.values),np.array(X_train.index)#, np.array(X_test.values),np.array(Y_test.values)
+def load_all_words_dataset_final(original,retrofitted, save_folder="./", cache=True, return_idx=False):
+    if cache:
+        print("Reusing cache")
+        X_train = pd.read_hdf(os.path.join(save_folder,"filtered_x"), 'mat', encoding='utf-8')
+        Y_train = pd.read_hdf(os.path.join(save_folder,"filtered_y"),'mat',encoding='utf-8')
+
+        if not return_idx:
+            return np.array(X_train.values), np.array(Y_train.values)#, np.array(X_test.values), np.array(Y_test.values)
+        else:
+            return np.array(X_train.values), np.array(Y_train.values), np.array(X_train.index)
+
+    print("Searching")
+    print("for:", original, retrofitted)
+    o = pd.read_hdf(original, 'mat', encoding='utf-8')
+    r = pd.read_hdf(retrofitted, 'mat', encoding='utf-8')
+    cns = []
+    print("Loading concepts")
+    for i in tqdm(r.index):
+        cns.append(i)
+    X_train = o.loc[cns, :]
+    Y_train = r.loc[cns, :]
+    print("Dumping training")
+
+    X_train.to_hdf(os.path.join(save_folder,"filtered_x"), "mat")
+    Y_train.to_hdf(os.path.join(save_folder,"filtered_y"),"mat")
+
+    print("Returning")
+    return X_train,Y_train
+
 def load_all_words_dataset_3(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95, return_idx=False,remove_constraint=None):
     global original, retrofitted
     xpath = os.path.join(save_folder,"filtered_x")
@@ -428,11 +457,6 @@ def load_all_words_dataset_3(dataset, seed=42, test_split=0.1, save_folder="./",
     # Y_test.to_hdf(os.path.join(save_folder,"filtered_y_test"), "mat")
     print("Returning")
     return X_train,Y_train
-    # if not return_idx:
-    #     return np.array(X_train.values),np.array(Y_train.values)#, np.array(X_test.values),np.array(Y_test.values)
-    # else:
-    #     return np.array(X_train.values),np.array(Y_train.values),np.array(X_train.index)#, np.array(X_test.values),np.array(Y_test.values)
-
 
 def load_training_input_2(limit=10000,normalize=True, seed = 42,test_split=0.1):
     global common_retro_vectors_train,common_retro_vectors_test,common_vectors_test,common_vectors_train

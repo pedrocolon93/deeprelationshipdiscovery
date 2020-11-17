@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from remove_from_corpus import *
+from remove_constraints_from_vectxt import *
 
 path_to_ar = "/media/pedro/ssd_ext/attract-repel/"
 ar_env_name = "attract_repel"

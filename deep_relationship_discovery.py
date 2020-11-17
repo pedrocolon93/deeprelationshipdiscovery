@@ -17,8 +17,8 @@ import sklearn
 import tensorflow as tf
 # from keras.utils import plot_model
 from tqdm import tqdm
-
-from retrogan_trainer_attractrepel_working import RetroCycleGAN
+import os
+from rcgan import RetroCycleGAN
 from tools import generate_fastext_embedding
 
 
@@ -403,22 +403,33 @@ def create_model_attn():
 
     class MyAttention(tf.keras.layers.Layer):
 
-        def __init__(self, max_tokens=512, dimension=256, num_heads=4):
+        def __init__(self, max_tokens=32, dimension=32, num_heads=4):
             super(MyAttention, self).__init__()
-            w_init = tf.random_normal_initializer()
-            self.keys = tf.Variable(initial_value=w_init(shape=(max_tokens, dimension),
-                                                      dtype='float32'),
-                                 trainable=True)
-            self.values = tf.Variable(initial_value=w_init(shape=(max_tokens, dimension),
-                                                         dtype='float32'),
-                                    trainable=True)
-            self.query_downscaler = tf.keras.layers.Dense(dimension)
-            self.att_heads = [tf.keras.layers.Attention(use_scale=True) for x in range(num_heads)]
+            # w_init = tf.random_normal_initializer()
+            self.max_tokens = max_tokens
+            self.token_dim = dimension
+            self.keys =tf.keras.layers.Embedding(
+                max_tokens, dimension, trainable=True,input_length=max_tokens
+            )
+            # self.keys = tf.Variable(initial_value=w_init(shape=(max_tokens, dimension),
+            #                                           dtype='float32'),
+            #                      trainable=True)
+            self.values = tf.keras.layers.Embedding(
+                max_tokens, dimension,trainable=True, input_length=max_tokens
+            )
+            # self.values = tf.Variable(initial_value=w_init(shape=(max_tokens, dimension),
+            #                                              dtype='float32'),
+            #                         trainable=True)
+            self.query_downscaler = tf.keras.layers.Dense(dimension,trainable=True)
+            self.att_heads = [tf.keras.layers.Attention(use_scale=True,trainable=True) for x in range(num_heads)]
             # self.att_fuse = tf.keras.layers.Dense(intermediate_size)
 
         def call(self, inputs):
             q = self.query_downscaler(inputs)
-            atts = [x([q, self.values,self.keys])for x in self.att_heads]
+            vin = np.array([[x for x in range(self.max_tokens)]for x in range(128)])
+            v = self.values(vin)
+            k = self.keys(vin)
+            atts = [x([q, v, k])for x in self.att_heads]
             head_conc = tf.keras.layers.Concatenate()(atts)
             # head_conc = self.att_fuse(head_conc)
             return head_conc
@@ -438,7 +449,8 @@ def create_model_attn():
     semi_final_layer = tf.keras.layers.Dense(intermediate_size, activation='relu')(attention_expand)
     semi_final_layer = tf.keras.layers.BatchNormalization()(semi_final_layer)
     common_layers_model = tf.keras.Model([wv1, wv2], semi_final_layer, name="Common layers")
-    semi_final_layer = semi_final_layer+head_conc
+    head_resize = tf.keras.layers.Dense(intermediate_size)(head_conc)
+    semi_final_layer = semi_final_layer+head_resize
     # common_optimizer = Adam(lr=0.000002)
     # common_layers_model.compile()
     # Output layer
@@ -452,6 +464,8 @@ def create_model_attn():
     # prob_model_dict = {}
     # FOR PICS
     for rel in relations:
+        layer_name = rel.replace("/r/", "")
+
         model_outs = []
         task_layer = tf.keras.layers.Dense(task_layer_neurons, activation='relu',name=layer_name+"init_proj")(semi_final_layer)
         # task_layer = tf.keras.layers.BatchNormalization()(task_layer)
@@ -462,7 +476,6 @@ def create_model_attn():
         task_layer = tf.keras.layers.BatchNormalization()(task_layer)
         losses = []
 
-        layer_name = rel.replace("/r/", "")
         # loss = "mean_squared_error"
         loss = "binary_crossentropy"
 
@@ -483,16 +496,16 @@ def create_model_attn():
         # drdp = Model([wv1, wv2], probability, name=layer_name + "probability")
         drd = tf.keras.Model([wv1, wv2], model_outs, name=layer_name)
         # optimizer = tf.keras.optimizers.Adam(lr=0.001)
-        lr_schedule = tf.optimizers.schedules.ExponentialDecay(2e-4, 9000, 0.95)
-        wd_schedule = tf.optimizers.schedules.ExponentialDecay(5e-5, 9000, 0.95)
-        optimizer = AdamW(learning_rate=lr_schedule, weight_decay=lambda: None)
-        optimizer.weight_decay = lambda: wd_schedule(optimizer.iterations)
+        # lr_schedule = tf.optimizers.schedules.ExponentialDecay(2e-4, 9000, 0.95)
+        # wd_schedule = tf.optimizers.schedules.ExponentialDecay(5e-5, 9000, 0.95)
+        optimizer = tf.keras.optimizers.Adam(lr=0.001)
+        # optimizer.weight_decay = lambda: wd_schedule(optimizer.iterations)
 
         drd.compile(optimizer=optimizer, loss=losses)
         # drdp.compile(optimizer=optimizer, loss=[loss])
         # drdp.summary()
         drd.summary()
-        tf.keras.utils.plot_model(drd,show_shapes=True)
+        # tf.keras.utils.plot_model(drd,show_shapes=True)
         model_dict[layer_name] = drd
 
         # prob_model_dict[layer_name] = drdp
@@ -1062,12 +1075,12 @@ if __name__ == '__main__':
     # del retrofitted_embeddings
     # gc.collect()
     print("Creating model...")
-    name = input("Model name")
-    # name = "attention_sota"
+    # name = input("Model name")
+    name = "testattention"
     save_fol = "trained_models/deepreldis/"+name+"_"+str(datetime.datetime.now())+"/"
     # save_fol = "trained_models/deepreldis/attention_sota_2020-04-12 12:18:20.076260/"
-    model = create_model()
-    # model = create_model_attn()
+    # model = create_model()
+    model = create_model_attn()
     # model = create_model_akbc()
     # model = create_model_akbc_baseline()
     print("Done\nLoading data")
