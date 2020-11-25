@@ -118,9 +118,9 @@ if __name__ == '__main__':
         bs = args.batch_size
         rcgan = RetroCycleGAN(save_folder=args.save_folder, batch_size=args.batch_size,
                               generator_lr=args.g_lr, discriminator_lr=args.d_lr)
-        # rcgan.load_weights(preface="final", folder="/media/pedro/ssd_ext/OOVconverter/models/trained_retrogan/Data")
-        # sl = tools.test_sem(rcgan.g_AB, ds, dataset_location="testing/SimLex-999.txt",
-        #                     fast_text_location="fasttext_model/cc.en.300.bin",prefix="en_")[0]
+        rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_nb_retrogan/")
+        sl = tools.test_sem(rcgan.g_AB, ds, dataset_location="testing/SimLex-999.txt",
+                            fast_text_location="fasttext_model/cc.en.300.bin",prefix="en_")[0]
         # continue
         models.append(rcgan)
         ds_res = rcgan.train(epochs=args.epochs, batch_size=bs, dataset=ds, save_folder=rcgan.save_folder,

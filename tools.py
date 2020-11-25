@@ -904,7 +904,7 @@ def test_sem(model, dataset, dataset_location='SimLex-999.txt',fast_text_locatio
     if isinstance(dataset,pd.DataFrame):
         ds_model = dataset
     elif dataset is not None:
-        ds_model = pd.read_hdf(dataset["directory"]+dataset["original"],"mat")
+        ds_model = pd.read_hdf(dataset["original"],"mat")
 
         # ds_model=ds_model.swapaxes(0,1)
     retrogan = model
