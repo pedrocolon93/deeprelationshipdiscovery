@@ -48,13 +48,23 @@ if __name__ == '__main__':
                         help="The prefix for the checkpoints generated while training")
     parser.add_argument("--epochs_per_checkpoint", default=4, type=int,
                         help="The amount of epochs per checkpoint saved.")
-    parser.add_argument("--epochs", default=500, type=int, help="Amount of epochs")
+    parser.add_argument("--epochs", default=50, type=int, help="Amount of epochs")
+    parser.add_argument("--iters", default=None, type=int, help="Amount of iterations, overrides epochs")
+
     parser.add_argument("--g_lr", default=0.00005, type=float, help="Generator learning rate")
     parser.add_argument("--d_lr", default=0.0001, type=float, help="Discriminator learning rate")
     parser.add_argument("--batch_size", default=32, type=int, help="Batch size")
     parser.add_argument("--dis_train_amount", default=3, type=int,
                         help="The amount of times to run a discriminator through the batch")
     args = parser.parse_args()
+    parser.add_argument("--one_way_mm", type=bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--cycle_mm", type=bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--cycle_dis", type=bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--id_loss", type=bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
 
     print("Configuring GPUs to use only needed memory")
     gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -117,20 +127,30 @@ if __name__ == '__main__':
         print("Training")
         print(ds)
         bs = args.batch_size
-        rcgan = RetroCycleGAN(save_folder=args.save_folder, batch_size=args.batch_size,
-                              generator_lr=args.g_lr, discriminator_lr=args.d_lr)
+        rcgan = RetroCycleGAN(
+            save_folder=args.save_folder,
+            generator_lr=args.g_lr,
+            discriminator_lr=args.d_lr,
+            one_way_mm=args.one_way_mm,
+            cycle_mm=args.cycle_mm,
+            cycle_dis=args.cycle_dis,
+            id_loss=args.id_loss
+        )
         # rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_nb_retrogan/")
         rcgan.to_device("cpu")
         sl = tools.test_sem(rcgan.g_AB, ds, dataset_location="testing/SimLex-999.txt",
-                            fast_text_location="fasttext_model/cc.en.300.bin",prefix="en_",pt=True)[0]
+                            fast_text_location="fasttext_model/cc.en.300.bin", prefix="en_", pt=True)[0]
         cuda = torch.cuda.is_available()
         rcgan.to_device("cuda" if cuda else "cpu")
 
         # continue
         rcgan.save_model("test")
         models.append(rcgan)
-        ds_res = rcgan.train(epochs=args.epochs, batch_size=bs, dataset=ds, save_folder=rcgan.save_folder,
-                             epochs_per_checkpoint=args.epochs_per_checkpoint, dis_train_amount=args.dis_train_amount)
+        ds_res = rcgan.train(epochs=args.epochs, batch_size=bs, dataset=ds,
+                             save_folder=rcgan.save_folder,
+                             epochs_per_checkpoint=args.epochs_per_checkpoint,
+                             dis_train_amount=args.dis_train_amount,
+                             iters=args.iters)
         results.append(ds_res)
         print("*" * 100)
         print(ds, results[-1])
