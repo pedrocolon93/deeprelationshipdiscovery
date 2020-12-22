@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 import torch
+import wandb
 from sklearn.metrics import accuracy_score
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
@@ -49,7 +50,7 @@ class RetroCycleGAN(nn.Module):
                  discriminator_size=64, word_vector_dimensions=300,
                  discriminator_lr=0.0001, generator_lr=0.0001,
                  one_way_mm=True,cycle_mm=True,cycle_dis=True,id_loss=True,
-                 device="cpu"):
+                 device="cpu",name="default"):
         super().__init__()
         self.save_folder = save_folder
         self.device = device
@@ -60,7 +61,7 @@ class RetroCycleGAN(nn.Module):
         # Number of filters in the first layer of G and D
         self.gf = generator_size
         self.df = discriminator_size
-
+        self.name = name
         d_lr = discriminator_lr
         self.d_lr = d_lr
         g_lr = generator_lr
@@ -129,6 +130,11 @@ class RetroCycleGAN(nn.Module):
     def train(self, epochs, dataset, save_folder, batch_size=1, cache=False, epochs_per_checkpoint=4,
               dis_train_amount=3,iters=None):
         writer = SummaryWriter()
+        wandb.init(project="retrogan",dir=save_folder)
+        wandb.run.name = self.name
+        wandb.watch(self,criterion="simlex")
+        wandb.run.save()
+
         start_time = datetime.datetime.now()
         res = []
         X_train, Y_train = tools.load_all_words_dataset_final(dataset["original"], dataset["retrofitted"],
@@ -177,9 +183,9 @@ class RetroCycleGAN(nn.Module):
 
         self.compile_all("adam")
 
-        def train_(training_epochs, always_random=False):
+        def train_(training_epochs, iters=None,always_random=False):
             count = 0
-            if iters is not None:
+            if iters is None:
                 for epoch in range(training_epochs):
                     # noise = np.random.normal(size=(batch_size, dimensionality), scale=0.01)
                     for batch_i, (imgs_A, imgs_B) in enumerate(load_batch(batch_size, always_random=always_random)):
@@ -402,25 +408,27 @@ class RetroCycleGAN(nn.Module):
                                 "mm_ba_loss": mm_b_loss if self.one_way_mm else 0,
                                 "discriminator_cycle_loss": d_cycle_loss
                             }
+                            wandb.log(scalars)
                             writer.add_scalars("run",tag_scalar_dict=scalars,global_step=count)
                             writer.flush()
 
-                        print("\n")
-                        sl, sv = self.test(dataset)
-                        writer.add_scalar("simlex",sl,global_step=count)
-                        writer.add_scalar("simverb", sv,global_step=count)
-                        writer.flush()
+                    print("\n")
+                    sl, sv = self.test(dataset)
+                    writer.add_scalar("simlex",sl,global_step=count)
+                    writer.add_scalar("simverb", sv,global_step=count)
+                    wandb.log({"simlex":sl,"simverb":sv})
+                    writer.flush()
 
-                        if epoch % epochs_per_checkpoint == 0 and epoch != 0:
-                            self.save_model(name="checkpoint_" + str(epoch))
+                    if epoch % epochs_per_checkpoint == 0 and epoch != 0:
+                        self.save_model(name="checkpoint_" + str(epoch))
 
-                        res.append((sl, sv))
+                    res.append((sl, sv))
 
-                        # self.combined_callback.on_epoch_end(epoch, {"simlex": sl, "simverb": sv})
-                        # wandbcb.on_epoch_end(epoch, {"simlex": sl, "simverb": sv})
+                    # self.combined_callback.on_epoch_end(epoch, {"simlex": sl, "simverb": sv})
+                    # wandbcb.on_epoch_end(epoch, {"simlex": sl, "simverb": sv})
 
-                        print(res)
-                        print("\n")
+                    print(res)
+                    print("\n")
             else:
                 epoch = 0
                 running = True
@@ -656,20 +664,20 @@ class RetroCycleGAN(nn.Module):
                             writer.add_scalars("run", tag_scalar_dict=scalars, global_step=count)
                             writer.flush()
 
-                        print("\n")
-                        sl, sv = self.test(dataset)
-                        writer.add_scalar("simlex", sl, global_step=count)
-                        writer.add_scalar("simverb", sv, global_step=count)
-                        writer.flush()
+                    print("\n")
+                    sl, sv = self.test(dataset)
+                    writer.add_scalar("simlex", sl, global_step=count)
+                    writer.add_scalar("simverb", sv, global_step=count)
+                    writer.flush()
 
-                        if epoch % epochs_per_checkpoint == 0 and epoch != 0:
-                            self.save_model(name="checkpoint_" + str(epoch))
+                    if epoch % epochs_per_checkpoint == 0 and epoch != 0:
+                        self.save_model(name="checkpoint_" + str(epoch))
 
-                        res.append((sl, sv))
-                        print(res)
-                        print("\n")
+                    res.append((sl, sv))
+                    print(res)
+                    print("\n")
         print("Actual training")
-        train_(epochs)
+        train_(epochs,iters=iters)
         print("Final performance")
         sl, sv = self.test(dataset)
         res.append((sl, sv))

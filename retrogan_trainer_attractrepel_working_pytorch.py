@@ -22,10 +22,19 @@ def write_log(callback, names, logs, batch_no):
         callback.writer.add_summary(summary, batch_no)
         callback.writer.flush()
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--disable_eager_execution', type=bool, default=True,
+    parser.add_argument('--disable_eager_execution', type=str2bool, default=True,
                         help='Whether to disable eager execution or not')
     parser.add_argument('--logdir', type=str, default="logs/",
                         help='Directory where tensorboard logging will go to')
@@ -56,15 +65,18 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size", default=32, type=int, help="Batch size")
     parser.add_argument("--dis_train_amount", default=3, type=int,
                         help="The amount of times to run a discriminator through the batch")
+
+
+
+    parser.add_argument("--one_way_mm", type=str2bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--cycle_mm", type=str2bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--cycle_dis", type=str2bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--id_loss", type=str2bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
     args = parser.parse_args()
-    parser.add_argument("--one_way_mm", type=bool, default=True,
-                        help="Whether to use fp16 calculation speed up.")
-    parser.add_argument("--cycle_mm", type=bool, default=True,
-                        help="Whether to use fp16 calculation speed up.")
-    parser.add_argument("--cycle_dis", type=bool, default=True,
-                        help="Whether to use fp16 calculation speed up.")
-    parser.add_argument("--id_loss", type=bool, default=True,
-                        help="Whether to use fp16 calculation speed up.")
 
     print("Configuring GPUs to use only needed memory")
     gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -134,7 +146,8 @@ if __name__ == '__main__':
             one_way_mm=args.one_way_mm,
             cycle_mm=args.cycle_mm,
             cycle_dis=args.cycle_dis,
-            id_loss=args.id_loss
+            id_loss=args.id_loss,
+            name=args.model_name
         )
         # rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_nb_retrogan/")
         rcgan.to_device("cpu")
