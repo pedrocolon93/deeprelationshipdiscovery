@@ -131,7 +131,7 @@ max_iter = 5
 
     arsubprocessargs = ['./run_ar.sh',path_to_ar_python, path_to_ar, configpath]
     print(arsubprocessargs)
-    # process = subprocess.run(args=arsubprocessargs, shell=False)
+    process = subprocess.run(args=arsubprocessargs, shell=False)
     print("Done outputting")
     print("Saving to hdfs")
     print("Original vectors:")

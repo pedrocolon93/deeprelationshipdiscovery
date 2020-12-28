@@ -6,7 +6,7 @@ PATH_TO_RETROGAN_PYTHON=/home/pedro/anaconda3/envs/gputester2/bin/python
 #PATH_TO_AR="/Users/pedro/Documents/Documents - Pedro’s MacBook Pro/git/attract-repel"
 PATH_TO_AR="/media/pedro/Data/P-Data/attract-repel"
 #ORIGINAL_VECTORS="/Users/pedro/PycharmProjects/OOVconverter/fasttext_model/cc.en.300.cut400k.vec"
-ORIGINAL_VECTORS="/home/pedro/OOVconverter/OOVconverter/fasttext_model/cc.en.300.cut400k.vec"
+ORIGINAL_VECTORS="/home/pedro/OOVconverter/fasttext_model/cc.en.300.cut400k.vec"
 ARVECTOR_POSTFIXFILENAME="cc.en.300.cut400k.vec"
 CURR_DIR=$(pwd)
 echo "Working in"
@@ -59,26 +59,14 @@ function attractrepel_for_percentage() {
       "retrogan_$PERCENTAGEREP" "oov_test_$PERCENTAGEREP/retrogan_$PERCENTAGEREP/"
  }
 PERCENTAGE=0.05
-generate_data_for_percentage
-attractrepel_for_percentage
-run_retro_gan_for_percentage
+generate_data_for_percentage && attractrepel_for_percentage && run_retro_gan_for_percentage && echo "Ran $PERCENTAGE">$PERCENTAGE.txt
 PERCENTAGE=0.1
-generate_data_for_percentage
-attractrepel_for_percentage
-run_retro_gan_for_percentage
+generate_data_for_percentage && attractrepel_for_percentage && run_retro_gan_for_percentage && echo "Ran $PERCENTAGE">$PERCENTAGE.txt
 PERCENTAGE=0.25
-generate_data_for_percentage
-attractrepel_for_percentage
-run_retro_gan_for_percentage
+generate_data_for_percentage && attractrepel_for_percentage && run_retro_gan_for_percentage && echo "Ran $PERCENTAGE">$PERCENTAGE.txt
 PERCENTAGE=0.5
-generate_data_for_percentage
-attractrepel_for_percentage
-run_retro_gan_for_percentage
+generate_data_for_percentage && attractrepel_for_percentage && run_retro_gan_for_percentage && echo "Ran $PERCENTAGE">$PERCENTAGE.txt
 PERCENTAGE=0.75
-generate_data_for_percentage
-attractrepel_for_percentage
-run_retro_gan_for_percentage
+generate_data_for_percentage && attractrepel_for_percentage && run_retro_gan_for_percentage && echo "Ran $PERCENTAGE">$PERCENTAGE.txt
 PERCENTAGE=1.0
-generate_data_for_percentage
-attractrepel_for_percentage
-run_retro_gan_for_percentage
+generate_data_for_percentage && attractrepel_for_percentage && run_retro_gan_for_percentage && echo "Ran $PERCENTAGE">$PERCENTAGE.txt
