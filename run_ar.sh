@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-cd /media/pedro/ssd_ext/attract-repel/
-pwd
-#conda activate attract_repel
-/home/pedro/anaconda3/envs/attract-repel/bin/python code/attract-repel.py config/ar_config.cfg
-#source deactivate
+echo "Starting shell script.."
+echo $1
+echo $2
+echo $3
+echo "param done"
+cd "$2"
+"$1" code/attract-repel.py "$3"

@@ -700,6 +700,11 @@ class RetroCycleGAN(nn.Module):
         self.to(device)
 
     def save_model(self, name=""):
-        os.makedirs(self.save_folder,exist_ok=True)
-        torch.save(self,os.path.join(self.save_folder,name+"complete.bin"))
+        try:
+            print("Trying to save model...")
+            os.makedirs(self.save_folder,exist_ok=True)
+            torch.save(self,os.path.join(self.save_folder,name+"complete.bin"))
+            print("Succeeded!")
+        except Exception as e:
+            print(e)
 

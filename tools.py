@@ -378,10 +378,8 @@ def load_all_words_dataset_final(original,retrofitted, save_folder="./", cache=T
     print("for:", original, retrofitted)
     o = pd.read_hdf(original, 'mat', encoding='utf-8')
     r = pd.read_hdf(retrofitted, 'mat', encoding='utf-8')
-    cns = []
-    print("Loading concepts")
-    for i in tqdm(r.index):
-        cns.append(i)
+    cns = r.index.intersection(o.index)
+    print("Intersecting on",len(cns))
     X_train = o.loc[cns, :]
     Y_train = r.loc[cns, :]
     print("Dumping training")

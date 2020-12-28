@@ -78,19 +78,19 @@ if __name__ == '__main__':
                         help="Whether to use fp16 calculation speed up.")
     args = parser.parse_args()
 
-    print("Configuring GPUs to use only needed memory")
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    if gpus:
-        try:
-            # Currently, memory growth needs to be the same across GPUs
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-        except RuntimeError as e:
-            # Memory growth must be set before GPUs have been initialized
-            print(e)
-    print("Done!")
+    # print("Configuring GPUs to use only needed memory")
+    # gpus = tf.config.experimental.list_physical_devices('GPU')
+    # if gpus:
+    #     try:
+    #         # Currently, memory growth needs to be the same across GPUs
+    #         for gpu in gpus:
+    #             tf.config.experimental.set_memory_growth(gpu, True)
+    #         logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+    #         print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    #     except RuntimeError as e:
+    #         # Memory growth must be set before GPUs have been initialized
+    #         print(e)
+    # print("Done!")
 
     print("Clearing logs!!!")
     print("*" * 100)
@@ -126,9 +126,10 @@ if __name__ == '__main__':
         b = os.path.exists(os.path.join(ds["retrofitted"]))
         print(a, b)
         if not a:
-            raise FileNotFoundError("Original file not found")
+
+            raise FileNotFoundError("Original file not found "+str(os.path.join(ds["original"])))
         if not b:
-            raise FileNotFoundError("Retrofitted file not found")
+            raise FileNotFoundError("Retrofitted file not found"+str(os.path.join(ds["retrofitted"])))
 
     models = []
     results = []

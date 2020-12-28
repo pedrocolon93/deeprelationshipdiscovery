@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--seen_words', type=str, default="testing/SimLex-999_cut_to_0_05.txt",
+    parser.add_argument('--seen_words', type=str, default="oov_test_0_05/SimLex-999_cut_to_0_05.txt",
                         help='File that we will reduce')
     parser.add_argument('--all_constraints', type=str, default="synonyms.txt",
                         help='File that we will reduce')
@@ -23,9 +23,10 @@ if __name__ == '__main__':
 
     seen_words_list = []
     original_length = 0
+    prefix = "en_"
     with open(seen_words) as f:
         for line in f:
-            seen_words_list.append(line.strip())
+            seen_words_list.append(line.replace(prefix,"").strip())
     lines_to_keep = []
     with open(target_file) as f:
         for line in tqdm(f):
@@ -37,4 +38,4 @@ if __name__ == '__main__':
     print("Keeping",len(lines_to_keep),"out of",original_length,"A percentage of",(len(lines_to_keep)*1.0)/(original_length))
     with open(os.path.join(output_dir,output_file),"w") as of:
         for tup in lines_to_keep:
-            of.write(tup[0]+"\t"+tup[1]+'\n')
+            of.write(tup)

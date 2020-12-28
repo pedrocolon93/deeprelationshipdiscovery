@@ -1,20 +1,16 @@
-import argparse
 import os
-import shutil
 import subprocess
+
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
 from remove_constraints_from_vectxt import *
 
-path_to_ar = "/media/pedro/ssd_ext/attract-repel/"
-ar_env_name = "attract_repel"
-activate_path ="/home/pedro/anaconda3/bin/activate"
 prefix = "en_"
 
 
-def to_hdf(file,outputname):
+def to_hdf(file, outputname):
     count = 0
     with open(file) as tv:
         indexes = []
@@ -31,12 +27,12 @@ def to_hdf(file,outputname):
             vectors.append(np.array(vec))
             if count % 10000 == 0:
                 print(count)
-        df = pd.DataFrame(index=indexes,data=vectors)
-        df.to_hdf(outputname,"mat")
+        df = pd.DataFrame(index=indexes, data=vectors)
+        df.to_hdf(outputname, "mat")
 
 
 def to_txt(param):
-    df = pd.read_hdf(param,"mat")
+    df = pd.read_hdf(param, "mat")
 
     pass
 
@@ -47,61 +43,54 @@ def generate_seen(ov, ar):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("ov",
+    parser.add_argument("--ov",
                         help="Path to text/vec file for original vectors",
                         )
-    parser.add_argument("cl",
+    parser.add_argument("--cl",
                         help="Amount of vectors to utilize",
                         default=-1,
                         type=int)
-    parser.add_argument("cv",
-                        help="Path for the output cleaned vectors",
-                        default=None)
-    parser.add_argument("synonyms",
+    parser.add_argument("--synonyms",
                         help="File that contains a list of antonyms",
                         default="antonyms.txt")
-    parser.add_argument("antonyms",
+    parser.add_argument("--antonyms",
                         help="Text vectors that will be filtered out",
                         default="synonyms.txt")
-    parser.add_argument("-tn",
+    parser.add_argument("--tn",
                         required=False,
                         help="Temp file name",
                         default="temp.txt")
-    parser.add_argument("-ccn",
+    parser.add_argument("--ccn",
                         required=False,
                         help="Complete corpus name",
                         default="completecorpus.txt")
-    parser.add_argument("-dcn",
+    parser.add_argument("--dcn",
                         required=False,
                         help="Disjoint corpus name",
                         default="disjoint.txt")
-    parser.add_argument("clean",
-                        help="file that has the names of words that will be filtered out. Leave empty for no cleaning",
-                        default=None)
-    parser.add_argument("aroutput",
+    parser.add_argument("--prefix",default="en_")
+    parser.add_argument("--aroutput",default="attract_repelled_vectors.txt",
+                        help="The output of the attract-repel algorithm")
+    parser.add_argument("--arconfigname", default="ar_config.cfg",
+                        help="The output of the attract-repel algorithm")
+    parser.add_argument("--path_to_ar", default="/media/pedro/ssd_ext/attract-repel/",
+                        help="The output of the attract-repel algorithm")
+    parser.add_argument("--path_to_ar_python", default="/media/pedro/ssd_ext/attract-repel/",
+                        help="The output of the attract-repel algorithm")
+    parser.add_argument("--output_dir",
                         help="The output of the attract-repel algorithm")
     args = parser.parse_args()
-
-
-
-    # Clean the dataset
-    # CV is cleaned vectors
-    print("Done")
-    if args.clean:
-        print("Cleaning the dataset")
-        #Has everything
-        remove_from_corpus_2(antonyms_file=args.antonyms, synonyms_file=args.synonyms, corpuse_to_clean=args.ov,
-                           output_corpus=args.ccn,sl_sv_words="../simlexsimverb.words")
-        # Output corpus has things in constraints.  May not have things in simlexsimverb. This is the training set.
-        # Only has constraints
-        remove_from_corpus(antonyms_file=args.antonyms, synonyms_file=args.synonyms, corpuse_to_clean=args.ov,
-                           output_corpus=args.cv)
-        # Does not have sl-sv from constriants
-        remove_constraints_from_corpus(sl_sv_words="../simlexsimverb.words", corpuse_to_clean=args.ov,
-                           output_corpus=args.dcn)
+    path_to_ar = args.path_to_ar
+    path_to_ar_python = args.path_to_ar_python
+    with open(os.path.abspath(args.ccn)) as dist_vecs:
+        print("Prefixing the input vecs JIC")
+        with open(os.path.abspath(args.ccn)+"prefixed.txt","w") as prefixed_dist_vecs:
+            for line in tqdm(dist_vecs):
+                if not args.prefix in line:
+                    prefixed_dist_vecs.write(args.prefix+line)
     print("Outputting config for AR ")
     configstring = \
-'''[experiment]
+        '''[experiment]
 log_scores_over_time=False
 print_simlex=True
 
@@ -117,7 +106,7 @@ synonyms = [{synonyms}]
 ;antonyms = []
 ;synonyms = []
 
-output_filepath=results/{aroutput}
+output_filepath={aroutput}
 
 [hyperparameters]
 
@@ -127,28 +116,27 @@ batch_size = 50
 l2_reg_constant = 0.000000001
 max_iter = 5
     '''.format(
-        distributional=os.path.abspath(args.ccn),
-        antonyms=os.path.abspath(args.antonyms),
-        synonyms=os.path.abspath(args.synonyms),
-        aroutput=args.aroutput
-    )
-    with open(os.path.join(path_to_ar, "config", "ar_config.cfg"), "w") as f:
+            distributional=os.path.abspath(args.ccn)+"prefixed.txt",
+            antonyms=os.path.abspath(args.antonyms),
+            synonyms=os.path.abspath(args.synonyms),
+            aroutput=args.aroutput
+        )
+    configpath = os.path.join(path_to_ar, "config", args.arconfigname)
+    with open(configpath, "w") as f:
         f.write(configstring)
     print("Done\nRunning AR with configuration:")
     print(configstring)
-    print("\n"*3)
+    print("\n" * 3)
+    print("Arguments are:")
 
-    process = subprocess.run('../run_ar.sh',
-                   shell=True,
-                   )
-    # print("Printing the process")
-    # print(process)
+    arsubprocessargs = ['./run_ar.sh',path_to_ar_python, path_to_ar, configpath]
+    print(arsubprocessargs)
+    # process = subprocess.run(args=arsubprocessargs, shell=False)
     print("Done outputting")
-    # Load the initial word vectors
     print("Saving to hdfs")
     print("Original vectors:")
-    to_hdf(args.ccn,args.ccn+".hdf")
+    to_hdf(os.path.abspath(args.ccn)+"prefixed.txt", args.output_dir+"/original.hdf")#TODO cut to only aroutputones
     print("Ar vectors")
-    to_hdf(os.path.join(path_to_ar,"results",args.aroutput),args.dcn+".hdf")
-    print("Seen vectors")
+    to_hdf(args.aroutput, args.output_dir+"/arvecs.hdf")
+    # print("Seen vectors")
     # shutil.copy(os.path.join(path_to_ar,"results",args.aroutput), "./arvecs.txt")
