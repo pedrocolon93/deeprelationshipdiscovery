@@ -82,12 +82,27 @@ if __name__ == '__main__':
     args = parser.parse_args()
     path_to_ar = args.path_to_ar
     path_to_ar_python = args.path_to_ar_python
+    words = set()
+    with open(args.synonyms) as f:
+        for line in f:
+            linecontents = line.strip().split()
+            words.add(linecontents[0])
+            words.add(linecontents[1])
+    with open(args.antonyms) as f:
+        for line in f:
+            linecontents = line.strip().split()
+            words.add(linecontents[0])
+            words.add(linecontents[1])
     with open(os.path.abspath(args.ccn)) as dist_vecs:
         print("Prefixing the input vecs JIC")
         with open(os.path.abspath(args.ccn)+"prefixed.txt","w") as prefixed_dist_vecs:
             for line in tqdm(dist_vecs):
-                if not args.prefix in line:
-                    prefixed_dist_vecs.write(args.prefix+line)
+                word = line.strip().split()[0]
+                if args.prefix not in word:
+                    word = args.prefix+word
+                if word in words:
+                    if not args.prefix in line:
+                        prefixed_dist_vecs.write(args.prefix+line)
     print("Outputting config for AR ")
     configstring = \
         '''[experiment]

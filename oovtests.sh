@@ -7,7 +7,7 @@ PATH_TO_RETROGAN_PYTHON=/home/pedro/anaconda3/envs/gputester2/bin/python
 PATH_TO_AR="/media/pedro/Data/P-Data/attract-repel"
 #ORIGINAL_VECTORS="/Users/pedro/PycharmProjects/OOVconverter/fasttext_model/cc.en.300.cut400k.vec"
 ORIGINAL_VECTORS="/home/pedro/OOVconverter/fasttext_model/cc.en.300.cut400k.vec"
-ARVECTOR_POSTFIXFILENAME="cc.en.300.cut400k.vec"
+ARVECTOR_POSTFIXFILENAME="cc.en.300.vec"
 CURR_DIR=$(pwd)
 echo "Working in"
 echo $CURR_DIR
@@ -39,7 +39,7 @@ function generate_data_for_percentage() {
 #    python oov_cutter_slsv_constraints_removeoverlap.py  --simlexcut "oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt" --simverbcut "oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt" --outputfile "oov_test_$PERCENTAGEREP/antonyms_reducedwith_$PERCENTAGEREP.txt"
 }
 function attractrepel_for_percentage() {
-    EPOCHS=1
+    EPOCHS=50
     PERCENTAGEREP=${PERCENTAGE/\./_}
     OUTDIR="oov_test_$PERCENTAGEREP/"
     python data_prep_retrogan.py --arconfigname "arconfig_$PERCENTAGE.config" --path_to_ar $PATH_TO_AR \
@@ -48,7 +48,7 @@ function attractrepel_for_percentage() {
     --output_dir "oov_test_$PERCENTAGEREP/"
  }
  function run_retro_gan_for_percentage() {
-     EPOCHS=1
+     EPOCHS=50
      PERCENTAGEREP=${PERCENTAGE/\./_}
      OUTDIR="oov_test_$PERCENTAGEREP/"
      echo "Runing with $PATH_TO_RETROGAN_PYTHON retrogan_trainer_attractrepel_working_pytorch.py --epochs $EPOCHS\
