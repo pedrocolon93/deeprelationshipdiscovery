@@ -1,13 +1,15 @@
 # Generate constraint data for percentages
 #PATH_TO_AR_PYTHON=/Users/pedro/opt/anaconda3/envs/attractrepel/bin/python
+# git clone https://github.com/nmrksic/attract-repel
+# conda create -n attractrepel python=2.7 tensorflow=1.14; conda activate attractrepel
 PATH_TO_AR_PYTHON=/home/pedro/anaconda3/envs/attractrepel/bin/python
 #PATH_TO_RETROGAN_PYTHON=/Users/pedro/opt/anaconda3/envs/OOVconverter/bin/python
 PATH_TO_RETROGAN_PYTHON=/home/pedro/anaconda3/envs/gputester2/bin/python
 #PATH_TO_AR="/Users/pedro/Documents/Documents - Pedro’s MacBook Pro/git/attract-repel"
 PATH_TO_AR="/media/pedro/Data/P-Data/attract-repel"
 #ORIGINAL_VECTORS="/Users/pedro/PycharmProjects/OOVconverter/fasttext_model/cc.en.300.cut400k.vec"
-ORIGINAL_VECTORS="/home/pedro/OOVconverter/fasttext_model/cc.en.300.cut400k.vec"
-ARVECTOR_POSTFIXFILENAME="cc.en.300.vec"
+ORIGINAL_VECTORS="/home/pedro/OOVconverter/fasttext_model/cc.en.300.vec"
+ARVECTOR_POSTFIXFILENAME="cc.en.300.ar.vec"
 CURR_DIR=$(pwd)
 echo "Working in"
 echo $CURR_DIR
@@ -39,7 +41,6 @@ function generate_data_for_percentage() {
 #    python oov_cutter_slsv_constraints_removeoverlap.py  --simlexcut "oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt" --simverbcut "oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt" --outputfile "oov_test_$PERCENTAGEREP/antonyms_reducedwith_$PERCENTAGEREP.txt"
 }
 function attractrepel_for_percentage() {
-    EPOCHS=50
     PERCENTAGEREP=${PERCENTAGE/\./_}
     OUTDIR="oov_test_$PERCENTAGEREP/"
     python data_prep_retrogan.py --arconfigname "arconfig_$PERCENTAGE.config" --path_to_ar $PATH_TO_AR \
@@ -58,6 +59,7 @@ function attractrepel_for_percentage() {
       "$CURR_DIR/oov_test_$PERCENTAGEREP/original.hdf" "$CURR_DIR/oov_test_$PERCENTAGEREP/arvecs.hdf" \
       "retrogan_$PERCENTAGEREP" "oov_test_$PERCENTAGEREP/retrogan_$PERCENTAGEREP/"
  }
+
 PERCENTAGE=0.05
 generate_data_for_percentage && attractrepel_for_percentage && run_retro_gan_for_percentage && echo "Ran $PERCENTAGE">$PERCENTAGE.txt
 PERCENTAGE=0.1
