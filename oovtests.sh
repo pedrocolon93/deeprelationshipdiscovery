@@ -46,7 +46,7 @@ function generate_data_for_percentage() {
     python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/simlexsimverb_words_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
 
     echo "Fusing both"
-    cp oov_test_$PERCENTAGEREP/synonyms_reducedwith_simlexsimverb_$PERCENTAGEREP.txt oov_test_$PERCENTAGEREP/synonyms_reducedwith_$PERCENTAGEREP.txt
+    cp oov_test_$PERCENTAGEREP/antonyms_reducedwith_simlexsimverb_$PERCENTAGEREP.txt oov_test_$PERCENTAGEREP/antonyms_reducedwith_$PERCENTAGEREP.txt
 
 #    cat oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt > oov_test_$PERCENTAGEREP/antonyms_reducedwith_$PERCENTAGEREP.txt
 #    python oov_cutter_slsv_constraints_removeoverlap.py  --simlexcut "oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt" --simverbcut "oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt" --outputfile "oov_test_$PERCENTAGEREP/antonyms_reducedwith_$PERCENTAGEREP.txt"
