@@ -2,13 +2,16 @@
 #PATH_TO_AR_PYTHON=/Users/pedro/opt/anaconda3/envs/attractrepel/bin/python
 # git clone https://github.com/nmrksic/attract-repel
 # conda create -n attractrepel python=2.7 tensorflow=1.14; conda activate attractrepel
+#PATH_TO_AR_PYTHON=/home/pedro/anaconda3/envs/attractrepel/bin/python
 PATH_TO_AR_PYTHON=/home/pedro/anaconda3/envs/attractrepel/bin/python
 #PATH_TO_RETROGAN_PYTHON=/Users/pedro/opt/anaconda3/envs/OOVconverter/bin/python
 PATH_TO_RETROGAN_PYTHON=/home/pedro/anaconda3/envs/gputester2/bin/python
 #PATH_TO_AR="/Users/pedro/Documents/Documents - Pedro’s MacBook Pro/git/attract-repel"
-PATH_TO_AR="/media/pedro/Data/P-Data/attract-repel"
+#PATH_TO_AR="/media/pedro/Data/P-Data/attract-repel"
+PATH_TO_AR="/media/pedro/ssd_ext/attract-repel"
 #ORIGINAL_VECTORS="/Users/pedro/PycharmProjects/OOVconverter/fasttext_model/cc.en.300.cut400k.vec"
-ORIGINAL_VECTORS="/home/pedro/OOVconverter/fasttext_model/cc.en.300.vec"
+#ORIGINAL_VECTORS="/home/pedro/OOVconverter/fasttext_model/cc.en.300.vec"
+ORIGINAL_VECTORS="/media/pedro/ssd_ext/OOVconverter/fasttext_model/cc.en.300.vec"
 ARVECTOR_POSTFIXFILENAME="cc.en.300.ar.vec"
 CURR_DIR=$(pwd)
 echo "Working in"
@@ -22,22 +25,30 @@ function generate_data_for_percentage() {
     echo "Outputting AR TO:"
     echo "$CURR_DIR/oov_test_$PERCENTAGEREP/ar$PERCENTAGEREP$ARVECTOR_POSTFIXFILENAME"
     mkdir $OUTDIR
+    python oov_cutter_slsv.py --target_file simlexsimverb_words.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "oov_test_$PERCENTAGEREP/"
+
     CONSTRAINTS=synonyms.txt
-    python oov_cutter_slsv.py --target_file testing/SimLex-999.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "oov_test_$PERCENTAGEREP/"
-    python oov_cutter_slsv.py --target_file testing/SimVerb-3500.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "oov_test_$PERCENTAGEREP/"
-    python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/SimLex-999_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
-    python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/SimVerb-3500_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
+#    python oov_cutter_slsv.py --target_file testing/SimLex-999.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "oov_test_$PERCENTAGEREP/"
+#    python oov_cutter_slsv.py --target_file testing/SimVerb-3500.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "oov_test_$PERCENTAGEREP/"
+#    python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/SimLex-999_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
+#    python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/SimVerb-3500_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
+    python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/simlexsimverb_words_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
     echo "Fusing both"
-    cat oov_test_$PERCENTAGEREP/synonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt oov_test_$PERCENTAGEREP/synonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt > oov_test_$PERCENTAGEREP/synonyms_reducedwith_$PERCENTAGEREP.txt
+#    cat oov_test_$PERCENTAGEREP/synonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt oov_test_$PERCENTAGEREP/synonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt > oov_test_$PERCENTAGEREP/synonyms_reducedwith_$PERCENTAGEREP.txt
+    cp oov_test_$PERCENTAGEREP/synonyms_reducedwith_simlexsimverb_$PERCENTAGEREP.txt oov_test_$PERCENTAGEREP/synonyms_reducedwith_$PERCENTAGEREP.txt
 
 #    python oov_cutter_slsv_constraints_removeoverlap.py  --simlexcut "oov_test_$PERCENTAGEREP/synonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt" --simverbcut "oov_test_$PERCENTAGEREP/synonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt" --outputfile "oov_test_$PERCENTAGEREP/synonyms_reducedwith_$PERCENTAGEREP.txt"
     CONSTRAINTS=antonyms.txt
-    python oov_cutter_slsv.py --target_file testing/SimLex-999.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "oov_test_$PERCENTAGEREP/"
-    python oov_cutter_slsv.py --target_file testing/SimVerb-3500.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "oov_test_$PERCENTAGEREP/"
-    python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/SimLex-999_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
-    python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/SimVerb-3500_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
+#    python oov_cutter_slsv.py --target_file testing/SimLex-999.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "oov_test_$PERCENTAGEREP/"
+#    python oov_cutter_slsv.py --target_file testing/SimVerb-3500.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "oov_test_$PERCENTAGEREP/"
+#    python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/SimLex-999_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
+#    python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/SimVerb-3500_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
+    python oov_cutter_slsv_constraints.py --seen_words "oov_test_$PERCENTAGEREP/simlexsimverb_words_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "oov_test_$PERCENTAGEREP/"
+
     echo "Fusing both"
-    cat oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt > oov_test_$PERCENTAGEREP/antonyms_reducedwith_$PERCENTAGEREP.txt
+    cp oov_test_$PERCENTAGEREP/synonyms_reducedwith_simlexsimverb_$PERCENTAGEREP.txt oov_test_$PERCENTAGEREP/synonyms_reducedwith_$PERCENTAGEREP.txt
+
+#    cat oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt > oov_test_$PERCENTAGEREP/antonyms_reducedwith_$PERCENTAGEREP.txt
 #    python oov_cutter_slsv_constraints_removeoverlap.py  --simlexcut "oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt" --simverbcut "oov_test_$PERCENTAGEREP/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt" --outputfile "oov_test_$PERCENTAGEREP/antonyms_reducedwith_$PERCENTAGEREP.txt"
 }
 function attractrepel_for_percentage() {
@@ -49,15 +60,16 @@ function attractrepel_for_percentage() {
     --output_dir "oov_test_$PERCENTAGEREP/"
  }
  function run_retro_gan_for_percentage() {
-     EPOCHS=50
+     ITERS=100000
+     EPOCHS=250
      PERCENTAGEREP=${PERCENTAGE/\./_}
      OUTDIR="oov_test_$PERCENTAGEREP/"
-     echo "Runing with $PATH_TO_RETROGAN_PYTHON retrogan_trainer_attractrepel_working_pytorch.py --epochs $EPOCHS\
-      \"$CURR_DIR/oov_test_$PERCENTAGEREP/original.hdf\" \"$CURR_DIR/oov_test_$PERCENTAGEREP/arvecs.hdf\" \
-      \"retrogan_$PERCENTAGEREP\" \"oov_test_$PERCENTAGEREP/retrogan_$PERCENTAGEREP/\""
-     CUDA_VISIBLE_DEVICES=1 $PATH_TO_RETROGAN_PYTHON retrogan_trainer_attractrepel_working_pytorch.py --epochs $EPOCHS\
+#     echo "Runing with $PATH_TO_RETROGAN_PYTHON retrogan_trainer_attractrepel_working_pytorch.py --iters $ITERS\
+#      \"$CURR_DIR/oov_test_$PERCENTAGEREP/original.hdf\" \"$CURR_DIR/oov_test_$PERCENTAGEREP/arvecs.hdf\" \
+#      \"retrogan_$PERCENTAGEREP\" \"oov_test_$PERCENTAGEREP/retrogan_$PERCENTAGEREP/\""
+     CUDA_VISIBLE_DEVICES=0 $PATH_TO_RETROGAN_PYTHON retrogan_trainer_attractrepel_working_pytorch.py --iters $ITERS\
       "$CURR_DIR/oov_test_$PERCENTAGEREP/original.hdf" "$CURR_DIR/oov_test_$PERCENTAGEREP/arvecs.hdf" \
-      "retrogan_$PERCENTAGEREP" "oov_test_$PERCENTAGEREP/retrogan_$PERCENTAGEREP/"
+      "retrogan_$PERCENTAGEREP" "oov_test_$PERCENTAGEREP/retrogan_$PERCENTAGEREP/" --fp16 --epochs $EPOCHS
  }
 
 PERCENTAGE=0.05

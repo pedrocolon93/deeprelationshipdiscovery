@@ -11,7 +11,7 @@ def clean_constraints(filename,slsv_words):
 
 if __name__ == "__main__":
     slsv_words = ""
-    simlexverb_text_file = "./simlexsimverb.words"
+    simlexverb_text_file = "simlexsimverb_words.txt"
     with open(simlexverb_text_file) as f:
         for line in f:
             slsv_words+=line+"\n"
