@@ -29,7 +29,10 @@ if __name__ == '__main__':
         for line in f:
             s = line.strip().split()
             words.append(s[0])
-            words.append(s[1])
+            try:
+                words.append(s[1])
+            except:
+                pass
     words = sorted(list(set(words)))
     random.Random(seed).shuffle(words)
     resulting_words = words[:int(math.floor(percentage_to_leave*len(words)))]

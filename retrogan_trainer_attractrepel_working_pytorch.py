@@ -148,7 +148,8 @@ if __name__ == '__main__':
             cycle_mm=args.cycle_mm,
             cycle_dis=args.cycle_dis,
             id_loss=args.id_loss,
-            name=args.model_name
+            name=args.model_name,
+            fp16=args.fp16
         )
         # rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_nb_retrogan/")
         rcgan.to_device("cpu")
