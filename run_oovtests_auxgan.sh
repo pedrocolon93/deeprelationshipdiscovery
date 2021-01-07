@@ -77,7 +77,6 @@ function attractrepel_for_percentage() {  # this function adds prefix "en_" to w
 }
 
 function run_auxgan_for_percentage() {  # Yida's job
-    EPOCHS=1
     AUXGAN_DIR="../auxgan"
     CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES \
     $PATH_TO_AUXGAN_PYTHON \
@@ -86,11 +85,16 @@ function run_auxgan_for_percentage() {  # Yida's job
     --adjusted_file "$CURR_DIR/$OUTDIR/ar$PERCENTAGEREP$ARVECTOR_POSTFIXFILENAME" \
     --unseen_file $ORIGINAL_VECTORS"prefixed.txt" \
     --out_dir $OUTDIR \
-    --n_epochs $EPOCHS \
+    --n_epochs 10 \
+    --epoch_size 100000 \
     --map_optimizer $OPTIMIZER,lr=$LEARNING_RATE \
     --dis_optimizer $OPTIMIZER,lr=$LEARNING_RATE \
-    --sim_optimizer $OPTIMIZER,lr=$LEARNING_RATE
+    --sim_optimizer $OPTIMIZER,lr=$LEARNING_RATE \
+    --in_simlex_file ../auxgan/evaluation/simlexorig999.txt \
+    --in_simverb_file ../auxgan/evaluation/simverb3500.txt \
+    --in_embedding_file $OUTDIR/gold_embs.txt
     # --map_optimizer adam,lr=0.001 \
     # --dis_optimizer adam,lr=0.001 \
     # --sim_optimizer adam,lr=0.001
+    # echo "Evaluated simlexorig999 and simverb3500 for $OUTDIR" > "evaluated_simverb_$OUTDIR.txt"
 }
