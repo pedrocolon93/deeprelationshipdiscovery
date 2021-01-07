@@ -19,37 +19,31 @@ PERCENTAGE=0.05
 SEED=42
 
 function generate_data_for_percentage() {
-    PERCENTAGEREP=${PERCENTAGE/\./_}
-    # OUTDIR="$OUTDIR/"
     echo "Working in $CURR_DIR/$OUTDIR/"
     echo "Outputting AR TO:"
     echo "$CURR_DIR/$OUTDIR/ar$PERCENTAGEREP$ARVECTOR_POSTFIXFILENAME"
     mkdir $OUTDIR
     python oov_cutter_slsv.py --target_file simlexsimverb_words.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "$OUTDIR/"
-
     CONSTRAINTS=synonyms.txt
-#    python oov_cutter_slsv.py --target_file testing/SimLex-999.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "$OUTDIR/"
-#    python oov_cutter_slsv.py --target_file testing/SimVerb-3500.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "$OUTDIR/"
-#    python oov_cutter_slsv_constraints.py --seen_words "$OUTDIR/SimLex-999_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "$OUTDIR/"
-#    python oov_cutter_slsv_constraints.py --seen_words "$OUTDIR/SimVerb-3500_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "$OUTDIR/"
+    # python oov_cutter_slsv.py --target_file testing/SimLex-999.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "$OUTDIR/"
+    # python oov_cutter_slsv.py --target_file testing/SimVerb-3500.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "$OUTDIR/"
+    # python oov_cutter_slsv_constraints.py --seen_words "$OUTDIR/SimLex-999_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "$OUTDIR/"
+    # python oov_cutter_slsv_constraints.py --seen_words "$OUTDIR/SimVerb-3500_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "$OUTDIR/"
     python oov_cutter_slsv_constraints.py --seen_words "$OUTDIR/simlexsimverb_words_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "$OUTDIR/"
     echo "Fusing both"
-#    cat $OUTDIR/synonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt $OUTDIR/synonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt > $OUTDIR/synonyms_reducedwith_$PERCENTAGEREP.txt
+    # cat $OUTDIR/synonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt $OUTDIR/synonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt > $OUTDIR/synonyms_reducedwith_$PERCENTAGEREP.txt
     cp $OUTDIR/synonyms_reducedwith_simlexsimverb_$PERCENTAGEREP.txt $OUTDIR/synonyms_reducedwith_$PERCENTAGEREP.txt
-
-#    python oov_cutter_slsv_constraints_removeoverlap.py  --simlexcut "$OUTDIR/synonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt" --simverbcut "$OUTDIR/synonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt" --outputfile "$OUTDIR/synonyms_reducedwith_$PERCENTAGEREP.txt"
+    # python oov_cutter_slsv_constraints_removeoverlap.py  --simlexcut "$OUTDIR/synonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt" --simverbcut "$OUTDIR/synonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt" --outputfile "$OUTDIR/synonyms_reducedwith_$PERCENTAGEREP.txt"
     CONSTRAINTS=antonyms.txt
-#    python oov_cutter_slsv.py --target_file testing/SimLex-999.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "$OUTDIR/"
-#    python oov_cutter_slsv.py --target_file testing/SimVerb-3500.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "$OUTDIR/"
-#    python oov_cutter_slsv_constraints.py --seen_words "$OUTDIR/SimLex-999_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "$OUTDIR/"
-#    python oov_cutter_slsv_constraints.py --seen_words "$OUTDIR/SimVerb-3500_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "$OUTDIR/"
+    # python oov_cutter_slsv.py --target_file testing/SimLex-999.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "$OUTDIR/"
+    # python oov_cutter_slsv.py --target_file testing/SimVerb-3500.txt --percentage_to_leave $PERCENTAGE --seed $SEED --output_dir "$OUTDIR/"
+    # python oov_cutter_slsv_constraints.py --seen_words "$OUTDIR/SimLex-999_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "$OUTDIR/"
+    # python oov_cutter_slsv_constraints.py --seen_words "$OUTDIR/SimVerb-3500_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "$OUTDIR/"
     python oov_cutter_slsv_constraints.py --seen_words "$OUTDIR/simlexsimverb_words_cut_to_$PERCENTAGEREP.txt" --all_constraints $CONSTRAINTS --output_dir "$OUTDIR/"
-
     echo "Fusing both"
-    cp $OUTDIR/synonyms_reducedwith_simlexsimverb_$PERCENTAGEREP.txt $OUTDIR/synonyms_reducedwith_$PERCENTAGEREP.txt
-
-#    cat $OUTDIR/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt $OUTDIR/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt > $OUTDIR/antonyms_reducedwith_$PERCENTAGEREP.txt
-#    python oov_cutter_slsv_constraints_removeoverlap.py  --simlexcut "$OUTDIR/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt" --simverbcut "$OUTDIR/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt" --outputfile "$OUTDIR/antonyms_reducedwith_$PERCENTAGEREP.txt"
+    cp $OUTDIR/antonyms_reducedwith_simlexsimverb_$PERCENTAGEREP.txt $OUTDIR/antonyms_reducedwith_$PERCENTAGEREP.txt
+    # cat $OUTDIR/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt $OUTDIR/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt > $OUTDIR/antonyms_reducedwith_$PERCENTAGEREP.txt
+    # python oov_cutter_slsv_constraints_removeoverlap.py  --simlexcut "$OUTDIR/antonyms_reducedwith_SimLex-999_$PERCENTAGEREP.txt" --simverbcut "$OUTDIR/antonyms_reducedwith_SimVerb-3500_$PERCENTAGEREP.txt" --outputfile "$OUTDIR/antonyms_reducedwith_$PERCENTAGEREP.txt"
 }
 
 #function generate_data_for_percentage() {
