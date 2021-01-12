@@ -52,11 +52,9 @@ class RetroCycleGAN(nn.Module):
                  discriminator_lr=0.0001, generator_lr=0.0001,
                  one_way_mm=True,cycle_mm=True,cycle_dis=True,id_loss=True,
                  device="cpu",name="default",fp16=False):
-
-        if fp16:
-            self.fp16=True
-
         super().__init__()
+        self.fp16=fp16
+
         self.save_folder = save_folder
         self.device = device
         # Input shape
@@ -180,15 +178,15 @@ class RetroCycleGAN(nn.Module):
             def __getitem__(self, idx):
                 # a = self.x.index[idx]
                 # b  = self.y.index[idx]
-                imgs_A = np.array(self.x.iloc[idx])
-                imgs_B = np.array(self.y.iloc[idx])
+                imgs_A = np.array(self.x.iloc[idx],dtype=np.float)
+                imgs_B = np.array(self.y.iloc[idx],dtype=np.float)
                 return torch.from_numpy(imgs_A),torch.from_numpy(imgs_B)
 
         ds = RetroPairsDataset(dataset["original"], dataset["retrofitted"],
                                                                       save_folder=save_folder, cache=cache)
 
         dataloader = DataLoader(ds, batch_size=batch_size,
-                                shuffle=True, num_workers=0)
+                                shuffle=True, num_workers=2)
 
         dis_train_amount = dis_train_amount
 
@@ -202,8 +200,8 @@ class RetroCycleGAN(nn.Module):
                 imgs_A = imgs_A.to(self.device)
                 imgs_B = imgs_B.to(self.device)
 
-                imgs_A = imgs_A.half() if self.fp16 else imgs_A
-                imgs_B = imgs_B.half() if self.fp16 else imgs_B
+                imgs_A = imgs_A.half() #if self.fp16 else imgs_A.double()
+                imgs_B = imgs_B.half() #if self.fp16 else imgs_B.double()
 
                 fake_B = self.g_AB(imgs_A)
                 fake_A = self.g_BA(imgs_B)
@@ -474,7 +472,7 @@ class RetroCycleGAN(nn.Module):
                     sl, sv = self.test(dataset)
                     writer.add_scalar("simlex",sl,global_step=count)
                     writer.add_scalar("simverb", sv,global_step=count)
-                    wandb.log({"simlex":sl,"simverb":sv})
+                    wandb.log({"simlex":sl,"simverb":sv},step=count)
                     writer.flush()
 
                     if epoch % epochs_per_checkpoint == 0 and epoch != 0:
@@ -492,6 +490,9 @@ class RetroCycleGAN(nn.Module):
                 running = True
                 while running:
                     for batch_i, (imgs_A, imgs_B) in enumerate(dataloader):
+                        if count >= iters:
+                            running=False
+                            break
                         run_batch(batch_i,imgs_A,imgs_B,epoch,count,iters%len(dataloader))
                         count += 1
                     epoch+=1
@@ -499,6 +500,7 @@ class RetroCycleGAN(nn.Module):
                     sl, sv = self.test(dataset)
                     writer.add_scalar("simlex", sl, global_step=count)
                     writer.add_scalar("simverb", sv, global_step=count)
+                    wandb.log({"simlex":sl,"simverb":sv},step=count)
                     writer.flush()
 
                     if epoch % epochs_per_checkpoint == 0 and epoch != 0:
@@ -539,3 +541,11 @@ class RetroCycleGAN(nn.Module):
         except Exception as e:
             print(e)
 
+    @staticmethod
+    def load_model(path,device="cpu"):
+        try:
+            print("Trying to load model...")
+            return torch.load(path,map_location=device)
+        except Exception as e:
+            print(e)
+            return None
