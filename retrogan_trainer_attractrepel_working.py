@@ -10,7 +10,7 @@ from tensorflow.python.framework.ops import disable_eager_execution
 
 import tools
 from rcgan import RetroCycleGAN
-
+import pandas as pd
 
 def write_log(callback, names, logs, batch_no):
     for name, value in zip(names, logs):
@@ -20,6 +20,17 @@ def write_log(callback, names, logs, batch_no):
         summary_value.tag = name
         callback.writer.add_summary(summary, batch_no)
         callback.writer.flush()
+
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 if __name__ == '__main__':
@@ -53,6 +64,17 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size", default=32, type=int, help="Batch size")
     parser.add_argument("--dis_train_amount", default=3, type=int,
                         help="The amount of times to run a discriminator through the batch")
+
+    parser.add_argument("--one_way_mm", type=str2bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--cycle_mm", type=str2bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--cycle_dis", type=str2bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--id_loss", type=str2bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--cycle_loss", type=str2bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
     args = parser.parse_args()
 
     print("Configuring GPUs to use only needed memory")
@@ -116,15 +138,43 @@ if __name__ == '__main__':
         print("Training")
         print(ds)
         bs = args.batch_size
-        rcgan = RetroCycleGAN(save_folder=args.save_folder, batch_size=args.batch_size,
-                              generator_lr=args.g_lr, discriminator_lr=args.d_lr)
-        rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_nb_retrogan/")
-        sl = tools.test_sem(rcgan.g_AB, ds, dataset_location="testing/SimLex-999.txt",
-                            fast_text_location="fasttext_model/cc.en.300.bin",prefix="en_")[0]
-        # continue
+        rcgan = RetroCycleGAN(save_folder=args.save_folder,
+                              generator_lr=args.g_lr,
+                              discriminator_lr=args.d_lr,
+                              one_way_mm=args.one_way_mm,
+                              cycle_mm=args.cycle_mm,
+                              cycle_dis=args.cycle_dis,
+                              id_loss=args.id_loss,
+                              cycle_loss=args.cycle_loss)
+        X_train, Y_train = tools.load_all_words_dataset_final(ds["original"], ds["retrofitted"],
+                                                              save_folder=save_folder, cache=False)
+        # X_train = pd.read_hdf(ds["original"], 'mat', encoding='utf-8')
+        # words = []
+        # vecs = []
+        # with open("Data/fasttext_seen.txt") as file:
+        #     for line in file:
+        #         words.append(line.split()[0])
+        #         vecs.append([float(x) for x in line.split()[1:]])
+        # X_train = pd.DataFrame(data=vecs,index=words)
+        c = X_train.loc["en_cat"]
+        d = X_train.loc["en_dog"]
+        print(c)
+        print(d)
+        sl_start = tools.test_sem_onlyds(X_train, dataset_location="testing/simlexorig999.txt", prefix="en_")
+        sv_start = tools.test_sem_onlyds(X_train, dataset_location="testing/simverb3500.txt", prefix="en_")
+        c_start = tools.test_sem_onlyds(X_train, dataset_location="testing/card660.tsv", prefix="en_")
+        sl_rstart = tools.test_sem_onlyds(Y_train, dataset_location="testing/simlexorig999.txt", prefix="en_")
+        sv_rstart = tools.test_sem_onlyds(Y_train, dataset_location="testing/simverb3500.txt", prefix="en_")
+        c_rstart = tools.test_sem_onlyds(Y_train, dataset_location="testing/card660.tsv", prefix="en_")
+
+        print("For simlex:", "distributional:", float(sl_start), "retrofitted:", float(sl_rstart))
+        print("For simverb:", "distributional:", float(sv_start), "retrofitted:", float(sv_rstart))
+        print("For card:", "distributional:", float(c_start), "retrofitted:", float(c_rstart))
         models.append(rcgan)
+        rcgan.test(ds)
         ds_res = rcgan.train(epochs=args.epochs, batch_size=bs, dataset=ds, save_folder=rcgan.save_folder,
-                             epochs_per_checkpoint=args.epochs_per_checkpoint, dis_train_amount=args.dis_train_amount)
+                             epochs_per_checkpoint=args.epochs_per_checkpoint, dis_train_amount=args.dis_train_amount,
+                             name=args.model_name)
         results.append(ds_res)
         print("*" * 100)
         print(ds, results[-1])

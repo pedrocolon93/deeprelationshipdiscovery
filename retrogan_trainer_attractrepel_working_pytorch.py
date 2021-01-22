@@ -8,7 +8,7 @@ import tensorflow as tf
 # from tensorflow.keras.mixed_precision import experimental as mixed_precision
 # from tensorflow.python.framework.ops import disable_eager_execution
 import torch
-
+import pandas as pd
 import tools
 from rcgan_pytorch import RetroCycleGAN
 
@@ -153,8 +153,21 @@ if __name__ == '__main__':
         )
         # rcgan.load_weights(preface="final", folder="trained_models/retrogans/ft_nb_retrogan/")
         rcgan.to_device("cpu")
-        sl = tools.test_sem(rcgan.g_AB, ds, dataset_location="testing/SimLex-999.txt",
-                            fast_text_location="fasttext_model/cc.en.300.bin", prefix="en_", pt=True)[0]
+        print("Starting from:")
+        X_train, Y_train = tools.load_all_words_dataset_final(ds["original"], ds["retrofitted"],
+                                                              save_folder=save_folder, cache=False)
+        # X_train = pd.read_hdf(ds["original"], 'mat', encoding='utf-8')
+        sl_start = tools.test_sem_onlyds(X_train,dataset_location="testing/simlexorig999.txt",prefix="en_")
+        sv_start = tools.test_sem_onlyds(X_train, dataset_location="testing/simverb3500.txt", prefix="en_")
+        c_start = tools.test_sem_onlyds(X_train, dataset_location="testing/card660.tsv", prefix="en_")
+        sl_rstart = tools.test_sem_onlyds(Y_train, dataset_location="testing/simlexorig999.txt", prefix="en_")
+        sv_rstart = tools.test_sem_onlyds(Y_train, dataset_location="testing/simverb3500.txt", prefix="en_")
+        c_rstart = tools.test_sem_onlyds(Y_train, dataset_location="testing/card660.tsv", prefix="en_")
+
+        print("For simlex:","distributional:",float(sl_start),"retrofitted:",float(sl_rstart))
+        print("For simverb:","distributional:",float(sv_start),"retrofitted:",float(sv_rstart))
+        print("For card:","distributional:",float(c_start),"retrofitted:",float(c_rstart))
+
         cuda = torch.cuda.is_available()
         rcgan.to_device("cuda" if cuda else "cpu")
 

@@ -7,7 +7,7 @@ import pickle
 from multiprocessing.pool import Pool
 from tokenize import String
 
-import faiss
+# import faiss
 import fasttext
 import gc
 
@@ -138,17 +138,17 @@ def load_training_input_3(seed=42,test_split=0.1,dataset="fasttext"):
 
 def mult(tup):
     return tup[0]*tup[1]
-thread_amount = 8
-pool = Pool(thread_amount)
+# thread_amount = 8
+# pool = Pool(thread_amount)
 
-def dot_product2_mp(v1, v2):
-    it = [x for x in zip(list(v1.reshape(dimensionality)), list(v2.reshape(dimensionality)))]
-
-    res = pool.map(mult,it)
-    # pool.join()
-    res = sum(res)
-    # print(res)
-    return res
+# def dot_product2_mp(v1, v2):
+#     it = [x for x in zip(list(v1.reshape(dimensionality)), list(v2.reshape(dimensionality)))]
+#
+#     res = pool.map(mult,it)
+#     # pool.join()
+#     res = sum(res)
+#     # print(res)
+#     return res
 
 def dot_product2(v1,v2):
     return sum(map(operator.mul,v1.reshape(dimensionality),v2.reshape(dimensionality)))
@@ -382,6 +382,7 @@ def load_all_words_dataset_final(original,retrofitted, save_folder="./", cache=T
     print("Intersecting on",len(cns))
     X_train = o.loc[cns, :]
     Y_train = r.loc[cns, :]
+
     print("Dumping training")
 
     X_train.to_hdf(os.path.join(save_folder,"filtered_x"), "mat")
@@ -526,101 +527,101 @@ def find_word(word,retro=True):
     print("Word not found...")
 
 
-def find_cross_closest(vec1, vec2, n_top, closest=0,verbose=False):
-    #TODO SKIP THE NEIGHBORS OF THE ONE WE DO NOT COMPARE AGAINST
-    results = []
-    if closest == 0:
-        #explore the dot between vec1 and synonyms of vec2
-        closest_words, closest_vecs = find_closest_2(vec2,n_top=n_top,dataset='numberbatch')
-        results = [(idx, item) for idx, item in enumerate(
-            list(map(lambda x: cosine_similarity( np.array(x).reshape(1, dimensionality), np.array(vec1).reshape(1, dimensionality))[0][0], closest_vecs)))]
-    else:
-        #explore the dot between vec2 and synonyms of vec1
-        closest_words, closest_vecs = find_closest_2(vec1,n_top=n_top,dataset='numberbatch')
-        results = [(idx, item) for idx, item in enumerate(
-            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality), np.array(vec2).reshape(1, dimensionality))[0][0], closest_vecs)))]
-    sorted_results = sorted(results, key=lambda x: x[1], reverse=True)
-    final_n_results = []
-    final_n_results_words = []
-    final_n_results_weights = []
-    for i in range(len(sorted_results)):
-        if len(final_n_results)==n_top:
-            print("Full")
-            break
-        # i += skip
-        if verbose:
-            print(closest_words[sorted_results[i][0]], sorted_results[i][1])
-        final_n_results_words.append(closest_words[sorted_results[i][0]])
-        final_n_results.append(np.array(closest_vecs[sorted_results[i][0]]))
-        final_n_results_weights.append(sorted_results[i][1])
-
-    # return final_n_results_words,final_n_results,final_n_results_weights
-    return final_n_results_words,final_n_results
-
-def find_cross_closest_dataset(vec1, vec2, projection_count=10,projection_cloud_count=20,n_top=200 ,closest=0,verbose=False,dataset=None):
-    # TODO SKIP THE NEIGHBORS OF THE ONE WE DO NOT COMPARE AGAINST
-    results = []
-    # find the projection of one concept unto the other
-    if closest == 0:
-        # explore the dot between vec1 and synonyms of vec2
-        closest_words, closest_vecs = find_closest_in_dataset(vec2, n_top=n_top, dataset=dataset)
-
-        results = [(idx, item) for idx, item in enumerate(
-            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality),
-                                                 np.array(vec1).reshape(1, dimensionality))[0][0],
-                     closest_vecs)))]
-    else:
-        # explore the dot between vec2 and synonyms of vec1
-        closest_words, closest_vecs = find_closest_in_dataset(vec1, n_top=n_top, dataset=dataset)
-        results = [(idx, item) for idx, item in enumerate(
-            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality),
-                                                 np.array(vec2).reshape(1, dimensionality))[0][0],
-                     closest_vecs)))]
-    # list of ordered projections this result is the cosine distance ordering of the projection of one concept
-    # unto the cloud of concepts of the other
-    # c1 ->  #cloud c2#
-    # Has the amount of the cloud in c2
-    sorted_results = sorted(results, key=lambda x: x[1], reverse=True)
-
-    final_n_results = []
-    final_n_results_words = []
-
-    # print("Finding the cloud of concepts around the cross closest")
-    for res_idx, res in enumerate(sorted_results):
-        if res_idx > projection_count:
-            break
-        if closest_words[sorted_results[res_idx][0]] in final_n_results_words:
-            projection_count += 1
-            continue
-
-        final_n_results_words.append(closest_words[sorted_results[res_idx][0]])
-        final_n_results.append(np.array(closest_vecs[sorted_results[res_idx][0]]))
-        # now add the ones around that
-        fin_aroud_vec = np.array(closest_vecs[sorted_results[res_idx][0]])
-        # the projection cloud
-        projection_cloud_words, projection_cloud_vecs = find_closest_in_dataset(fin_aroud_vec,
-                                                                                n_top=projection_cloud_count,
-                                                                                dataset=dataset,
-                                                                                )
-        ordered_projection_results = [(idx, item) for idx, item in enumerate(
-            list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality),
-                                                 fin_aroud_vec.reshape(1, dimensionality))[0][0],
-                     projection_cloud_vecs)))]
-        for pcres_idx, pcres in enumerate(ordered_projection_results):
-            # print(res_idx)
-            # print(sorted_results[res_idx])
-            # print("Working in", closest_words[sorted_results[res_idx][0]])
-            # print(res, "Cloud concept")
-            # print(ordered_projection_results[pcres_idx])
-            # print(projection_cloud_words[ordered_projection_results[pcres_idx][0]])
-            # print(pcres)
-            if projection_cloud_words[ordered_projection_results[pcres_idx][0]] not in final_n_results_words:
-                final_n_results_words.append(projection_cloud_words[ordered_projection_results[pcres_idx][0]])
-                final_n_results.append(np.array(projection_cloud_vecs[ordered_projection_results[pcres_idx][0]]))
-    # if verbose: print("Finally", final_n_results_words)
-
-    # return final_n_results_words,final_n_results,final_n_results_weights
-    return final_n_results_words, final_n_results
+# def find_cross_closest(vec1, vec2, n_top, closest=0,verbose=False):
+#     #TODO SKIP THE NEIGHBORS OF THE ONE WE DO NOT COMPARE AGAINST
+#     results = []
+#     if closest == 0:
+#         #explore the dot between vec1 and synonyms of vec2
+#         closest_words, closest_vecs = find_closest_2(vec2,n_top=n_top,dataset='numberbatch')
+#         results = [(idx, item) for idx, item in enumerate(
+#             list(map(lambda x: cosine_similarity( np.array(x).reshape(1, dimensionality), np.array(vec1).reshape(1, dimensionality))[0][0], closest_vecs)))]
+#     else:
+#         #explore the dot between vec2 and synonyms of vec1
+#         closest_words, closest_vecs = find_closest_2(vec1,n_top=n_top,dataset='numberbatch')
+#         results = [(idx, item) for idx, item in enumerate(
+#             list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality), np.array(vec2).reshape(1, dimensionality))[0][0], closest_vecs)))]
+#     sorted_results = sorted(results, key=lambda x: x[1], reverse=True)
+#     final_n_results = []
+#     final_n_results_words = []
+#     final_n_results_weights = []
+#     for i in range(len(sorted_results)):
+#         if len(final_n_results)==n_top:
+#             print("Full")
+#             break
+#         # i += skip
+#         if verbose:
+#             print(closest_words[sorted_results[i][0]], sorted_results[i][1])
+#         final_n_results_words.append(closest_words[sorted_results[i][0]])
+#         final_n_results.append(np.array(closest_vecs[sorted_results[i][0]]))
+#         final_n_results_weights.append(sorted_results[i][1])
+#
+#     # return final_n_results_words,final_n_results,final_n_results_weights
+#     return final_n_results_words,final_n_results
+#
+# def find_cross_closest_dataset(vec1, vec2, projection_count=10,projection_cloud_count=20,n_top=200 ,closest=0,verbose=False,dataset=None):
+#     # TODO SKIP THE NEIGHBORS OF THE ONE WE DO NOT COMPARE AGAINST
+#     results = []
+#     # find the projection of one concept unto the other
+#     if closest == 0:
+#         # explore the dot between vec1 and synonyms of vec2
+#         closest_words, closest_vecs = find_closest_in_dataset(vec2, n_top=n_top, dataset=dataset)
+#
+#         results = [(idx, item) for idx, item in enumerate(
+#             list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality),
+#                                                  np.array(vec1).reshape(1, dimensionality))[0][0],
+#                      closest_vecs)))]
+#     else:
+#         # explore the dot between vec2 and synonyms of vec1
+#         closest_words, closest_vecs = find_closest_in_dataset(vec1, n_top=n_top, dataset=dataset)
+#         results = [(idx, item) for idx, item in enumerate(
+#             list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality),
+#                                                  np.array(vec2).reshape(1, dimensionality))[0][0],
+#                      closest_vecs)))]
+#     # list of ordered projections this result is the cosine distance ordering of the projection of one concept
+#     # unto the cloud of concepts of the other
+#     # c1 ->  #cloud c2#
+#     # Has the amount of the cloud in c2
+#     sorted_results = sorted(results, key=lambda x: x[1], reverse=True)
+#
+#     final_n_results = []
+#     final_n_results_words = []
+#
+#     # print("Finding the cloud of concepts around the cross closest")
+#     for res_idx, res in enumerate(sorted_results):
+#         if res_idx > projection_count:
+#             break
+#         if closest_words[sorted_results[res_idx][0]] in final_n_results_words:
+#             projection_count += 1
+#             continue
+#
+#         final_n_results_words.append(closest_words[sorted_results[res_idx][0]])
+#         final_n_results.append(np.array(closest_vecs[sorted_results[res_idx][0]]))
+#         # now add the ones around that
+#         fin_aroud_vec = np.array(closest_vecs[sorted_results[res_idx][0]])
+#         # the projection cloud
+#         projection_cloud_words, projection_cloud_vecs = find_closest_in_dataset(fin_aroud_vec,
+#                                                                                 n_top=projection_cloud_count,
+#                                                                                 dataset=dataset,
+#                                                                                 )
+#         ordered_projection_results = [(idx, item) for idx, item in enumerate(
+#             list(map(lambda x: cosine_similarity(np.array(x).reshape(1, dimensionality),
+#                                                  fin_aroud_vec.reshape(1, dimensionality))[0][0],
+#                      projection_cloud_vecs)))]
+#         for pcres_idx, pcres in enumerate(ordered_projection_results):
+#             # print(res_idx)
+#             # print(sorted_results[res_idx])
+#             # print("Working in", closest_words[sorted_results[res_idx][0]])
+#             # print(res, "Cloud concept")
+#             # print(ordered_projection_results[pcres_idx])
+#             # print(projection_cloud_words[ordered_projection_results[pcres_idx][0]])
+#             # print(pcres)
+#             if projection_cloud_words[ordered_projection_results[pcres_idx][0]] not in final_n_results_words:
+#                 final_n_results_words.append(projection_cloud_words[ordered_projection_results[pcres_idx][0]])
+#                 final_n_results.append(np.array(projection_cloud_vecs[ordered_projection_results[pcres_idx][0]]))
+#     # if verbose: print("Finally", final_n_results_words)
+#
+#     # return final_n_results_words,final_n_results,final_n_results_weights
+#     return final_n_results_words, final_n_results
 
 def find_cross_closest_2(vec1, vec2, projection_count=10,projection_cloud_count=20,n_top=200 ,closest=0,verbose=False):
     #TODO SKIP THE NEIGHBORS OF THE ONE WE DO NOT COMPARE AGAINST
@@ -732,70 +733,70 @@ def find_closest_2(pred_y,n_top=5,retro=True,skip=0,verbose=True
     # return final_n_results_words,final_n_results,final_n_results_weights
     return final_n_results_words,final_n_results
 
-def find_closest_in_dataset(pred_y,dataset, n_top=5):
-    print("Finding closest")
-    if type(dataset) is str:
-        o = pd.read_hdf(dataset, 'mat', encoding='utf-8')
-    elif type(dataset) is pd.DataFrame:
-        o = dataset
-    else:
-        raise Exception("Neither string nor dataframe provided as dataset")
-    print(o)
-    # if limit is None:
-    # results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality),
-    #                                                                                  pred_y.reshape(1,dimensionality)),
-    #                                                      np.array(o.iloc[:,:])
-    #                                                      )))]
-    # else:
-    # limit = 400000
-    # results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, dimensionality),
-    #                                                                                        pred_y.reshape(1, dimensionality)),
-    #                                                            np.array(o.iloc[0:limit, :])
-    #                                                            )))]
-    # sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
-    # final_n_results = []
-    # final_n_results_words = []
-    # # FULL FLEDGED COMPUTATION
-    # for i in range(n_top):
-    # #     # if(verbose):
-    # #     #     print(o.index[sorted_results[i][0]])
-    #     final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
-    #     final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
-
-    # del o,results,sorted_results
-    # gc.collect()
-
-    # testvec = find_in_dataset(["cat"], o)
-    # print("Loading everything")
-    testvec = pred_y
-    print(testvec)
-    try:
-        print("Creating index")
-        index = faiss.IndexFlatIP(300)  # build the index
-        print(index.is_trained)
-        print('Adding items to it')
-        print(o.values.shape)
-        index.add(np.ascontiguousarray(o.values).astype(np.float32))  # add vectors to the index
-        print(index.ntotal)
-        print("Converting the testvect to query")
-        tst = np.array([testvec.astype(np.float32)])
-        tst = tst.reshape((tst.shape[0],tst.shape[-1]))
-        print("Ready to query")
-    except Exception as e:
-        print("We died")
-        print(e)
-        return [],[]
-    print(tst.shape)
-    print("Searching")
-    D, I = index.search(tst, n_top)  # sanity check
-    print(I)
-    print(D)
-    # print(o.iloc[I[0]])
-    # print("Dumping results")
-    final_n_results = o.iloc[I[0]].values
-    final_n_results_words = o.index[I[0]].values
-
-    return final_n_results_words,final_n_results
+# def find_closest_in_dataset(pred_y,dataset, n_top=5):
+#     print("Finding closest")
+#     if type(dataset) is str:
+#         o = pd.read_hdf(dataset, 'mat', encoding='utf-8')
+#     elif type(dataset) is pd.DataFrame:
+#         o = dataset
+#     else:
+#         raise Exception("Neither string nor dataframe provided as dataset")
+#     print(o)
+#     # if limit is None:
+#     # results = [(idx,item) for idx,item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1,dimensionality),
+#     #                                                                                  pred_y.reshape(1,dimensionality)),
+#     #                                                      np.array(o.iloc[:,:])
+#     #                                                      )))]
+#     # else:
+#     # limit = 400000
+#     # results = [(idx, item) for idx, item in enumerate(list(map(lambda x: cosine_similarity(x.reshape(1, dimensionality),
+#     #                                                                                        pred_y.reshape(1, dimensionality)),
+#     #                                                            np.array(o.iloc[0:limit, :])
+#     #                                                            )))]
+#     # sorted_results = sorted(results,key=lambda x:x[1],reverse=True)
+#     # final_n_results = []
+#     # final_n_results_words = []
+#     # # FULL FLEDGED COMPUTATION
+#     # for i in range(n_top):
+#     # #     # if(verbose):
+#     # #     #     print(o.index[sorted_results[i][0]])
+#     #     final_n_results_words.append(o.index[sorted_results[i][0]]) # the index
+#     #     final_n_results.append(o.iloc[sorted_results[i][0],:]) # the vector
+#
+#     # del o,results,sorted_results
+#     # gc.collect()
+#
+#     # testvec = find_in_dataset(["cat"], o)
+#     # print("Loading everything")
+#     testvec = pred_y
+#     print(testvec)
+#     try:
+#         print("Creating index")
+#         index = faiss.IndexFlatIP(300)  # build the index
+#         print(index.is_trained)
+#         print('Adding items to it')
+#         print(o.values.shape)
+#         index.add(np.ascontiguousarray(o.values).astype(np.float32))  # add vectors to the index
+#         print(index.ntotal)
+#         print("Converting the testvect to query")
+#         tst = np.array([testvec.astype(np.float32)])
+#         tst = tst.reshape((tst.shape[0],tst.shape[-1]))
+#         print("Ready to query")
+#     except Exception as e:
+#         print("We died")
+#         print(e)
+#         return [],[]
+#     print(tst.shape)
+#     print("Searching")
+#     D, I = index.search(tst, n_top)  # sanity check
+#     print(I)
+#     print(D)
+#     # print(o.iloc[I[0]])
+#     # print("Dumping results")
+#     final_n_results = o.iloc[I[0]].values
+#     final_n_results_words = o.index[I[0]].values
+#
+#     return final_n_results_words,final_n_results
 
 
 
@@ -947,8 +948,74 @@ def test_sem(model, dataset, dataset_location='SimLex-999.txt',fast_text_locatio
     # word_tuples = sorted(word_tuples,key=lambda x:(x[0],x[2]))
     return sr
 import torch
+def test_sem_onlyds(dataset, dataset_location='SimLex-999.txt',prefix=""):
+    word_tuples = []
+    my_word_tuples = []
+    ds_model = None
+    if isinstance(dataset, pd.DataFrame):
+        ds_model = dataset
+    elif dataset is not None:
+        ds_model = pd.read_hdf(dataset["original"], "mat")
+
+    # ds_model=ds_model.swapaxes(0,1)
+    with open(dataset_location) as csv_file:
+        # csv_reader = csv.reader(csv_file, delimiter='\t')
+        line_count = 0
+        missing = 0
+
+        for row in csv_file:
+            row = row.split()
+        # print(f'Word1:\t{row[0]}\tWord2:\t{row[1]}\tSimscore:\t{row[2]}.')
+            line_count += 1
+            wtrow = []
+            wtrow.append(row[0])
+            wtrow.append(row[1])
+            try:
+                wtrow.append(row[3])
+            except:
+                wtrow.append(row[2])
+            word_tuples.append(wtrow)
+            score = 0
+
+            # conceptnet5.uri.concept_uri("en",row[0].lower())
+            # mw1 = ft_model.get_word_vector(row[0].lower())
+            try:
+                mw1 = np.array(ds_model.loc[prefix + row[0], :])
+                mw2 = np.array(ds_model.loc[prefix + row[1], :])
+                mw1 /= np.linalg.norm(mw1)
+                mw2 /= np.linalg.norm(mw2)
+
+                score = np.inner(mw1, mw2)
+
+                # if "cat" in row[1]  and "dog" in row[0]:
+                #     print(mw1)
+                #     print(mw2)
+                #     print(score)
+
+
+                # print("en_"+row[0],"en_"+row[1],score)
+                del mw1, mw2
+            except Exception as e:
+                # print(e)
+                missing+=1
+                score = 0
+            my_word_tuples.append((row[0], row[1], score))
+        # del csv_reader
+
+        # print(f'Processed {line_count} lines.')
+        pr = pearsonr([float(x[2]) for x in word_tuples], [float(x[2]) for x in my_word_tuples])
+        # print(pr)
+        # print([x[2] for x in my_word_tuples])
+        sr = spearmanr([x[2] for x in word_tuples], [x[2] for x in my_word_tuples])
+        # print(sr)
+        del my_word_tuples
+        del word_tuples
+        gc.collect()
+        # word_tuples = sorted(word_tuples,key=lambda x:(x[0],x[2]))
+        print("Missing",missing)
+        return sr[0]
 def test_sem(model, dataset, dataset_location='SimLex-999.txt',
-             fast_text_location="../fasttext_model/cc.en.300.bin",prefix="",pt=False):
+             fast_text_location="../fasttext_model/cc.en.300.bin",prefix="",pt=False,use_ft=False):
     word_tuples = []
     my_word_tuples = []
     global ft_model
@@ -963,23 +1030,34 @@ def test_sem(model, dataset, dataset_location='SimLex-999.txt',
         # ds_model=ds_model.swapaxes(0,1)
     retrogan = model
     with open(dataset_location) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter='\t')
+        # csv_reader = csv.reader(csv_file, delimiter='\t')
         line_count = 0
-        for row in csv_reader:
+        if use_ft:
+            global ft_model
+            if ft_model is None:
+                ft_model = fasttext.load_model(fasttext)
+        for row in csv_file:
             # print(f'Word1:\t{row[0]}\tWord2:\t{row[1]}\tSimscore:\t{row[2]}.')
+            row = row.split()
             line_count += 1
             wtrow = []
             wtrow.append(row[0])
             wtrow.append(row[1])
-            wtrow.append(row[3])
+            try:
+                wtrow.append(row[3])
+            except:
+                wtrow.append(row[2])
             word_tuples.append(wtrow)
             score = 0
-
-            # conceptnet5.uri.concept_uri("en",row[0].lower())
-            # mw1 = ft_model.get_word_vector(row[0].lower())
             try:
-                mw1 = ds_model.loc[prefix+row[0].lower(),:]
-                mw2 = ds_model.loc[prefix + row[1].lower(), :]
+                if use_ft:
+                    mw1 = ft_model.get_word_vector(row[0])
+                    mw2 = ft_model.get_word_vector(row[1])
+                else:
+                    mw1 = ds_model.loc[prefix+row[0],:]
+                    mw2 = ds_model.loc[prefix+row[1],:]
+                mw1 /= np.linalg.norm(mw1)
+                mw2 /= np.linalg.norm(mw2)
                 if pt:
                     mw1 = np.array(retrogan(torch.tensor(np.array(mw1).reshape(1, 300),dtype=torch.float32)).detach()).reshape((300,))
                 else:
@@ -989,20 +1067,21 @@ def test_sem(model, dataset, dataset_location='SimLex-999.txt',
                     mw2 = np.array(retrogan(torch.tensor(np.array(mw2).reshape(1, 300),dtype=torch.float32)).detach()).reshape((300,))
                 else:
                     mw2 = np.array(retrogan.predict(np.array(mw2).reshape(1, 300))).reshape((300,))
+                mw1 /= np.linalg.norm(mw1)
+                mw2 /= np.linalg.norm(mw2)
 
-                score = cosine_similarity([mw1], [mw2])
+                score = np.inner(mw1, mw2)
                 del mw1, mw2
             except Exception as e:
                 print(e)
                 score = [0]
-            my_word_tuples.append((row[0], row[1], score[0]))
-        del csv_reader
+            my_word_tuples.append((row[0], row[1], score))
 
-        print(f'Processed {line_count} lines.')
-    pr = pearsonr([float(x[2]) for x in word_tuples], [float(x[2]) for x in my_word_tuples])
-    print(pr)
+        # print(f'Processed {line_count} lines.')
+    # pr = pearsonr([float(x[2]) for x in word_tuples], [float(x[2]) for x in my_word_tuples])
+    # print(pr)
     sr = spearmanr([x[2] for x in word_tuples], [x[2] for x in my_word_tuples])
-    print(sr)
+    # print(sr)
     del my_word_tuples
     del word_tuples
     gc.collect()
