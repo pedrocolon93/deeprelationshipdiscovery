@@ -31,15 +31,6 @@ def to_hdf(file, outputname):
         df.to_hdf(outputname, "mat")
 
 
-def to_txt(param):
-    df = pd.read_hdf(param, "mat")
-
-    pass
-
-
-def generate_seen(ov, ar):
-    pass
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -79,30 +70,40 @@ if __name__ == '__main__':
                         help="The output of the attract-repel algorithm")
     parser.add_argument("--output_dir",
                         help="The output of the attract-repel algorithm")
+    parser.add_argument("--skip_ar", default=False,action="store_true",
+                        help="The output of the attract-repel algorithm")
+    parser.add_argument("--skip_prefix", default=False, action="store_true",
+                        help="The output of the attract-repel algorithm")
+    parser.add_argument("--arvectors",
+                        help="The output of the attract-repel algorithm")
+    parser.add_argument("--origvectors",
+                        help="The output of the attract-repel algorithm")
     args = parser.parse_args()
     path_to_ar = args.path_to_ar
     path_to_ar_python = args.path_to_ar_python
     words = set()
-    with open(args.synonyms) as f:
-        for line in f:
-            linecontents = line.strip().split()
-            words.add(linecontents[0])
-            words.add(linecontents[1])
-    with open(args.antonyms) as f:
-        for line in f:
-            linecontents = line.strip().split()
-            words.add(linecontents[0])
-            words.add(linecontents[1])
-    with open(os.path.abspath(args.ccn)) as dist_vecs:
-        print("Prefixing the input vecs JIC")
-        with open(os.path.abspath(args.ccn)+"prefixed.txt","w") as prefixed_dist_vecs:
-            for line in tqdm(dist_vecs):
-                word = line.strip().split()[0]
-                if args.prefix not in word:
-                    word = args.prefix+word
-                if word in words:
-                    if not args.prefix in line:
-                        prefixed_dist_vecs.write(args.prefix+line)
+
+    if not args.skip_prefix:
+        with open(args.synonyms) as f:
+            for line in f:
+                linecontents = line.strip().split()
+                words.add(linecontents[0])
+                words.add(linecontents[1])
+        with open(args.antonyms) as f:
+            for line in f:
+                linecontents = line.strip().split()
+                words.add(linecontents[0])
+                words.add(linecontents[1])
+        with open(os.path.abspath(args.ccn)) as dist_vecs:
+            print("Prefixing the input vecs JIC")
+            with open(os.path.abspath(args.ccn)+"prefixed.txt","w") as prefixed_dist_vecs:
+                for line in tqdm(dist_vecs):
+                    word = line.strip().split()[0]
+                    if args.prefix not in word:
+                        word = args.prefix+word
+                    if word in words:
+                        if not args.prefix in line:
+                            prefixed_dist_vecs.write(args.prefix+line)
     print("Outputting config for AR ")
     configstring = \
         '''[experiment]
@@ -137,21 +138,34 @@ max_iter = 5
             aroutput=args.aroutput
         )
     configpath = os.path.join(path_to_ar, "config", args.arconfigname)
-    with open(configpath, "w") as f:
-        f.write(configstring)
-    print("Done\nRunning AR with configuration:")
+    try:
+        with open(configpath, "w") as f:
+            f.write(configstring)
+        print("Done writing config")
+
+    except Exception as e:
+        print(e)
     print(configstring)
     print("\n" * 3)
-    print("Arguments are:")
+    if not args.skip_ar:
+        print("Running AR")
+        print("Arguments are:")
 
-    arsubprocessargs = ['./run_ar.sh',path_to_ar_python, path_to_ar, configpath]
-    print(arsubprocessargs)
-    process = subprocess.run(args=arsubprocessargs, shell=False)
+        arsubprocessargs = ['./run_ar.sh',path_to_ar_python, path_to_ar, configpath]
+        print(arsubprocessargs)
+        process = subprocess.run(args=arsubprocessargs, shell=False)
     print("Done outputting")
     print("Saving to hdfs")
     print("Original vectors:")
-    to_hdf(os.path.abspath(args.ccn)+"prefixed.txt", args.output_dir+"/original.hdf")#TODO cut to only aroutputones
+    if args.origvectors is not None:
+        to_hdf(args.origvectors,
+               args.output_dir + "/original.hdf")  # TODO cut to only aroutputones
+    else:
+        to_hdf(os.path.abspath(args.ccn)+"prefixed.txt", args.output_dir+"/original.hdf")#TODO cut to only aroutputones
     print("Ar vectors")
-    to_hdf(args.aroutput, args.output_dir+"/arvecs.hdf")
+    if args.arvectors is not None:
+        to_hdf(args.arvectors, args.output_dir + "/arvecs.hdf")
+    else:
+        to_hdf(args.aroutput, args.output_dir+"/arvecs.hdf")
     # print("Seen vectors")
     # shutil.copy(os.path.join(path_to_ar,"results",args.aroutput), "./arvecs.txt")
