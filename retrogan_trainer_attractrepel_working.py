@@ -52,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument("--d_lr", default=0.0001, type=float, help="Discriminator learning rate")
     parser.add_argument("--batch_size", default=32, type=int, help="Batch size")
     parser.add_argument("--dis_train_amount", default=3, type=int,
-                        help="The amount of times to run a discriminator through the batch")
+                        help="The amount of times to run-AAAI2020 a discriminator through the batch")
     args = parser.parse_args()
 
     print("Configuring GPUs to use only needed memory")

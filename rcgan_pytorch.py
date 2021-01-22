@@ -457,7 +457,7 @@ class RetroCycleGAN(nn.Module):
                         "discriminator_cycle_loss": d_cycle_loss
                     }
                     wandb.log(scalars)
-                    writer.add_scalars("run", tag_scalar_dict=scalars, global_step=count)
+                    writer.add_scalars("run-AAAI2020", tag_scalar_dict=scalars, global_step=count)
                     writer.flush()
         def train_(training_epochs, iters=None):
             count = 0
