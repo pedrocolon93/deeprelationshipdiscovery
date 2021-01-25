@@ -562,7 +562,7 @@ class RetroCycleGAN(nn.Module):
                     dABBA_loss_real = 0
                     dBAAB_loss_real = 0
                 g_loss = valid_A_loss + valid_B_loss + \
-                         1*mm_abba + 1*mm_baab + \
+                         2*mm_abba + 2*mm_baab + \
                          mae_abba + mae_baab + \
                          0.01*mae_id_abba + 0.01*mae_id_baab +\
                          dBAAB_loss_real + dABBA_loss_real

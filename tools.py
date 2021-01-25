@@ -373,11 +373,16 @@ def load_all_words_dataset_final(original,retrofitted, save_folder="./", cache=T
             return np.array(X_train.values), np.array(Y_train.values)#, np.array(X_test.values), np.array(Y_test.values)
         else:
             return np.array(X_train.values), np.array(Y_train.values), np.array(X_train.index)
-
     print("Searching")
     print("for:", original, retrofitted)
-    o = pd.read_hdf(original, 'mat', encoding='utf-8')
-    r = pd.read_hdf(retrofitted, 'mat', encoding='utf-8')
+    if "hdf" in original or "h5" in original:
+        print("Assuming its a hdf file")
+        o = pd.read_hdf(original, 'mat', encoding='utf-8')
+        r = pd.read_hdf(retrofitted, 'mat', encoding='utf-8')
+    else:
+        print("Assuming its a text file")
+        o = load_text_embeddings(original)
+        r = load_text_embeddings(retrofitted)
     cns = r.index.intersection(o.index)
     print("Intersecting on",len(cns))
     X_train = o.loc[cns, :]
@@ -390,6 +395,20 @@ def load_all_words_dataset_final(original,retrofitted, save_folder="./", cache=T
 
     print("Returning")
     return X_train,Y_train
+
+
+def load_text_embeddings(original):
+    vecs = []
+    idxs = []
+    with open(original) as f:
+        for line in f:
+            line = line.strip()
+            ls = line.split()
+
+            if line != "" and len(ls) > 2:
+                vecs.append([float(x) for x in ls[1:]])
+                idxs.append(ls[0])
+    return pd.DataFrame(index=idxs,data=vecs)
 
 def load_all_words_dataset_3(dataset, seed=42, test_split=0.1, save_folder="./", cache=True, threshold = 0.95, return_idx=False,remove_constraint=None):
     global original, retrofitted
@@ -1024,9 +1043,11 @@ def test_sem(model, dataset, dataset_location='SimLex-999.txt',
     #     ft_model= fasttext.load_model(fast_text_location)
     if isinstance(dataset,pd.DataFrame):
         ds_model = dataset
+    elif ".txt" in dataset["original"]:
+        ds_model = load_text_embeddings(dataset["original"])
+
     elif dataset is not None:
         ds_model = pd.read_hdf(dataset["original"],"mat")
-
         # ds_model=ds_model.swapaxes(0,1)
     retrogan = model
     with open(dataset_location) as csv_file:
