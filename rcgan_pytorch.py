@@ -74,7 +74,7 @@ class RetroCycleGAN(nn.Module):
     def __init__(self, save_index="0", save_folder="./", generator_size=32,
                  discriminator_size=64, word_vector_dimensions=300,
                  discriminator_lr=0.0001, generator_lr=0.0001,
-                 one_way_mm=True,cycle_mm=True,cycle_dis=True,id_loss=True,
+                 one_way_mm=True,cycle_mm=True,cycle_dis=True,id_loss=True, cycle_loss=True,
                  device="cpu",name="default",fp16=False):
         super().__init__()
         self.fp16=fp16
@@ -84,7 +84,7 @@ class RetroCycleGAN(nn.Module):
         # Input shape
         self.word_vector_dimensions = word_vector_dimensions
         self.save_index = save_index
-
+        self.cycle_loss = cycle_loss
         # Number of filters in the first layer of G and D
         self.gf = generator_size
         self.df = discriminator_size
@@ -98,6 +98,8 @@ class RetroCycleGAN(nn.Module):
         self.cycle_mm = cycle_mm
         self.cycle_dis = cycle_dis
         self.id_loss = id_loss
+        self.cycle_mm_weight = 2
+        self.id_loss_weight = 0.01
         gpus = tf.config.experimental.list_physical_devices('GPU')
         if gpus:
             try:
@@ -548,9 +550,12 @@ class RetroCycleGAN(nn.Module):
                 else:
                     mm_abba = mm_baab = 0
 
-                mae_abba = torch.nn.L1Loss()(fake_ABBA, imgs_A)
-                mae_baab = torch.nn.L1Loss()(fake_BAAB, imgs_B)
-
+                if self.cycle_loss:
+                    mae_abba = torch.nn.L1Loss()(fake_ABBA, imgs_A)
+                    mae_baab = torch.nn.L1Loss()(fake_BAAB, imgs_B)
+                else:
+                    mae_abba = 0
+                    mae_baab = 0
                 if self.cycle_dis:
                     dA = self.d_ABBA(torch.cat([fake_B, imgs_A], 1))
                     dA_r = self.d_ABBA(torch.cat([fake_B, fake_ABBA], 1))
@@ -562,9 +567,9 @@ class RetroCycleGAN(nn.Module):
                     dABBA_loss_real = 0
                     dBAAB_loss_real = 0
                 g_loss = valid_A_loss + valid_B_loss + \
-                         2*mm_abba + 2*mm_baab + \
+                         self.cycle_mm_weight*mm_abba + self.cycle_mm_weight*mm_baab + \
                          mae_abba + mae_baab + \
-                         0.01*mae_id_abba + 0.01*mae_id_baab +\
+                         self.id_loss_weight*mae_id_abba + self.id_loss_weight*mae_id_baab +\
                          dBAAB_loss_real + dABBA_loss_real
                 if self.fp16:
                     self.combined_optimizerscaler.scale(g_loss).backward()
@@ -586,8 +591,8 @@ class RetroCycleGAN(nn.Module):
                         "Combined loss:", "{:.2f}".format(g_loss.item()),
                         "MM_ABBA_CYCLE:", "{:.2f}".format(mm_abba.item() if self.cycle_mm else 0),
                         "MM_BAAB_CYCLE:", "{:.2f}".format(mm_baab.item() if self.cycle_mm else 0),
-                        "abba acc:", "{:.2f}".format(mae_abba.item()),
-                        "baab acc:", "{:.2f}".format(mae_baab.item()),
+                        "abba acc:", "{:.2f}".format(mae_abba.item() if self.cycle_loss else 0),
+                        "baab acc:", "{:.2f}".format(mae_baab.item() if self.cycle_loss else 0),
                         "idloss ab:", "{:.2f}".format(mae_id_abba.item() if self.id_loss else 0),
                         "idloss ba:", "{:.2f}".format(mae_id_baab.item() if self.id_loss else 0),
                         "mm ab loss:", "{:.2f}".format(mm_a_loss if self.one_way_mm else 0),
@@ -604,8 +609,8 @@ class RetroCycleGAN(nn.Module):
                         "loss":g_loss.item()+d_loss,
                         "MM_ABBA_CYCLE": mm_abba.item() if self.cycle_mm else 0,
                         "MM_BAAB_CYCLE": mm_baab.item() if self.cycle_mm else 0,
-                        "abba_mae": mae_abba.item(),
-                        "baab_mae": mae_baab.item(),
+                        "abba_mae": mae_abba.item() if self.cycle_loss else 0,
+                        "baab_mae": mae_baab.item() if self.cycle_loss else 0,
                         "cycle_da": valid_A_loss.item(),
                         "cycle_db": valid_B_loss.item(),
                         "idloss_ab": mae_id_abba.item() if self.id_loss else 0,

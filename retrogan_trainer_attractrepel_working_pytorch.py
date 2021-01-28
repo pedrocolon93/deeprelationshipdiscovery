@@ -3,6 +3,7 @@ from __future__ import print_function, division
 import argparse
 import os
 import shutil
+import random
 
 import tensorflow as tf
 # from tensorflow.keras.mixed_precision import experimental as mixed_precision
@@ -31,6 +32,17 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+
+import numpy as np
+
+def set_seed(seed):
+    print("Setting seed to",seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+    torch.manual_seed(seed)
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
@@ -76,7 +88,13 @@ if __name__ == '__main__':
                         help="Whether to use fp16 calculation speed up.")
     parser.add_argument("--id_loss", type=str2bool, default=True,
                         help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--cycle_loss", type=str2bool, default=True,
+                        help="Whether to use fp16 calculation speed up.")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Whether to use fp16 calculation speed up.")
+
     args = parser.parse_args()
+    set_seed(args.seed)
 
     # print("Configuring GPUs to use only needed memory")
     # gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -148,6 +166,7 @@ if __name__ == '__main__':
             cycle_mm=args.cycle_mm,
             cycle_dis=args.cycle_dis,
             id_loss=args.id_loss,
+            cycle_loss=args.cycle_loss,
             name=args.model_name,
             fp16=args.fp16
         )
