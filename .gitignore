@@ -13,3 +13,35 @@ retrogan/
 /fasttext_model/fitted-debias.hd5
 /fasttext_model/trained_retrogan/
 /logs/train/
+
+###########################
+##                       ##
+## Added for yida_auxgan ##
+##                       ##
+###########################
+
+evaluate_oovtests*.sh
+requirements.txt
+.DS_Store
+__pycache__
+*.ipynb
+attract-repel/.DS_Store
+attract-repel/__pycache__/
+auxgan/.DS_Store
+auxgan/__pycache__/
+auxgan/data/
+auxgan/models-ACL2021/
+auxgan/results/
+data/.DS_Store
+data/__pycache__/
+data/cc.en.300.vec
+data/cc.en.300.vecprefixed.txt
+data/fasttext-en-20.09.txt
+data/numberbatch-en-19.08.txt
+retrogandeeprelationshipdiscovery/.DS_Store
+retrogandeeprelationshipdiscovery/__pycache__/
+#retrogandeeprelationshipdiscovery/antonyms.txt
+#retrogandeeprelationshipdiscovery/synonyms.txt
+#retrogandeeprelationshipdiscovery/simlexsimverb_words.txt
+#retrogandeeprelationshipdiscovery/concatenated_fasttext_and_card_vectors.txt
+#retrogandeeprelationshipdiscovery/train600k.txt
